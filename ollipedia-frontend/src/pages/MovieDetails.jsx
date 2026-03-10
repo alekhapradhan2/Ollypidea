@@ -1,40 +1,355 @@
-import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { API } from "../api/api";
+import React, { useEffect, useState, useCallback } from "react";
+import { useParams, Link } from "react-router-dom";
+import { API, getToken } from "../api/api";
 
-export default function MovieDetails(){
+const verdictClass = (v) => {
+  if (!v) return "verdict-upcoming";
+  const l = v.toLowerCase();
+  if (l === "hit" || l === "super hit" || l === "blockbuster") return "verdict-hit";
+  if (l === "flop" || l === "disaster") return "verdict-flop";
+  if (l === "average") return "verdict-average";
+  return "verdict-upcoming";
+};
 
-const {id} = useParams();
+const stars = (n) => "★".repeat(Math.round(n || 0)) + "☆".repeat(5 - Math.round(n || 0));
 
-const [movie,setMovie] = useState(null);
+export default function MovieDetails({ currentMovie, onToast }) {
+  const { id } = useParams();
+  const [movie, setMovie] = useState(null);
+  const [tab, setTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-useEffect(()=>{
-API.getMovie(id).then(setMovie)
-},[])
+  // Review form
+  const [reviewUser, setReviewUser] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
-if(!movie) return <p>Loading...</p>
+  const isOwner = getToken() && currentMovie?._id === id;
 
-return(
+  const load = useCallback(() => {
+    setLoading(true);
+    API.getMovie(id)
+      .then(setMovie)
+      .catch(e => setError(typeof e === "string" ? e : "Failed to load movie"))
+      .finally(() => setLoading(false));
+  }, [id]);
 
-<div>
+  useEffect(() => { load(); }, [load]);
 
-<h1>{movie.title}</h1>
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewUser.trim() || !reviewText.trim()) return;
+    setSubmittingReview(true);
+    try {
+      const reviews = await API.postReview(id, { user: reviewUser, rating: reviewRating, text: reviewText });
+      setMovie(prev => ({ ...prev, reviews }));
+      setReviewUser(""); setReviewText(""); setReviewRating(5);
+      onToast && onToast("Review submitted!", "success");
+    } catch (e) {
+      onToast && onToast(typeof e === "string" ? e : "Failed to submit review", "error");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
-<p>Director: {movie.director}</p>
+  if (loading) return (
+    <div className="page">
+      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 48 }}>
+        <div className="skeleton" style={{ aspectRatio: "2/3" }} />
+        <div>
+          <div className="skeleton" style={{ height: 20, width: "40%", marginBottom: 12 }} />
+          <div className="skeleton" style={{ height: 48, width: "70%", marginBottom: 16 }} />
+          <div className="skeleton" style={{ height: 14, width: "100%", marginBottom: 8 }} />
+          <div className="skeleton" style={{ height: 14, width: "80%" }} />
+        </div>
+      </div>
+    </div>
+  );
 
-<p>Producer: {movie.producer}</p>
+  if (error || !movie) return (
+    <div className="page empty-state">
+      <h3>Movie not found</h3>
+      <p>{error}</p>
+      <Link to="/movies" className="btn btn-outline" style={{ marginTop: 16 }}>← Back to Movies</Link>
+    </div>
+  );
 
-<p>Budget: {movie.budget}</p>
+  const avgRating = movie.reviews?.length
+    ? (movie.reviews.reduce((s, r) => s + r.rating, 0) / movie.reviews.length).toFixed(1)
+    : null;
 
-<h3>Cast</h3>
+  return (
+    <div className="page">
+      {/* Back */}
+      <Link to="/movies" className="btn btn-ghost btn-sm" style={{ marginBottom: 24, display: "inline-flex" }}>
+        ← All Films
+      </Link>
 
-{movie.cast?.map(c=>(
+      {/* Hero */}
+      <div className="movie-hero">
+        <div className="movie-hero-poster">
+          {movie.posterUrl
+            ? <img src={movie.posterUrl} alt={movie.title} />
+            : <span className="movie-hero-poster-placeholder">🎬</span>
+          }
+        </div>
 
-<div key={c.name}>{c.name}</div>
+        <div className="movie-hero-content">
+          <div className="movie-category">{movie.category || "Feature Film"} · {movie.language || "Odia"}</div>
+          <h1 className="movie-title">{movie.title}</h1>
 
-))}
+          {avgRating && (
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ color: "var(--gold)", fontFamily: "'Playfair Display', serif", fontSize: "1.4rem" }}>
+                {avgRating}
+              </span>
+              <span style={{ color: "var(--gold)", fontSize: "0.85rem", marginLeft: 6 }}>
+                {stars(avgRating)}
+              </span>
+              <span style={{ color: "var(--muted)", fontSize: "0.8rem", marginLeft: 6 }}>
+                ({movie.reviews.length} reviews)
+              </span>
+            </div>
+          )}
 
-</div>
+          <div className="movie-badges">
+            {movie.genre?.map(g => <span key={g} className="badge">{g}</span>)}
+            <span className={`movie-card-verdict ${verdictClass(movie.verdict)}`} style={{ borderRadius: 3, padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {movie.verdict || "Upcoming"}
+            </span>
+          </div>
 
-)
+          <div className="movie-meta-grid">
+            {movie.director && (
+              <div className="movie-meta-item">
+                <label>Director</label><span>{movie.director}</span>
+              </div>
+            )}
+            {movie.producer && (
+              <div className="movie-meta-item">
+                <label>Producer</label><span>{movie.producer}</span>
+              </div>
+            )}
+            {movie.releaseDate && (
+              <div className="movie-meta-item">
+                <label>Release</label><span>{movie.releaseTBA ? "TBA" : movie.releaseDate}</span>
+              </div>
+            )}
+            {movie.budget && (
+              <div className="movie-meta-item">
+                <label>Budget</label><span>{movie.budget}</span>
+              </div>
+            )}
+          </div>
+
+          {movie.synopsis && <p className="movie-synopsis">{movie.synopsis}</p>}
+
+          {isOwner && (
+            <div style={{ marginTop: 20 }}>
+              <Link to={`/movie/${id}/manage`} className="btn btn-gold btn-sm">⚙ Manage Movie</Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs">
+        {["overview", "cast", "media", "boxoffice", "news", "reviews"].map(t => (
+          <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+            {t === "boxoffice" ? "Box Office" : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === "reviews" && movie.reviews?.length ? ` (${movie.reviews.length})` : ""}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview */}
+      {tab === "overview" && (
+        <div className="section">
+          {movie.synopsis ? (
+            <p style={{ color: "#b0a898", lineHeight: 1.8, fontSize: "0.95rem", maxWidth: 720 }}>{movie.synopsis}</p>
+          ) : (
+            <p style={{ color: "var(--muted)" }}>No synopsis available.</p>
+          )}
+          {movie.media?.trailer?.ytId && (
+            <>
+              <hr className="divider" />
+              <h3 style={{ marginBottom: 16, fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)" }}>Trailer</h3>
+              <div className="trailer-embed" style={{ maxWidth: 640 }}>
+                <iframe
+                  src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen title="Trailer"
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Cast */}
+      {tab === "cast" && (
+        <div className="section">
+          {movie.cast?.length ? (
+            <div className="cast-grid">
+              {movie.cast.map((c, i) => (
+                <div key={c.castId || i} className="cast-card">
+                  <div className="cast-card-photo">
+                    {c.photo ? <img src={c.photo} alt={c.name} /> : <span className="cast-card-photo-placeholder">👤</span>}
+                  </div>
+                  <div className="cast-card-body">
+                    <div className="cast-card-name">{c.name}</div>
+                    {c.role && <div className="cast-card-role">{c.role}</div>}
+                    {c.type && <div className="cast-card-role" style={{ color: "var(--gold)", fontSize: "0.65rem" }}>{c.type}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p style={{ color: "var(--muted)" }}>No cast information available.</p>}
+        </div>
+      )}
+
+      {/* Media */}
+      {tab === "media" && (
+        <div className="section">
+          {movie.media?.trailer?.ytId && (
+            <>
+              <h3 style={{ marginBottom: 16, fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)" }}>Trailer</h3>
+              <div className="trailer-embed" style={{ maxWidth: 640, marginBottom: 32 }}>
+                <iframe
+                  src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen title="Trailer"
+                />
+              </div>
+            </>
+          )}
+          {movie.media?.songs?.length > 0 && (
+            <>
+              <h3 style={{ marginBottom: 16, fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--muted)" }}>
+                Songs ({movie.media.songs.length})
+              </h3>
+              <div className="song-list">
+                {movie.media.songs.map((s, i) => (
+                  <div key={i} className="song-item">
+                    <span className="song-num">{i + 1}</span>
+                    <div className="song-info">
+                      <div className="song-title">{s.title}</div>
+                      {s.singer && <div className="song-singer">{s.singer}</div>}
+                    </div>
+                    {s.ytId && (
+                      <a href={`https://www.youtube.com/watch?v=${s.ytId}`} target="_blank" rel="noreferrer">
+                        <button className="song-play">▶</button>
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {!movie.media?.trailer?.ytId && !movie.media?.songs?.length && (
+            <p style={{ color: "var(--muted)" }}>No media available yet.</p>
+          )}
+        </div>
+      )}
+
+      {/* Box Office */}
+      {tab === "boxoffice" && (
+        <div className="section">
+          <div className="boxoffice-grid" style={{ marginBottom: 24 }}>
+            <div className="boxoffice-card">
+              <div className="boxoffice-label">Opening Weekend</div>
+              <div className="boxoffice-value">{movie.boxOffice?.opening || "TBA"}</div>
+            </div>
+            <div className="boxoffice-card">
+              <div className="boxoffice-label">First Week</div>
+              <div className="boxoffice-value">{movie.boxOffice?.firstWeek || "TBA"}</div>
+            </div>
+            <div className="boxoffice-card">
+              <div className="boxoffice-label">Total Collection</div>
+              <div className="boxoffice-value">{movie.boxOffice?.total || "TBA"}</div>
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <span className={`movie-card-verdict ${verdictClass(movie.verdict)}`} style={{ display: "inline-block", padding: "6px 20px", fontSize: "0.85rem", fontWeight: 700, borderRadius: 4 }}>
+              Verdict: {movie.verdict || "Upcoming"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* News */}
+      {tab === "news" && (
+        <div className="section">
+          {movie.news?.length ? (
+            <div className="news-grid">
+              {movie.news.map(n => (
+                <div key={n._id} className="news-card">
+                  {n.imageUrl && <div className="news-card-img"><img src={n.imageUrl} alt={n.title} /></div>}
+                  <div className="news-card-body">
+                    <div className="news-card-category">{n.category || "Update"}</div>
+                    <div className="news-card-title">{n.title}</div>
+                    <div className="news-card-content">{n.content}</div>
+                    <div className="news-card-meta">{new Date(n.createdAt).toLocaleDateString("en-IN")}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <p style={{ color: "var(--muted)" }}>No news articles for this film.</p>}
+        </div>
+      )}
+
+      {/* Reviews */}
+      {tab === "reviews" && (
+        <div className="section">
+          {/* Submit Review */}
+          <div className="review-form">
+            <h3 style={{ marginBottom: 16, fontSize: "1rem" }}>Write a Review</h3>
+            <form onSubmit={submitReview}>
+              <div className="form-grid" style={{ marginBottom: 12 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Your Name</label>
+                  <input className="form-input" required value={reviewUser} onChange={e => setReviewUser(e.target.value)} placeholder="Name" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Rating (1–5)</label>
+                  <select className="form-select" value={reviewRating} onChange={e => setReviewRating(Number(e.target.value))}>
+                    {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} — {["","Poor","Below Average","Average","Good","Excellent"][n]}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Review</label>
+                <textarea className="form-textarea" required value={reviewText} onChange={e => setReviewText(e.target.value)} placeholder="Share your thoughts…" />
+              </div>
+              <button className="btn btn-gold btn-sm" type="submit" disabled={submittingReview}>
+                {submittingReview ? "Submitting…" : "Submit Review"}
+              </button>
+            </form>
+          </div>
+
+          {/* Review List */}
+          {movie.reviews?.length ? (
+            <div className="review-list">
+              {[...movie.reviews].reverse().map((r, i) => (
+                <div key={i} className="review-item">
+                  <div className="review-header">
+                    <span className="review-user">{r.user}</span>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <span className="review-stars">{stars(r.rating)}</span>
+                      {r.date && <span className="review-date">{r.date}</span>}
+                    </div>
+                  </div>
+                  <p className="review-text">{r.text}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: "var(--muted)" }}>No reviews yet. Be the first!</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
