@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
 
 function CastPhoto({ src, alt }) {
@@ -8,6 +9,7 @@ function CastPhoto({ src, alt }) {
 }
 
 export default function Cast() {
+  const navigate = useNavigate();
   const [cast, setCast] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -49,7 +51,7 @@ export default function Cast() {
       ) : (
         <div className="cast-page-grid">
           {filtered.map(c => (
-            <div key={c._id} className="cast-page-card">
+            <div key={c._id} className="cast-page-card" onClick={() => navigate(`/cast/${c._id}`)} style={{ cursor: "pointer" }}>
               <div className="cast-page-photo">
                 <CastPhoto src={c.photo} alt={c.name} />
               </div>

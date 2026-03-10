@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import LoginModal from "./components/LoginModal";
 
-
 import Home from "./pages/Home";
 import Movies from "./pages/Movies";
 import MovieDetails from "./pages/MovieDetails";
@@ -14,6 +13,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import AddMovie from "./pages/AddMovie";
 import ProductionProfile from "./pages/ProductionProfile";
+import CastProfile from "./pages/CastProfile";
+import NewsDetail from "./pages/NewsDetail";
 
 export default function App() {
   const [production, setProduction] = useState(() => {
@@ -45,12 +46,15 @@ export default function App() {
         <Route path="/"                       element={<Home />} />
         <Route path="/movies"                 element={<Movies />} />
         <Route path="/movie/:id"              element={<MovieDetails production={production} onToast={showToast} />} />
+
         <Route path="/cast"                   element={<Cast />} />
         <Route path="/news"                   element={<News />} />
         <Route path="/register"               element={<Register onSuccess={handleAuth} onToast={showToast} />} />
         <Route path="/dashboard"              element={<Dashboard production={production} onToast={showToast} />} />
         <Route path="/dashboard/add-movie"    element={<AddMovie production={production} onToast={showToast} />} />
         <Route path="/production/:id"         element={<ProductionProfile production={production} />} />
+        <Route path="/cast/:id"               element={<CastProfile />} />
+        <Route path="/news/:id"               element={<NewsDetail />} />
       </Routes>
 
       {showLogin && (
@@ -60,7 +64,7 @@ export default function App() {
         />
       )}
 
-
+    
     </BrowserRouter>
   );
 }

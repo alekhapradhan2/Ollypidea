@@ -29,7 +29,7 @@ const req = async (method, path, body, auth = false) => {
 // ── PUBLIC ──
 export const API = {
   getMovies:  ()          => req("GET",  "/movies"),
-  getMovie:   (id)        => req("GET",  `/movies/${id}`),
+  getMovie:   (id)        => rgiteq("GET",  `/movies/${id}`),
   getCast:    ()          => req("GET",  "/cast"),
   getCastOne: (id)        => req("GET",  `/cast/${id}`),
   getNews:    ()          => req("GET",  "/news"),
