@@ -449,3 +449,100 @@ img::before {
 .search-dropdown-item:hover { background: var(--bg3); }
 .search-dropdown-item:last-child { border-bottom: none; }
 .search-dropdown-item.muted { color: var(--muted); cursor: default; }
+
+/* ── Production chips on movie detail page ── */
+.movie-productions {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 8px; margin: 12px 0 16px;
+}
+.prod-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 20px;
+  background: var(--bg2); border: 1px solid var(--border);
+  font-size: 0.78rem; font-weight: 600; color: var(--text);
+  transition: border-color 0.2s, color 0.2s;
+}
+.prod-chip:hover { border-color: var(--gold); color: var(--gold); }
+.prod-chip-collab { background: rgba(201,151,58,0.06); border-color: rgba(201,151,58,0.3); }
+.prod-chip-sep { color: var(--muted); font-size: 0.75rem; }
+
+/* ── Section subtitle ── */
+.section-sub-title {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 16px; margin-top: 0;
+}
+
+/* ── News action buttons (edit/delete) ── */
+.news-action-btn {
+  width: 28px; height: 28px; border-radius: 4px;
+  background: var(--bg3); border: 1px solid var(--border);
+  cursor: pointer; font-size: 0.75rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.news-action-btn:hover { background: var(--bg); border-color: var(--gold); }
+.news-action-delete:hover { border-color: var(--red); }
+
+/* ── Edit field ── */
+.edit-field { margin-bottom: 16px; }
+.edit-field-value { padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; }
+
+/* ── Clickable cast card ── */
+.cast-card-linked { cursor: pointer; position: relative; transition: transform 0.15s, border-color 0.15s; }
+.cast-card-linked:hover { transform: translateY(-3px); border-color: var(--gold); }
+.cast-remove-btn {
+  position: absolute; top: 6px; right: 6px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(217,79,61,0.85); border: none; color: #fff;
+  font-size: 0.7rem; cursor: pointer; display: none;
+  align-items: center; justify-content: center;
+}
+.cast-card-linked:hover .cast-remove-btn { display: flex; }
+
+/* ── Cast Profile Page ── */
+.cast-profile-hero {
+  display: flex; gap: 36px; align-items: flex-start;
+  flex-wrap: wrap; margin-bottom: 48px;
+}
+.cast-profile-photo {
+  width: 180px; height: 220px; flex-shrink: 0;
+  border-radius: var(--radius); overflow: hidden;
+  border: 2px solid var(--border);
+  background: var(--bg2);
+  display: flex; align-items: center; justify-content: center;
+}
+.cast-profile-photo-icon { font-size: 4rem; }
+.cast-profile-info { flex: 1; min-width: 200px; padding-top: 8px; }
+.cast-profile-type {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.cast-profile-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.4rem; font-weight: 900; margin-bottom: 16px; line-height: 1.1;
+}
+.cast-profile-stats { display: flex; gap: 24px; margin-bottom: 16px; }
+.cast-stat { }
+.cast-stat-val { font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700; color: var(--gold); }
+.cast-stat-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.cast-profile-bio { color: #b0a898; line-height: 1.7; font-size: 0.9rem; max-width: 560px; }
+
+/* ── Filmography list ── */
+.filmography-list { display: flex; flex-direction: column; gap: 12px; }
+.filmography-item {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 16px;
+  cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+}
+.filmography-item:hover { border-color: var(--gold); transform: translateX(4px); }
+.filmography-poster {
+  width: 48px; height: 64px; flex-shrink: 0;
+  border-radius: 4px; overflow: hidden; background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+}
+.filmography-info { flex: 1; min-width: 0; }
+.filmography-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+.filmography-role  { font-size: 0.8rem; color: var(--muted); font-style: italic; margin-bottom: 3px; }
+.filmography-meta  { font-size: 0.75rem; color: var(--muted); }
