@@ -170,6 +170,9 @@ app.post("/api/register", async (req, res) => {
   try {
     const { email, password, cast: castData, newCast, ...movieData } = req.body;
 
+    // Remove cast from movieData spread to prevent raw string overwriting processed castIds
+    delete movieData.cast;
+
     if (!email || !password || password.length < 6)
       return res.status(400).json({ error: "Invalid email/password" });
     if (!movieData.title?.trim())
@@ -184,10 +187,10 @@ app.post("/api/register", async (req, res) => {
     const castIds = [];
     for (const c of castData || []) {
       if (c.isNew) {
-        const nc = await Cast.create({ name: c.name, type: c.type, bio: c.bio, photo: c.photo, movies: [] });
-        castIds.push({ castId: nc._id, name: nc.name, photo: nc.photo, type: nc.type, role: c.role });
+        const nc = await Cast.create({ name: c.name, type: c.type, bio: c.bio || "", photo: c.photo || "", movies: [] });
+        castIds.push({ castId: nc._id, name: nc.name, photo: nc.photo || "", type: nc.type, role: c.role || "" });
       } else {
-        castIds.push({ castId: c.id, name: c.name, photo: c.photo, type: c.type, role: c.role });
+        castIds.push({ castId: c.id, name: c.name, photo: c.photo || "", type: c.type, role: c.role || "" });
       }
     }
 
@@ -195,7 +198,7 @@ app.post("/api/register", async (req, res) => {
       ...movieData,
       email: email.toLowerCase(),
       password: hashed,
-      cast: castIds,
+      cast: castIds,   // always use processed castIds, never raw movieData.cast
     });
 
     // Update cast.movies references
@@ -242,7 +245,7 @@ app.post("/api/movies/:id/reviews", async (req, res) => {
 // Update box office
 app.patch("/api/movies/:id/boxoffice", auth, async (req, res) => {
   try {
-    if (req.movie.movieId !== req.params.id) return res.status(403).json({ error: "Forbidden" });
+    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
     const { opening, firstWeek, total, verdict } = req.body;
     const movie = await Movie.findByIdAndUpdate(
       req.params.id,
@@ -256,7 +259,7 @@ app.patch("/api/movies/:id/boxoffice", auth, async (req, res) => {
 // Update cast
 app.patch("/api/movies/:id/cast", auth, async (req, res) => {
   try {
-    if (req.movie.movieId !== req.params.id) return res.status(403).json({ error: "Forbidden" });
+    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
     const movie = await Movie.findByIdAndUpdate(req.params.id, { cast: req.body.cast }, { new: true, select: "-password -email" });
     res.json(movie);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -265,7 +268,7 @@ app.patch("/api/movies/:id/cast", auth, async (req, res) => {
 // Update media (trailer + songs)
 app.patch("/api/movies/:id/media", auth, async (req, res) => {
   try {
-    if (req.movie.movieId !== req.params.id) return res.status(403).json({ error: "Forbidden" });
+    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
     const movie = await Movie.findByIdAndUpdate(req.params.id, { media: req.body.media }, { new: true, select: "-password -email" });
     res.json(movie);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -274,7 +277,7 @@ app.patch("/api/movies/:id/media", auth, async (req, res) => {
 // Add news
 app.post("/api/movies/:id/news", auth, async (req, res) => {
   try {
-    if (req.movie.movieId !== req.params.id) return res.status(403).json({ error: "Forbidden" });
+    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
     const movie = await Movie.findById(req.params.id);
     const item = await News.create({ ...req.body, movieId: movie._id, movieTitle: movie.title });
     await Movie.findByIdAndUpdate(req.params.id, { $push: { news: item._id } });
