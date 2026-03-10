@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API } from "../api/api";
-import MovieCard from "../components/MovieCard";
+import { MovieCard, SafeImg } from "../components/UI";
+
+function NewsImg({ src, alt }) {
+  const [broken, setBroken] = React.useState(false);
+  if (broken) return null;
+  return <div className="news-card-img"><img src={src} alt={alt} onError={() => setBroken(true)} /></div>;
+}
 
 export default function Home() {
   const [movies, setMovies] = useState([]);
@@ -91,9 +97,7 @@ export default function Home() {
             <div className="news-grid">
               {news.map(n => (
                 <div key={n._id} className="news-card">
-                  {n.imageUrl && (
-                    <div className="news-card-img"><img src={n.imageUrl} alt={n.title} /></div>
-                  )}
+                  {n.imageUrl && <NewsImg src={n.imageUrl} alt={n.title} />}
                   <div className="news-card-body">
                     <div className="news-card-category">{n.category || "Update"}</div>
                     <div className="news-card-title">{n.title}</div>

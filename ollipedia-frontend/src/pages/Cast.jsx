@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { API } from "../api/api";
 
+function CastPhoto({ src, alt }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return <span className="cast-page-photo-placeholder">👤</span>;
+  return <img src={src} alt={alt} onError={() => setBroken(true)} />;
+}
+
 export default function Cast() {
   const [cast, setCast] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,10 +51,7 @@ export default function Cast() {
           {filtered.map(c => (
             <div key={c._id} className="cast-page-card">
               <div className="cast-page-photo">
-                {c.photo
-                  ? <img src={c.photo} alt={c.name} />
-                  : <span className="cast-page-photo-placeholder">👤</span>
-                }
+                <CastPhoto src={c.photo} alt={c.name} />
               </div>
               <div className="cast-page-body">
                 <div className="cast-page-name">{c.name}</div>

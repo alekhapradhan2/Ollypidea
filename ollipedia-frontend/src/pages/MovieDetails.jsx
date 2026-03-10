@@ -2,6 +2,18 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { API, getToken } from "../api/api";
 
+function SafeNewsImg({ src, alt }) {
+  const [broken, setBroken] = React.useState(false);
+  if (broken) return null;
+  return <div className="news-card-img"><img src={src} alt={alt} onError={() => setBroken(true)} /></div>;
+}
+
+function SafeImg({ src, alt, className, style, placeholder }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return <span className={placeholder || ""}>{placeholder ? "" : "🎬"}</span>;
+  return <img src={src} alt={alt} className={className} style={style} onError={() => setBroken(true)} />;
+}
+
 const verdictClass = (v) => {
   if (!v) return "verdict-upcoming";
   const l = v.toLowerCase();
@@ -90,10 +102,7 @@ export default function MovieDetails({ currentMovie, onToast }) {
       {/* Hero */}
       <div className="movie-hero">
         <div className="movie-hero-poster">
-          {movie.posterUrl
-            ? <img src={movie.posterUrl} alt={movie.title} />
-            : <span className="movie-hero-poster-placeholder">🎬</span>
-          }
+          <SafeImg src={movie.posterUrl} alt={movie.title} placeholder="movie-hero-poster-placeholder" />
         </div>
 
         <div className="movie-hero-content">
@@ -196,7 +205,7 @@ export default function MovieDetails({ currentMovie, onToast }) {
               {movie.cast.map((c, i) => (
                 <div key={c.castId || i} className="cast-card">
                   <div className="cast-card-photo">
-                    {c.photo ? <img src={c.photo} alt={c.name} /> : <span className="cast-card-photo-placeholder">👤</span>}
+                    <SafeImg src={c.photo} alt={c.name} placeholder="cast-card-photo-placeholder" />
                   </div>
                   <div className="cast-card-body">
                     <div className="cast-card-name">{c.name}</div>
@@ -286,7 +295,7 @@ export default function MovieDetails({ currentMovie, onToast }) {
             <div className="news-grid">
               {movie.news.map(n => (
                 <div key={n._id} className="news-card">
-                  {n.imageUrl && <div className="news-card-img"><img src={n.imageUrl} alt={n.title} /></div>}
+                  {n.imageUrl && <SafeNewsImg src={n.imageUrl} alt={n.title} />}
                   <div className="news-card-body">
                     <div className="news-card-category">{n.category || "Update"}</div>
                     <div className="news-card-title">{n.title}</div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { API } from "../api/api";
-import MovieCard from "../components/MovieCard";
+import { MovieCard } from "../components/UI";
 
 const GENRES = ["All", "Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical"];
 const VERDICTS = ["All", "Upcoming", "Hit", "Flop", "Average", "Super Hit", "Blockbuster"];

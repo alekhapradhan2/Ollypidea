@@ -9,7 +9,6 @@ const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
 app.use(express.json({ limit: "10mb" }));
 
-// ── Connect MongoDB ──
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB error:", err));
@@ -18,6 +17,20 @@ mongoose.connect(process.env.MONGO_URI)
 // SCHEMAS
 // ══════════════════════════════════════════
 
+// Production Company (the user/account)
+const ProductionSchema = new mongoose.Schema({
+  name:        { type: String, required: true },
+  email:       { type: String, required: true, unique: true },
+  password:    { type: String, required: true },
+  logo:        String,
+  banner:      String,
+  bio:         String,
+  founded:     String,
+  website:     String,
+  location:    String,
+}, { timestamps: true });
+
+// Cast / Crew member (shared across system)
 const CastSchema = new mongoose.Schema({
   name:   { type: String, required: true },
   type:   { type: String, default: "Actor" },
@@ -26,6 +39,7 @@ const CastSchema = new mongoose.Schema({
   movies: [{ type: mongoose.Schema.Types.ObjectId, ref: "Movie" }],
 }, { timestamps: true });
 
+// News article (linked to a movie)
 const NewsSchema = new mongoose.Schema({
   movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie" },
   movieTitle: String,
@@ -43,25 +57,34 @@ const ReviewSchema = new mongoose.Schema({
   date:   String,
 });
 
+// Movie — owned by one production, can have collaborators
 const MovieSchema = new mongoose.Schema({
-  title:      { type: String, required: true },
-  category:   { type: String, default: "Feature Film" },
-  genre:      [String],
+  title:       { type: String, required: true },
+  category:    { type: String, default: "Feature Film" },
+  genre:       [String],
   releaseDate: String,
-  releaseTBA: Boolean,
-  director:   String,
-  producer:   String,
-  budget:     String,
-  language:   { type: String, default: "Odia" },
-  synopsis:   String,
-  posterUrl:  String,
+  releaseTBA:  Boolean,
+  director:    String,
+  producer:    String,
+  budget:      String,
+  language:    { type: String, default: "Odia" },
+  synopsis:    String,
+  posterUrl:   String,
+
+  // Owner production company
+  productionId: { type: mongoose.Schema.Types.ObjectId, ref: "Production", required: true },
+
+  // Collaborating production companies
+  collaborators: [{ type: mongoose.Schema.Types.ObjectId, ref: "Production" }],
+
   cast: [{
-    castId:    { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },
-    name:      String,
-    photo:     String,
-    type:      String,
-    role:      String,
+    castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },
+    name:   String,
+    photo:  String,
+    type:   String,
+    role:   String,
   }],
+
   media: {
     trailer: { ytId: String, url: String },
     songs: [{
@@ -71,6 +94,7 @@ const MovieSchema = new mongoose.Schema({
       url:    String,
     }],
   },
+
   boxOffice: {
     opening:   { type: String, default: "TBA" },
     firstWeek: { type: String, default: "TBA" },
@@ -78,38 +102,143 @@ const MovieSchema = new mongoose.Schema({
   },
   verdict:  { type: String, default: "Upcoming" },
   status:   { type: String, default: "Upcoming" },
-  rating:   { type: Number, default: 0 },
   reviews:  [ReviewSchema],
   news:     [{ type: mongoose.Schema.Types.ObjectId, ref: "News" }],
-  email:    { type: String, required: true, unique: true },
-  password: { type: String, required: true },
 }, { timestamps: true });
 
-const Movie = mongoose.model("Movie", MovieSchema);
-const Cast  = mongoose.model("Cast",  CastSchema);
-const News  = mongoose.model("News",  NewsSchema);
+const Production = mongoose.model("Production", ProductionSchema);
+const Movie      = mongoose.model("Movie",      MovieSchema);
+const Cast       = mongoose.model("Cast",       CastSchema);
+const News       = mongoose.model("News",       NewsSchema);
 
 // ── Auth middleware ──
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token" });
   try {
-    req.movie = jwt.verify(token, process.env.JWT_SECRET);
+    req.production = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
   }
 };
 
+// Helper: check if production is owner OR collaborator
+const canEdit = (movie, productionId) =>
+  String(movie.productionId) === String(productionId) ||
+  movie.collaborators.some(c => String(c) === String(productionId));
+
 // ══════════════════════════════════════════
-// ROUTES — PUBLIC
+// AUTH ROUTES
 // ══════════════════════════════════════════
 
-// Get all movies (public fields only)
+// Register production company
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { name, email, password, logo, bio, founded, website, location } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Company name required" });
+    if (!email || !password || password.length < 6)
+      return res.status(400).json({ error: "Valid email and password (min 6 chars) required" });
+
+    const exists = await Production.findOne({ email: email.toLowerCase() });
+    if (exists) return res.status(400).json({ error: "Email already registered" });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const prod = await Production.create({
+      name, email: email.toLowerCase(), password: hashed,
+      logo: logo || "", bio: bio || "", founded: founded || "",
+      website: website || "", location: location || "",
+    });
+
+    const token = jwt.sign(
+      { productionId: prod._id, email: prod.email },
+      process.env.JWT_SECRET, { expiresIn: "30d" }
+    );
+    const obj = prod.toObject(); delete obj.password;
+    res.json({ token, production: obj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Login production company
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const prod = await Production.findOne({ email: email.toLowerCase() });
+    if (!prod) return res.status(401).json({ error: "Invalid credentials" });
+    const ok = await bcrypt.compare(password, prod.password);
+    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+    const token = jwt.sign(
+      { productionId: prod._id, email: prod.email },
+      process.env.JWT_SECRET, { expiresIn: "30d" }
+    );
+    const obj = prod.toObject(); delete obj.password;
+    res.json({ token, production: obj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════
+// PUBLIC ROUTES
+// ══════════════════════════════════════════
+
+// Get all production companies (public)
+app.get("/api/productions", async (req, res) => {
+  try {
+    const prods = await Production.find({}, "-password -email").lean();
+    // Attach movie count to each
+    const counts = await Movie.aggregate([
+      { $group: { _id: "$productionId", count: { $sum: 1 } } }
+    ]);
+    const countMap = {};
+    counts.forEach(c => { countMap[String(c._id)] = c.count; });
+    const result = prods.map(p => ({ ...p, movieCount: countMap[String(p._id)] || 0 }));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get single production company (public)
+app.get("/api/productions/:id", async (req, res) => {
+  try {
+    const prod = await Production.findById(req.params.id, "-password -email").lean();
+    if (!prod) return res.status(404).json({ error: "Not found" });
+    res.json(prod);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Search productions by name (for collaboration)
+app.get("/api/productions/search/:q", async (req, res) => {
+  try {
+    const prods = await Production.find(
+      { name: { $regex: req.params.q, $options: "i" } },
+      "-password -email"
+    ).limit(10).lean();
+    res.json(prods);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get all movies for a production (owner + collaborator)
+app.get("/api/productions/:id/movies", async (req, res) => {
+  try {
+    const movies = await Movie.find({
+      $or: [
+        { productionId: req.params.id },
+        { collaborators: req.params.id }
+      ]
+    }, "-reviews")
+    .populate("productionId", "name logo")
+    .populate("collaborators", "name logo")
+    .populate("news")
+    .lean();
+    res.json(movies);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get all movies (public browse)
 app.get("/api/movies", async (req, res) => {
   try {
-    const movies = await Movie.find({}, "-password -email")
-      .populate("news").lean();
+    const movies = await Movie.find({}, "-reviews")
+      .populate("productionId", "name logo")
+      .populate("collaborators", "name logo")
+      .lean();
     res.json(movies);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -117,8 +246,11 @@ app.get("/api/movies", async (req, res) => {
 // Get single movie
 app.get("/api/movies/:id", async (req, res) => {
   try {
-    const movie = await Movie.findById(req.params.id, "-password -email")
-      .populate("news").lean();
+    const movie = await Movie.findById(req.params.id)
+      .populate("productionId", "name logo")
+      .populate("collaborators", "name logo")
+      .populate("news")
+      .lean();
     if (!movie) return res.status(404).json({ error: "Not found" });
     res.json(movie);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -132,12 +264,13 @@ app.get("/api/cast", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get single cast
-app.get("/api/cast/:id", async (req, res) => {
+// Search cast by name
+app.get("/api/cast/search/:q", async (req, res) => {
   try {
-    const c = await Cast.findById(req.params.id).lean();
-    if (!c) return res.status(404).json({ error: "Not found" });
-    res.json(c);
+    const cast = await Cast.find(
+      { name: { $regex: req.params.q, $options: "i" } }
+    ).limit(10).lean();
+    res.json(cast);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -149,79 +282,16 @@ app.get("/api/news", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get all songs (aggregated from movies)
+// Get all songs
 app.get("/api/songs", async (req, res) => {
   try {
     const movies = await Movie.find({}, "title posterUrl media").lean();
     const songs = movies.flatMap(m =>
       (m.media?.songs || []).map(s => ({
-        ...s,
-        movieTitle: m.title,
-        movieId: m._id,
-        moviePoster: m.posterUrl,
+        ...s, movieTitle: m.title, movieId: m._id, moviePoster: m.posterUrl,
       }))
     );
     res.json(songs);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Register movie
-app.post("/api/register", async (req, res) => {
-  try {
-    const { email, password, cast: castData, newCast, ...movieData } = req.body;
-
-    // Remove cast from movieData spread to prevent raw string overwriting processed castIds
-    delete movieData.cast;
-
-    if (!email || !password || password.length < 6)
-      return res.status(400).json({ error: "Invalid email/password" });
-    if (!movieData.title?.trim())
-      return res.status(400).json({ error: "Movie title required" });
-
-    const exists = await Movie.findOne({ email: email.toLowerCase() });
-    if (exists) return res.status(400).json({ error: "Email already registered" });
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    // Save new cast profiles
-    const castIds = [];
-    for (const c of castData || []) {
-      if (c.isNew) {
-        const nc = await Cast.create({ name: c.name, type: c.type, bio: c.bio || "", photo: c.photo || "", movies: [] });
-        castIds.push({ castId: nc._id, name: nc.name, photo: nc.photo || "", type: nc.type, role: c.role || "" });
-      } else {
-        castIds.push({ castId: c.id, name: c.name, photo: c.photo || "", type: c.type, role: c.role || "" });
-      }
-    }
-
-    const movie = await Movie.create({
-      ...movieData,
-      email: email.toLowerCase(),
-      password: hashed,
-      cast: castIds,   // always use processed castIds, never raw movieData.cast
-    });
-
-    // Update cast.movies references
-    for (const c of castIds) {
-      await Cast.findByIdAndUpdate(c.castId, { $addToSet: { movies: movie._id } });
-    }
-
-    const token = jwt.sign({ movieId: movie._id, email: movie.email }, process.env.JWT_SECRET, { expiresIn: "30d" });
-    res.json({ token, movie: { ...movie.toObject(), password: undefined } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Login
-app.post("/api/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const movie = await Movie.findOne({ email: email.toLowerCase() }).populate("news");
-    if (!movie) return res.status(401).json({ error: "Invalid credentials" });
-    const ok = await bcrypt.compare(password, movie.password);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-    const token = jwt.sign({ movieId: movie._id, email: movie.email }, process.env.JWT_SECRET, { expiresIn: "30d" });
-    const obj = movie.toObject(); delete obj.password;
-    res.json({ token, movie: obj });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -232,65 +302,169 @@ app.post("/api/movies/:id/reviews", async (req, res) => {
     const movie = await Movie.findByIdAndUpdate(
       req.params.id,
       { $push: { reviews: { user, rating, text, date: new Date().toISOString().split("T")[0] } } },
-      { new: true, select: "-password -email" }
+      { new: true }
     );
     res.json(movie.reviews);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ══════════════════════════════════════════
-// ROUTES — PROTECTED (movie owner only)
+// PROTECTED ROUTES (production company login required)
 // ══════════════════════════════════════════
+
+// Create a new movie
+app.post("/api/movies", auth, async (req, res) => {
+  try {
+    const { cast: castData, collaborators, ...movieData } = req.body;
+    delete movieData.productionId;
+
+    // Process cast
+    const castIds = [];
+    for (const c of (Array.isArray(castData) ? castData : [])) {
+      if (c.isNew) {
+        const nc = await Cast.create({
+          name: c.name, type: c.type || "Actor",
+          bio: c.bio || "", photo: c.photo || "", movies: []
+        });
+        castIds.push({ castId: nc._id, name: nc.name, photo: nc.photo || "", type: nc.type, role: c.role || "" });
+      } else {
+        castIds.push({ castId: c.castId || c._id, name: c.name, photo: c.photo || "", type: c.type, role: c.role || "" });
+      }
+    }
+
+    // Validate collaborators exist
+    const collabIds = [];
+    for (const cid of (collaborators || [])) {
+      const p = await Production.findById(cid);
+      if (p) collabIds.push(p._id);
+    }
+
+    const movie = await Movie.create({
+      ...movieData,
+      productionId: req.production.productionId,
+      collaborators: collabIds,
+      cast: castIds,
+    });
+
+    // Update cast.movies
+    for (const c of castIds) {
+      await Cast.findByIdAndUpdate(c.castId, { $addToSet: { movies: movie._id } });
+    }
+
+    const populated = await Movie.findById(movie._id)
+      .populate("productionId", "name logo")
+      .populate("collaborators", "name logo")
+      .lean();
+
+    res.json(populated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Update movie details (owner or collaborator)
+app.patch("/api/movies/:id", auth, async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+    if (!canEdit(movie, req.production.productionId))
+      return res.status(403).json({ error: "Forbidden" });
+
+    const allowed = ["title","category","genre","releaseDate","releaseTBA","director",
+      "producer","budget","language","synopsis","posterUrl","verdict","status"];
+    const update = {};
+    allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    if (req.body.verdict) update.status = req.body.verdict === "Upcoming" ? "Upcoming" : "Released";
+
+    const updated = await Movie.findByIdAndUpdate(req.params.id, update, { new: true })
+      .populate("productionId", "name logo").populate("collaborators", "name logo").lean();
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // Update box office
 app.patch("/api/movies/:id/boxoffice", auth, async (req, res) => {
   try {
-    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+    if (!canEdit(movie, req.production.productionId))
+      return res.status(403).json({ error: "Forbidden" });
     const { opening, firstWeek, total, verdict } = req.body;
-    const movie = await Movie.findByIdAndUpdate(
+    const updated = await Movie.findByIdAndUpdate(
       req.params.id,
       { boxOffice: { opening, firstWeek, total }, verdict, status: verdict === "Upcoming" ? "Upcoming" : "Released" },
-      { new: true, select: "-password -email" }
-    );
-    res.json(movie);
+      { new: true }
+    ).populate("productionId", "name logo").lean();
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Update cast
 app.patch("/api/movies/:id/cast", auth, async (req, res) => {
   try {
-    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
-    const movie = await Movie.findByIdAndUpdate(req.params.id, { cast: req.body.cast }, { new: true, select: "-password -email" });
-    res.json(movie);
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+    if (!canEdit(movie, req.production.productionId))
+      return res.status(403).json({ error: "Forbidden" });
+    const updated = await Movie.findByIdAndUpdate(
+      req.params.id, { cast: req.body.cast }, { new: true }
+    ).populate("productionId", "name logo").lean();
+    res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Update media (trailer + songs)
+// Update media
 app.patch("/api/movies/:id/media", auth, async (req, res) => {
   try {
-    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
-    const movie = await Movie.findByIdAndUpdate(req.params.id, { media: req.body.media }, { new: true, select: "-password -email" });
-    res.json(movie);
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+    if (!canEdit(movie, req.production.productionId))
+      return res.status(403).json({ error: "Forbidden" });
+    const updated = await Movie.findByIdAndUpdate(
+      req.params.id, { media: req.body.media }, { new: true }
+    ).populate("productionId", "name logo").lean();
+    res.json(updated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Add collaborator
+app.post("/api/movies/:id/collaborators", auth, async (req, res) => {
+  try {
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+    if (String(movie.productionId) !== String(req.production.productionId))
+      return res.status(403).json({ error: "Only owner can add collaborators" });
+    const collab = await Production.findById(req.body.productionId);
+    if (!collab) return res.status(404).json({ error: "Production company not found" });
+    await Movie.findByIdAndUpdate(req.params.id, { $addToSet: { collaborators: collab._id } });
+    res.json({ message: `${collab.name} added as collaborator` });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Add news
 app.post("/api/movies/:id/news", auth, async (req, res) => {
   try {
-    if (String(req.movie.movieId) !== String(req.params.id)) return res.status(403).json({ error: "Forbidden" });
     const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+    if (!canEdit(movie, req.production.productionId))
+      return res.status(403).json({ error: "Forbidden" });
     const item = await News.create({ ...req.body, movieId: movie._id, movieTitle: movie.title });
     await Movie.findByIdAndUpdate(req.params.id, { $push: { news: item._id } });
     res.json(item);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Create cast profile
-app.post("/api/cast", auth, async (req, res) => {
+// Update production profile
+app.patch("/api/productions/me", auth, async (req, res) => {
   try {
-    const c = await Cast.create(req.body);
-    res.json(c);
+    const allowed = ["name","logo","banner","bio","founded","website","location"];
+    const update = {};
+    allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    const prod = await Production.findByIdAndUpdate(
+      req.production.productionId, update, { new: true, select: "-password -email" }
+    );
+    res.json(prod);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.listen(process.env.PORT || 4000, () => console.log(`🚀 Server on port ${process.env.PORT || 4000}`));
+app.listen(process.env.PORT || 4000, () =>
+  console.log(`🚀 Server on port ${process.env.PORT || 4000}`)
+);
