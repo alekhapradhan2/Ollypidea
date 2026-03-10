@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
 
+function CastPhoto({ src, alt }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return <span className="cast-page-photo-placeholder">👤</span>;
+  return <img src={src} alt={alt} onError={() => setBroken(true)} />;
+}
+
 export default function Cast() {
+  const navigate = useNavigate();
   const [cast, setCast] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -43,12 +51,9 @@ export default function Cast() {
       ) : (
         <div className="cast-page-grid">
           {filtered.map(c => (
-            <div key={c._id} className="cast-page-card">
+            <div key={c._id} className="cast-page-card" onClick={() => navigate(`/cast/${c._id}`)} style={{ cursor: "pointer" }}>
               <div className="cast-page-photo">
-                {c.photo
-                  ? <img src={c.photo} alt={c.name} />
-                  : <span className="cast-page-photo-placeholder">👤</span>
-                }
+                <CastPhoto src={c.photo} alt={c.name} />
               </div>
               <div className="cast-page-body">
                 <div className="cast-page-name">{c.name}</div>

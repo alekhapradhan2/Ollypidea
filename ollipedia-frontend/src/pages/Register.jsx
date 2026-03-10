@@ -1,331 +1,110 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { API, setToken } from "../api/api";
 
-const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
-const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
-
-const EMPTY = {
-  // Step 1 – Basic Info
-  title: "", category: "Feature Film", genre: [],
-  releaseDate: "", releaseTBA: false,
-  language: "Odia", director: "", producer: "",
-  budget: "", synopsis: "", posterUrl: "",
-  // Step 2 – Cast (simplified)
-  cast: [],
-  // Step 3 – Media
-  trailerYtId: "", songs: [],
-  // Step 4 – Account
-  email: "", password: "", confirm: "",
-};
-
-export default function Register({ onSuccess }) {
+export default function Register({ onSuccess, onToast }) {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState(EMPTY);
-  const [newCastName, setNewCastName] = useState("");
-  const [newCastRole, setNewCastRole] = useState("");
-  const [newCastType, setNewCastType] = useState("Actor");
-  const [newCastPhoto, setNewCastPhoto] = useState("");
-  const [newSongTitle, setNewSongTitle] = useState("");
-  const [newSongSinger, setNewSongSinger] = useState("");
+  const [form, setForm] = useState({
+    name: "", email: "", password: "", confirm: "",
+    logo: "", bio: "", founded: "", website: "", location: "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const steps = ["Basic Info", "Cast", "Media", "Account"];
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
-
-  const toggleGenre = (g) => {
-    set("genre", form.genre.includes(g)
-      ? form.genre.filter(x => x !== g)
-      : [...form.genre, g]
-    );
-  };
-
-  const addCast = () => {
-    if (!newCastName.trim()) return;
-    set("cast", [...form.cast, { name: newCastName.trim(), role: newCastRole.trim(), type: newCastType, photo: newCastPhoto.trim(), isNew: true }]);
-    setNewCastName(""); setNewCastRole(""); setNewCastPhoto("");
-  };
-
-  const removeCast = (i) => set("cast", form.cast.filter((_, idx) => idx !== i));
-
-  const addSong = () => {
-    if (!newSongTitle.trim()) return;
-    set("songs", [...form.songs, { title: newSongTitle.trim(), singer: newSongSinger.trim() }]);
-    setNewSongTitle(""); setNewSongSinger("");
-  };
-
-  const removeSong = (i) => set("songs", form.songs.filter((_, idx) => idx !== i));
-
-  const canNext = () => {
-    if (step === 0) return form.title.trim().length > 0 && form.director.trim().length > 0;
-    if (step === 3) return form.email.trim() && form.password.length >= 6 && form.password === form.confirm;
-    return true;
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.password !== form.confirm) return setError("Passwords don't match");
+    if (form.password.length < 6) return setError("Password must be at least 6 characters");
     setError(""); setLoading(true);
     try {
-      // Clean cast array to match exactly what server.js register route expects:
-      // For new cast members: { isNew: true, name, type, bio, photo, role }
-      // For existing:         { id: castId string, name, type, photo, role }
-      const cleanCast = form.cast.map(c => ({
-        isNew: true,          // always new during registration
-        name: c.name,
-        type: c.type || "Actor",
-        role: c.role || "",
-        photo: c.photo || "",
-        bio: c.bio || "",
-      }));
-
-      const body = {
-        title: form.title,
-        category: form.category,
-        genre: form.genre,
-        releaseDate: form.releaseTBA ? "" : form.releaseDate,
-        releaseTBA: form.releaseTBA,
-        language: form.language,
-        director: form.director,
-        producer: form.producer,
-        budget: form.budget,
-        synopsis: form.synopsis,
-        posterUrl: form.posterUrl,
-        cast: cleanCast,
-        media: {
-          trailer: form.trailerYtId ? { ytId: form.trailerYtId } : {},
-          songs: form.songs.map(s => ({ title: s.title, singer: s.singer || "" })),
-        },
-        email: form.email.toLowerCase().trim(),
-        password: form.password,
-      };
-
-      const { token, movie } = await API.register(body);
+      const { token, production } = await API.register({
+        name: form.name, email: form.email, password: form.password,
+        logo: form.logo, bio: form.bio, founded: form.founded,
+        website: form.website, location: form.location,
+      });
       setToken(token);
-      onSuccess && onSuccess(movie);
-      navigate(`/movie/${movie._id}`);
+      onSuccess(production);
+      onToast && onToast(`Welcome to Ollipedia, ${production.name}!`);
+      navigate("/dashboard");
     } catch (e) {
-      // Show the actual server error message, not a generic one
-      const msg = typeof e === "string" ? e : (e?.message || "Registration failed. Please try again.");
-      setError(msg);
-      setLoading(false);
-    }
+      setError(typeof e === "string" ? e : "Registration failed");
+    } finally { setLoading(false); }
   };
 
   return (
     <div className="register-page">
       <div className="register-header">
-        <h1>Register Your Film</h1>
-        <p>Add your Ollywood movie to the database and manage its profile.</p>
+        <h1>Register Your Production</h1>
+        <p>Join Ollipedia to add and manage your Ollywood films.</p>
+        <p style={{ marginTop: 8, fontSize: "0.85rem", color: "var(--muted)" }}>
+          Already registered? <button className="btn btn-ghost btn-sm" style={{ display: "inline", padding: "0 4px" }} onClick={() => navigate(-1)}>Login</button>
+        </p>
       </div>
 
       <div className="register-card">
-        {/* Step indicators */}
-        <div className="register-steps">
-          {steps.map((s, i) => (
-            <div key={s} className={`register-step ${i === step ? "active" : i < step ? "done" : ""}`}>
-              {i < step ? "✓ " : ""}{s}
-            </div>
-          ))}
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Production Company Name *</label>
+            <input className="form-input" required value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Tarang Cine Productions" />
+          </div>
 
-        {/* ── Step 0: Basic Info ── */}
-        {step === 0 && (
-          <>
-            <div className="form-group">
-              <label className="form-label">Movie Title *</label>
-              <input className="form-input" value={form.title} onChange={e => set("title", e.target.value)} placeholder="e.g. Daman" />
-            </div>
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Category</label>
-                <select className="form-select" value={form.category} onChange={e => set("category", e.target.value)}>
-                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Language</label>
-                <input className="form-input" value={form.language} onChange={e => set("language", e.target.value)} />
-              </div>
-            </div>
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Director *</label>
-                <input className="form-input" value={form.director} onChange={e => set("director", e.target.value)} placeholder="Director name" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Producer</label>
-                <input className="form-input" value={form.producer} onChange={e => set("producer", e.target.value)} placeholder="Producer name" />
-              </div>
-            </div>
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Release Date</label>
-                <input className="form-input" type="date" value={form.releaseDate} onChange={e => set("releaseDate", e.target.value)} disabled={form.releaseTBA} />
-                <label style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={form.releaseTBA} onChange={e => set("releaseTBA", e.target.checked)} /> TBA
-                </label>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Budget</label>
-                <input className="form-input" value={form.budget} onChange={e => set("budget", e.target.value)} placeholder="e.g. ₹2 Crore" />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Genres</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {GENRES.map(g => (
-                  <button key={g} type="button"
-                    className={`badge ${form.genre.includes(g) ? "" : ""}`}
-                    style={{
-                      cursor: "pointer", border: "1px solid",
-                      borderColor: form.genre.includes(g) ? "var(--gold)" : "var(--border)",
-                      color: form.genre.includes(g) ? "var(--gold)" : "var(--muted)",
-                      background: "var(--bg3)",
-                    }}
-                    onClick={() => toggleGenre(g)}
-                  >{g}</button>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Poster URL</label>
-              <input className="form-input" value={form.posterUrl} onChange={e => set("posterUrl", e.target.value)} placeholder="https://…" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Synopsis</label>
-              <textarea className="form-textarea" value={form.synopsis} onChange={e => set("synopsis", e.target.value)} placeholder="Brief description of the film…" style={{ minHeight: 100 }} />
-            </div>
-          </>
-        )}
-
-        {/* ── Step 1: Cast ── */}
-        {step === 1 && (
-          <>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: 20 }}>
-              Add cast members for this film. You can skip this and update later.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <input className="form-input" value={newCastName} onChange={e => setNewCastName(e.target.value)} placeholder="Full Name *" />
-              <input className="form-input" value={newCastRole} onChange={e => setNewCastRole(e.target.value)} placeholder="Role / Character (e.g. Hero)" />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 12, alignItems: "center" }}>
-              <select className="form-select" value={newCastType} onChange={e => setNewCastType(e.target.value)}>
-                {["Actor", "Actress", "Director", "Producer", "Music Director", "Cinematographer", "Other"].map(t => <option key={t}>{t}</option>)}
-              </select>
-              <input className="form-input" value={newCastPhoto} onChange={e => setNewCastPhoto(e.target.value)} placeholder="Photo URL (optional)" />
-              <button className="btn btn-outline btn-sm" type="button" onClick={addCast} style={{ whiteSpace: "nowrap" }}>+ Add</button>
-            </div>
-            {form.cast.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {form.cast.map((c, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg3)", padding: "10px 14px", borderRadius: 4, border: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {c.photo ? (
-                        <img src={c.photo} alt={c.name} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }} />
-                      ) : (
-                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--bg2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem" }}>👤</div>
-                      )}
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{c.name}</span>
-                        {c.role && <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}> — {c.role}</span>}
-                        <span style={{ color: "var(--gold)", fontSize: "0.72rem", marginLeft: 8 }}>{c.type}</span>
-                      </div>
-                    </div>
-                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeCast(i)} style={{ color: "var(--red)" }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: "var(--muted)", fontSize: "0.85rem", textAlign: "center", padding: "20px 0" }}>No cast added yet.</p>
-            )}
-          </>
-        )}
-
-        {/* ── Step 2: Media ── */}
-        {step === 2 && (
-          <>
-            <div className="form-group">
-              <label className="form-label">YouTube Trailer ID</label>
-              <input className="form-input" value={form.trailerYtId} onChange={e => set("trailerYtId", e.target.value)} placeholder="e.g. dQw4w9WgXcQ (from youtube.com/watch?v=…)" />
-              {form.trailerYtId && (
-                <div className="trailer-embed" style={{ maxWidth: 400, marginTop: 10 }}>
-                  <iframe src={`https://www.youtube.com/embed/${form.trailerYtId}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Preview" />
-                </div>
-              )}
-            </div>
-            <hr className="divider" />
-            <label className="form-label" style={{ marginBottom: 12 }}>Songs</label>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-              <input className="form-input" style={{ flex: 2, minWidth: 120 }} value={newSongTitle} onChange={e => setNewSongTitle(e.target.value)} placeholder="Song title" onKeyDown={e => e.key === "Enter" && addSong()} />
-              <input className="form-input" style={{ flex: 1, minWidth: 100 }} value={newSongSinger} onChange={e => setNewSongSinger(e.target.value)} placeholder="Singer(s)" onKeyDown={e => e.key === "Enter" && addSong()} />
-              <button className="btn btn-outline btn-sm" type="button" onClick={addSong}>+ Add</button>
-            </div>
-            {form.songs.length > 0 && (
-              <div className="song-list">
-                {form.songs.map((s, i) => (
-                  <div key={i} className="song-item">
-                    <span className="song-num">{i + 1}</span>
-                    <div className="song-info">
-                      <div className="song-title">{s.title}</div>
-                      {s.singer && <div className="song-singer">{s.singer}</div>}
-                    </div>
-                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeSong(i)} style={{ color: "var(--red)", opacity: 1 }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── Step 3: Account ── */}
-        {step === 3 && (
-          <>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: 20 }}>
-              Create an account to manage your movie's profile, update box office numbers, and post news.
-            </p>
+          <div className="form-grid">
             <div className="form-group">
               <label className="form-label">Email *</label>
-              <input className="form-input" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="your@email.com" />
+              <input className="form-input" type="email" required value={form.email} onChange={e => set("email", e.target.value)} placeholder="contact@yourproduction.com" />
             </div>
-            <div className="form-grid">
-              <div className="form-group">
-                <label className="form-label">Password * (min 6 chars)</label>
-                <input className="form-input" type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder="••••••••" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Confirm Password *</label>
-                <input className="form-input" type="password" value={form.confirm} onChange={e => set("confirm", e.target.value)} placeholder="••••••••" />
-                {form.confirm && form.password !== form.confirm && (
-                  <p style={{ color: "var(--red)", fontSize: "0.75rem", marginTop: 4 }}>Passwords don't match</p>
-                )}
-              </div>
+            <div className="form-group">
+              <label className="form-label">Location</label>
+              <input className="form-input" value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Bhubaneswar, Odisha" />
             </div>
-            {error && <p style={{ color: "var(--red)", fontSize: "0.85rem", marginBottom: 12, padding: "10px 14px", background: "rgba(217,79,61,0.1)", borderRadius: 4 }}>{error}</p>}
-          </>
-        )}
+          </div>
 
-        {/* Navigation */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
-          <button
-            className="btn btn-outline btn-sm" type="button"
-            onClick={() => step > 0 ? setStep(s => s - 1) : null}
-            style={{ visibility: step === 0 ? "hidden" : "visible" }}
-          >
-            ← Back
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Password * (min 6 chars)</label>
+              <input className="form-input" type="password" required value={form.password} onChange={e => set("password", e.target.value)} placeholder="••••••••" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Confirm Password *</label>
+              <input className="form-input" type="password" required value={form.confirm} onChange={e => set("confirm", e.target.value)} placeholder="••••••••" />
+              {form.confirm && form.password !== form.confirm && (
+                <p style={{ color: "var(--red)", fontSize: "0.75rem", marginTop: 4 }}>Passwords don't match</p>
+              )}
+            </div>
+          </div>
+
+          <hr className="divider" />
+          <p style={{ color: "var(--muted)", fontSize: "0.82rem", marginBottom: 16 }}>Optional — you can fill these later from your dashboard.</p>
+
+          <div className="form-group">
+            <label className="form-label">Logo URL</label>
+            <input className="form-input" value={form.logo} onChange={e => set("logo", e.target.value)} placeholder="https://…" />
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Founded Year</label>
+              <input className="form-input" value={form.founded} onChange={e => set("founded", e.target.value)} placeholder="e.g. 2010" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Website</label>
+              <input className="form-input" value={form.website} onChange={e => set("website", e.target.value)} placeholder="https://…" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">About Your Production</label>
+            <textarea className="form-textarea" value={form.bio} onChange={e => set("bio", e.target.value)} placeholder="Brief description of your production company…" />
+          </div>
+
+          {error && <p style={{ color: "var(--red)", fontSize: "0.85rem", marginBottom: 12, padding: "10px 14px", background: "rgba(217,79,61,0.1)", borderRadius: 4 }}>{error}</p>}
+
+          <button className="btn btn-gold" type="submit" disabled={loading} style={{ width: "100%", padding: "12px" }}>
+            {loading ? "Creating account…" : "🎬 Create Production Account"}
           </button>
-
-          {step < steps.length - 1 ? (
-            <button className="btn btn-gold btn-sm" type="button" onClick={() => setStep(s => s + 1)} disabled={!canNext()}>
-              Next: {steps[step + 1]} →
-            </button>
-          ) : (
-            <button className="btn btn-gold" type="button" onClick={handleSubmit} disabled={loading || !canNext()}>
-              {loading ? "Registering…" : "🎬 Register Film"}
-            </button>
-          )}
-        </div>
+        </form>
       </div>
     </div>
   );

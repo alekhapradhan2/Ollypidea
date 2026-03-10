@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { API } from "../api/api";
-import MovieCard from "../components/MovieCard";
+import { MovieCard, SafeImg } from "../components/UI";
+
+function NewsImg({ src, alt }) {
+  const [broken, setBroken] = React.useState(false);
+  if (broken) return null;
+  return <div className="news-card-img"><img src={src} alt={alt} onError={() => setBroken(true)} /></div>;
+}
 
 export default function Home() {
+  const navigate = useNavigate();
   const [movies, setMovies] = useState([]);
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,15 +97,21 @@ export default function Home() {
             </div>
             <div className="news-grid">
               {news.map(n => (
-                <div key={n._id} className="news-card">
-                  {n.imageUrl && (
-                    <div className="news-card-img"><img src={n.imageUrl} alt={n.title} /></div>
-                  )}
-                  <div className="news-card-body">
-                    <div className="news-card-category">{n.category || "Update"}</div>
-                    <div className="news-card-title">{n.title}</div>
-                    <div className="news-card-content">{n.content?.slice(0, 120)}{n.content?.length > 120 ? "…" : ""}</div>
-                    {n.movieTitle && <div className="news-card-meta">🎬 {n.movieTitle}</div>}
+                <div key={n._id} className="news-card news-card-clickable" onClick={() => navigate(`/news/${n._id}`)}>
+                  <div className="news-card-img-fixed">
+                    {n.imageUrl ? <img src={n.imageUrl} alt={n.title} onError={e=>e.target.style.display="none"} />
+                      : <div className="news-card-img-placeholder">📰</div>}
+                    <div className="news-card-cat-badge" style={{ background: n.category==="Interview"?"#e07b39":n.category==="Trailer"?"#3a86ff":"var(--gold)" }}>
+                      {n.category || "Update"}
+                    </div>
+                  </div>
+                  <div className="news-card-body news-card-body-fixed">
+                    <div className="news-card-title news-card-title-clamp">{n.title}</div>
+                    <div className="news-card-content news-card-content-clamp">{n.content}</div>
+                    <div className="news-card-footer">
+                      {n.movieTitle && <span className="news-card-movie">🎬 {n.movieTitle}</span>}
+                      <span className="news-card-date">{new Date(n.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</span>
+                    </div>
                   </div>
                 </div>
               ))}

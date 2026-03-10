@@ -1,26 +1,22 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getToken, setToken } from "../api/api";
 
-export default function Navbar({ currentMovie, onLoginClick, onRefresh }) {
+function SafeImg({ src, alt, className }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return null;
+  return <img src={src} alt={alt} className={className} onError={() => setBroken(true)} />;
+}
+
+export default function Navbar({ production, onLoginClick, onLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isLoggedIn = !!getToken();
+  const active = (p) => location.pathname === p ? "nav-link active" : "nav-link";
 
-  const handleLogout = () => {
-    setToken(null);
-    onRefresh && onRefresh();
-    navigate("/");
-  };
-
-  const active = (path) =>
-    location.pathname === path ? "nav-link active" : "nav-link";
+  const handleLogout = () => { onLogout(); navigate("/"); };
 
   return (
     <nav className="navbar">
-      <Link to="/" className="navbar-brand">
-        OLLI<span>PEDIA</span>
-      </Link>
+      <Link to="/" className="navbar-brand">OLLI<span>PEDIA</span></Link>
 
       <Link to="/" className={active("/")}>Home</Link>
       <Link to="/movies" className={active("/movies")}>Movies</Link>
@@ -28,23 +24,22 @@ export default function Navbar({ currentMovie, onLoginClick, onRefresh }) {
       <Link to="/news" className={active("/news")}>News</Link>
 
       <div className="nav-actions">
-        {isLoggedIn && currentMovie ? (
+        {production ? (
           <>
-            <Link to={`/movie/${currentMovie._id}`} className="btn btn-outline btn-sm">
-              My Movie
+            <Link to="/dashboard" className="nav-prod-btn">
+              {production.logo
+                ? <SafeImg src={production.logo} alt={production.name} className="nav-prod-logo" />
+                : <span className="nav-prod-avatar">{production.name[0]}</span>
+              }
+              <span className="nav-prod-name">{production.name}</span>
             </Link>
-            <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
-              Logout
-            </button>
+            <Link to="/dashboard/add-movie" className="btn btn-gold btn-sm">+ Add Movie</Link>
+            <button className="btn btn-ghost btn-sm" onClick={handleLogout}>Logout</button>
           </>
         ) : (
           <>
-            <button className="btn btn-outline btn-sm" onClick={() => onLoginClick && onLoginClick("login")}>
-              Login
-            </button>
-            <Link to="/register" className="btn btn-gold btn-sm">
-              Register Movie
-            </Link>
+            <button className="btn btn-outline btn-sm" onClick={onLoginClick}>Login</button>
+            <Link to="/register" className="btn btn-gold btn-sm">Join as Production</Link>
           </>
         )}
       </div>
