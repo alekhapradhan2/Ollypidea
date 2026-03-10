@@ -9,7 +9,7 @@ function NewsImg({ src, alt }) {
   return <div className="news-card-img"><img src={src} alt={alt} onError={() => setBroken(true)} /></div>;
 }
 
-export default function Home() {
+export default function Home({ production }) {
   const navigate = useNavigate();
   const [movies, setMovies] = useState([]);
   const [news, setNews] = useState([]);
@@ -34,7 +34,10 @@ export default function Home() {
         <p>Track box office, explore cast, read the latest news from the world of Ollywood cinema.</p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Link to="/movies" className="btn btn-gold">Browse All Films</Link>
-          <Link to="/register" className="btn btn-outline">Register Your Movie</Link>
+          {production
+            ? <Link to="/dashboard/add-movie" className="btn btn-outline">+ Add Movie</Link>
+            : <Link to="/register" className="btn btn-outline">Register Your Movie</Link>
+          }
         </div>
 
         <div className="home-stats">
@@ -124,7 +127,10 @@ export default function Home() {
             <h3>No movies yet</h3>
             <p>Be the first to register your film on Ollipedia.</p>
             <br />
-            <Link to="/register" className="btn btn-gold">Register a Movie</Link>
+            {production
+              ? <Link to="/dashboard/add-movie" className="btn btn-gold">+ Add Movie</Link>
+              : <Link to="/register" className="btn btn-gold">Register Your Production</Link>
+            }
           </div>
         )}
       </div>
