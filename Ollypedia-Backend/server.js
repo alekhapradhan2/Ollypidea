@@ -295,6 +295,33 @@ app.get("/api/news", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get single news article with related news + related movie
+app.get("/api/news/:newsId", async (req, res) => {
+  try {
+    const item = await News.findById(req.params.newsId).lean();
+    if (!item) return res.status(404).json({ error: "Not found" });
+
+    // Related news: same category or same movie, exclude self
+    const related = await News.find({
+      _id: { $ne: item._id },
+      published: true,
+      $or: [
+        { category: item.category },
+        { movieId: item.movieId },
+      ]
+    }).sort({ createdAt: -1 }).limit(4).lean();
+
+    // Related movie
+    let movie = null;
+    if (item.movieId) {
+      movie = await Movie.findById(item.movieId, "title posterUrl genre verdict releaseDate productionId")
+        .populate("productionId", "name logo").lean();
+    }
+
+    res.json({ ...item, related, movie });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Get all songs
 app.get("/api/songs", async (req, res) => {
   try {

@@ -48,6 +48,7 @@ export const API = {
   getMovies:  ()    => get("/movies"),
   getMovie:   (id)  => get(`/movies/${id}`),
   getNews:    ()    => get("/news"),
+  getNewsItem: (id)  => get(`/news/${id}`),
   getSongs:   ()    => get("/songs"),
   postReview: (id, body) => post(`/movies/${id}/reviews`, body),
 

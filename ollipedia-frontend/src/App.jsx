@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import AddMovie from "./pages/AddMovie";
 import ProductionProfile from "./pages/ProductionProfile";
 import CastProfile from "./pages/CastProfile";
+import NewsDetail from "./pages/NewsDetail";
 
 export default function App() {
   const [production, setProduction] = useState(() => {
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="/dashboard/add-movie"    element={<AddMovie production={production} onToast={showToast} />} />
         <Route path="/production/:id"         element={<ProductionProfile production={production} />} />
         <Route path="/cast/:id"               element={<CastProfile />} />
+        <Route path="/news/:id"               element={<NewsDetail />} />
       </Routes>
 
       {showLogin && (
@@ -62,6 +64,7 @@ export default function App() {
         />
       )}
 
+    
     </BrowserRouter>
   );
 }

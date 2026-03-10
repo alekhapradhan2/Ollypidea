@@ -546,3 +546,128 @@ img::before {
 .filmography-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
 .filmography-role  { font-size: 0.8rem; color: var(--muted); font-style: italic; margin-bottom: 3px; }
 .filmography-meta  { font-size: 0.75rem; color: var(--muted); }
+
+/* ══════════════════════════════════════════
+   NEWS CARDS — equal height, fixed layout
+   ══════════════════════════════════════════ */
+
+/* Clickable cursor + lift */
+.news-card-clickable { cursor: pointer; }
+.news-card-clickable:hover { border-color: var(--gold); transform: translateY(-3px); transition: transform 0.15s, border-color 0.15s; }
+
+/* Fixed-height image area with category badge overlay */
+.news-card-img-fixed {
+  position: relative;
+  width: 100%; height: 190px;
+  background: var(--bg3); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.news-card-img-fixed img { width: 100%; height: 100%; object-fit: cover; }
+.news-card-img-placeholder { font-size: 2.5rem; opacity: 0.3; }
+
+/* Category badge sitting on image */
+.news-card-cat-badge {
+  position: absolute; top: 10px; left: 10px;
+  font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #fff;
+  padding: 3px 10px; border-radius: 3px;
+}
+
+/* Fixed-height body — title 2 lines, content 3 lines, footer pinned */
+.news-card-body-fixed {
+  display: flex; flex-direction: column;
+  flex: 1; padding: 16px;
+}
+.news-card-title-clamp {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 1rem; font-weight: 700;
+  line-height: 1.35; margin-bottom: 8px; min-height: 2.7em;
+}
+.news-card-content-clamp {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 0.83rem; color: var(--muted);
+  line-height: 1.55; flex: 1;
+}
+
+/* Footer always at bottom */
+.news-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 4px;
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem; color: var(--muted);
+}
+.news-card-movie { color: var(--gold); font-weight: 600; }
+.news-card-date  { margin-left: auto; }
+
+/* Make all cards in a row the same height */
+.news-grid { align-items: stretch; }
+.news-grid .news-card { display: flex; flex-direction: column; }
+
+/* ══════════════════════════════════════════
+   NEWS ARTICLE PAGE
+   ══════════════════════════════════════════ */
+
+.news-article { max-width: 780px; margin: 0 auto; }
+
+.news-article-hero {
+  width: 100%; height: 420px; border-radius: var(--radius);
+  overflow: hidden; background: var(--bg2);
+  margin-bottom: 28px;
+}
+@media (max-width: 600px) { .news-article-hero { height: 220px; } }
+
+.news-article-meta {
+  display: flex; align-items: center; gap: 14px;
+  flex-wrap: wrap; margin-bottom: 16px;
+}
+.news-article-cat {
+  font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #fff;
+  padding: 4px 12px; border-radius: 3px;
+}
+.news-article-movie-link {
+  font-size: 0.82rem; color: var(--gold); font-weight: 600;
+  text-decoration: none; display: flex; align-items: center; gap: 4px;
+}
+.news-article-movie-link:hover { text-decoration: underline; }
+.news-article-date { font-size: 0.8rem; color: var(--muted); margin-left: auto; }
+
+.news-article-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 900; line-height: 1.2;
+  margin-bottom: 20px;
+}
+
+.news-article-divider {
+  width: 60px; height: 3px;
+  background: var(--gold); border-radius: 2px;
+  margin-bottom: 24px;
+}
+
+.news-article-body {
+  font-size: 1rem; line-height: 1.85;
+  color: #c8bfb5;
+}
+.news-article-body p { margin-bottom: 18px; }
+
+/* ── Related movie card ── */
+.news-related-movie {
+  display: flex; align-items: center; gap: 20px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px;
+  cursor: pointer; transition: border-color 0.15s;
+}
+.news-related-movie:hover { border-color: var(--gold); }
+.news-related-movie-poster {
+  width: 72px; height: 96px; flex-shrink: 0;
+  border-radius: 4px; overflow: hidden;
+  background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+}
+.news-related-movie-info { flex: 1; min-width: 0; }
+.news-related-movie-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.news-related-movie-prod  { font-size: 0.8rem; color: var(--muted); }
+.news-related-movie-arrow { font-size: 1.4rem; color: var(--gold); flex-shrink: 0; }
