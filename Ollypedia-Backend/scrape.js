@@ -42,13 +42,13 @@ const MovieSchema = new mongoose.Schema({
   posterUrl:   String,
   productionId:  { type: mongoose.Schema.Types.ObjectId, ref: "Production" },
   collaborators: [{ type: mongoose.Schema.Types.ObjectId, ref: "Production" }],
-  cast: [{
-    castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },
-    name:   String,
-    photo:  String,
-    type:   String,
-    role:   String,
-  }],
+  cast: [new mongoose.Schema({
+    castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast", required: true },
+    name:   { type: String, default: "" },
+    photo:  { type: String, default: "" },
+    type:   { type: String, default: "Actor" },
+    role:   { type: String, default: "" },
+  }, { _id: false })],
   media: {
     trailer: { ytId: String, url: String },
     songs:   [{ title: String, singer: String, ytId: String, url: String }],
@@ -65,7 +65,7 @@ const MovieSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Cast  = mongoose.model("Cast",  CastSchema);
-//  const Movie = mongoose.model("Movie", MovieSchema);
+const Movie = mongoose.model("Movie", MovieSchema);
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -232,7 +232,7 @@ async function saveFilms(films) {
         dirDoc = await Cast.create({ name: f.director, type: "Director" });
         castCreated++;
       }
-      castIds.push({ castId: dirDoc._id, name: dirDoc.name, photo: "", type: "Director", role: "Director" });
+      castIds.push({ castId: dirDoc._id.toString(), name: dirDoc.name, photo: "", type: "Director", role: "Director" });
     }
 
     // Actors
@@ -243,7 +243,7 @@ async function saveFilms(films) {
         castDoc = await Cast.create({ name, type: "Actor" });
         castCreated++;
       }
-      castIds.push({ castId: castDoc._id, name: castDoc.name, photo: "", type: "Actor", role: "" });
+      castIds.push({ castId: castDoc._id.toString(), name: castDoc.name, photo: "", type: "Actor", role: "" });
     }
 
     // Create the movie
@@ -263,7 +263,7 @@ async function saveFilms(films) {
 
     // Back-link cast → movie
     for (const c of castIds) {
-      await Cast.findByIdAndUpdate(c.castId, { $addToSet: { movies: movie._id } });
+      await Cast.findByIdAndUpdate(c.castId.toString(), { $addToSet: { movies: movie._id } });
     }
 
     console.log(`  ✅ Created: ${f.title} (${f.releaseDate}) — ${castIds.length} cast`);
@@ -289,7 +289,7 @@ async function main() {
   const args  = process.argv.slice(2);
   const years = args.length > 0
     ? args.map(Number)
-    : [2019, 2020, 2021, 2022, 2023, 2024];
+    : [1936, 1937, 1938, 1939, 1940, 1941, 1942, 1943, 1944, 1945, 1946, 1947, 1948, 1949, 1950, 1951, 1952, 1953, 1954, 1955, 1956, 1957, 1958, 1959, 1960, 1961, 1962, 1963, 1964, 1965, 1966, 1967, 1968, 1969, 1970, 1971, 1972, 1973, 1974, 1975, 1976, 1977, 1978, 1979, 1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018];
 
   let totalCreated = 0, totalSkipped = 0, totalCast = 0;
 
