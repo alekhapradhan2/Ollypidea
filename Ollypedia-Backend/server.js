@@ -85,13 +85,16 @@ const MovieSchema = new mongoose.Schema({
     role:   String,
   }],
 
+  thumbnailUrl: String,  // hero banner shown on homepage
+
   media: {
-    trailer: { ytId: String, url: String },
+    trailer: { ytId: String, url: String, thumbnailUrl: String },
     songs: [{
-      title:  String,
-      singer: String,
-      ytId:   String,
-      url:    String,
+      title:        String,
+      singer:       String,
+      ytId:         String,
+      url:          String,
+      thumbnailUrl: String,
     }],
   },
 
@@ -106,10 +109,30 @@ const MovieSchema = new mongoose.Schema({
   news:     [{ type: mongoose.Schema.Types.ObjectId, ref: "News" }],
 }, { timestamps: true });
 
-const Production = mongoose.model("Production", ProductionSchema);
-const Movie      = mongoose.model("Movie",      MovieSchema);
-const Cast       = mongoose.model("Cast",       CastSchema);
-const News       = mongoose.model("News",       NewsSchema);
+// CastMember — industry professional with login
+const CastMemberSchema = new mongoose.Schema({
+  name:     { type: String, required: true },
+  email:    { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  // Multiple roles supported e.g. ["Actor","Director"]
+  roles:    [{ type: String }],
+  photo:    String,
+  banner:   String,
+  bio:      String,
+  dob:      String,
+  gender:   String,
+  location: String,
+  website:  String,
+  instagram: String,
+  // Link to the Cast document (public profile)
+  castId:   { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },
+}, { timestamps: true });
+
+const Production  = mongoose.model("Production",  ProductionSchema);
+const Movie       = mongoose.model("Movie",       MovieSchema);
+const Cast        = mongoose.model("Cast",        CastSchema);
+const News        = mongoose.model("News",        NewsSchema);
+const CastMember  = mongoose.model("CastMember",  CastMemberSchema);
 
 // ── Auth middleware ──
 const auth = (req, res, next) => {
@@ -117,6 +140,18 @@ const auth = (req, res, next) => {
   if (!token) return res.status(401).json({ error: "No token" });
   try {
     req.production = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+// CastMember auth middleware
+const castAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token" });
+  try {
+    req.castMember = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
     res.status(401).json({ error: "Invalid token" });
@@ -173,6 +208,102 @@ app.post("/api/auth/login", async (req, res) => {
     );
     const obj = prod.toObject(); delete obj.password;
     res.json({ token, production: obj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════
+// CAST MEMBER AUTH ROUTES
+// ══════════════════════════════════════════
+
+// Register cast/crew member
+app.post("/api/cast-auth/register", async (req, res) => {
+  try {
+    const { name, email, password, roles, photo, bio, gender, location, dob } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "Name required" });
+    if (!email || !password || password.length < 6)
+      return res.status(400).json({ error: "Valid email and password (min 6 chars) required" });
+    if (!roles?.length) return res.status(400).json({ error: "Select at least one role" });
+
+    const exists = await CastMember.findOne({ email: email.toLowerCase() });
+    if (exists) return res.status(400).json({ error: "Email already registered" });
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    // Create the public Cast document so they appear in search
+    const castDoc = await Cast.create({
+      name: name.trim(),
+      type: roles[0], // primary role
+      bio: bio || "",
+      photo: photo || "",
+    });
+
+    const member = await CastMember.create({
+      name: name.trim(), email: email.toLowerCase(), password: hashed,
+      roles, photo: photo || "", bio: bio || "",
+      gender: gender || "", location: location || "", dob: dob || "",
+      castId: castDoc._id,
+    });
+
+    const token = jwt.sign(
+      { castMemberId: member._id, email: member.email },
+      process.env.JWT_SECRET, { expiresIn: "30d" }
+    );
+    const obj = member.toObject(); delete obj.password;
+    res.json({ token, castMember: obj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Login cast member
+app.post("/api/cast-auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const member = await CastMember.findOne({ email: email.toLowerCase() });
+    if (!member) return res.status(401).json({ error: "Invalid credentials" });
+    const ok = await bcrypt.compare(password, member.password);
+    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+    const token = jwt.sign(
+      { castMemberId: member._id, email: member.email },
+      process.env.JWT_SECRET, { expiresIn: "30d" }
+    );
+    const obj = member.toObject(); delete obj.password;
+    res.json({ token, castMember: obj });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Get logged-in cast member's own profile + their movies
+app.get("/api/cast-auth/me", castAuth, async (req, res) => {
+  try {
+    const member = await CastMember.findById(req.castMember.castMemberId).select("-password").lean();
+    if (!member) return res.status(404).json({ error: "Not found" });
+    // Get movies they appear in
+    const movies = await Movie.find(
+      { "cast.castId": member.castId },
+      "title posterUrl releaseDate verdict genre productionId cast"
+    ).populate("productionId", "name logo").lean();
+    res.json({ ...member, movies });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Update cast member profile
+app.patch("/api/cast-auth/me", castAuth, async (req, res) => {
+  try {
+    const allowed = ["name","photo","banner","bio","gender","location","dob","website","instagram","roles"];
+    const update = {};
+    allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    const member = await CastMember.findByIdAndUpdate(
+      req.castMember.castMemberId, update, { new: true, select: "-password" }
+    );
+    // Sync name/photo/type to Cast document
+    if (member.castId) {
+      const castUpdate = {};
+      if (update.name)  castUpdate.name  = update.name;
+      if (update.photo) castUpdate.photo = update.photo;
+      if (update.roles) castUpdate.type  = update.roles[0];
+      if (update.bio)   castUpdate.bio   = update.bio;
+      if (Object.keys(castUpdate).length)
+        await Cast.findByIdAndUpdate(member.castId, castUpdate);
+    }
+    res.json(member);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -352,6 +483,16 @@ app.post("/api/movies/:id/reviews", async (req, res) => {
 // PROTECTED ROUTES (production company login required)
 // ══════════════════════════════════════════
 
+// Extract bare 11-char YouTube ID from any URL or ID string
+const extractYtId = (input) => {
+  if (!input) return "";
+  const s = String(input).trim();
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  return s;
+};
+
 // Create a new movie
 app.post("/api/movies", auth, async (req, res) => {
   try {
@@ -372,7 +513,20 @@ app.post("/api/movies", auth, async (req, res) => {
     const posterUrl   = body.posterUrl   || "";
     const verdict     = body.verdict     || "Upcoming";
     const status      = body.status      || "Upcoming";
-    const media       = (body.media && typeof body.media === "object") ? body.media : { trailer: {}, songs: [] };
+    // Normalise media — extract bare YT IDs from any URL format
+    const rawMedia = (body.media && typeof body.media === "object") ? body.media : { trailer: {}, songs: [] };
+    const media = {
+      trailer: rawMedia.trailer ? {
+        ytId: extractYtId(rawMedia.trailer.ytId || rawMedia.trailer.url || ""),
+        thumbnailUrl: rawMedia.trailer.thumbnailUrl || "",
+      } : {},
+      songs: (rawMedia.songs || []).map(s => ({
+        title:        String(s.title   || ""),
+        singer:       String(s.singer  || ""),
+        ytId:         extractYtId(s.ytId || s.url || ""),
+        thumbnailUrl: String(s.thumbnailUrl || (s.ytId ? `https://img.youtube.com/vi/${extractYtId(s.ytId)}/hqdefault.jpg` : "")),
+      })),
+    };
 
     // Normalise cast — handle array or accidental JSON string
     let castArray = [];
@@ -445,7 +599,7 @@ app.patch("/api/movies/:id", auth, async (req, res) => {
       return res.status(403).json({ error: "Forbidden" });
 
     const allowed = ["title","category","genre","releaseDate","releaseTBA","director",
-      "producer","budget","language","synopsis","posterUrl","verdict","status"];
+      "producer","budget","language","synopsis","posterUrl","thumbnailUrl","verdict","status"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     if (req.body.verdict) update.status = req.body.verdict === "Upcoming" ? "Upcoming" : "Released";

@@ -26,10 +26,10 @@ export function verdictClass(v) {
 }
 
 // ── Movie Card ──
-export function MovieCard({ movie }) {
+export function MovieCard({ movie, portalMode }) {
   const navigate = useNavigate();
   return (
-    <div className="movie-card" onClick={() => navigate(`/movie/${movie._id}`)}>
+    <div className="movie-card" onClick={() => navigate(portalMode ? `/portal/movie/${movie._id}` : `/movie/${movie._id}`)}>
       <div className="movie-card-poster">
         <SafeImg
           src={movie.posterUrl} alt={movie.title}

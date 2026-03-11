@@ -15,7 +15,7 @@ export default function AddMovie({ production, onToast }) {
   // Basic info
   const [form, setForm] = useState({
     title: "", category: "Feature Film", genre: [], releaseDate: "",
-    releaseTBA: false, language: "Odia", budget: "", synopsis: "", posterUrl: "",
+    releaseTBA: false, language: "Odia", budget: "", synopsis: "", posterUrl: "", thumbnailUrl: "",
   });
 
   // Cast (includes director, producer etc.)
@@ -34,12 +34,12 @@ export default function AddMovie({ production, onToast }) {
   const [castSearching, setCastSearching] = useState(false);
   const castTimer = useRef(null);
 
-  // New cast entry form
-  const [newName,  setNewName]  = useState("");
-  const [newRole,  setNewRole]  = useState("");
-  const [newType,  setNewType]  = useState("Actor");
-  const [newPhoto, setNewPhoto] = useState("");
-  const [newBio,   setNewBio]   = useState("");
+  // ── New cast form ──
+  const [showNewCast, setShowNewCast] = useState(false);
+  const [newName,     setNewName]     = useState("");
+  const [newType,     setNewType]     = useState("Actor");
+  const [newRole,     setNewRole]     = useState("");
+  const [newPhoto,    setNewPhoto]    = useState("");
 
   // ── Collab search ──
   const [collabQuery,   setCollabQuery]   = useState("");
@@ -47,9 +47,32 @@ export default function AddMovie({ production, onToast }) {
   const collabTimer = useRef(null);
 
   // ── Song form ──
+  const [songUrl,    setSongUrl]    = useState("");  // accepts full YT URL or bare ID
   const [songTitle,  setSongTitle]  = useState("");
   const [songSinger, setSongSinger] = useState("");
-  const [songYtId,   setSongYtId]   = useState("");
+  const [songThumb,  setSongThumb]  = useState("");
+  const [songFetching, setSongFetching] = useState(false);
+
+  // Extract bare 11-char YouTube ID from any URL or ID string
+  const extractYtId = (input) => {
+    if (!input) return "";
+    const s = input.trim();
+    const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+    if (m) return m[1];
+    if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+    return s; // fallback, let it fail gracefully
+  };
+
+  // When user pastes a YT URL — auto-fill thumbnail
+  const handleSongUrlChange = (val) => {
+    setSongUrl(val);
+    const id = extractYtId(val);
+    if (id.length >= 11) {
+      setSongThumb(`https://img.youtube.com/vi/${id}/hqdefault.jpg`);
+    } else {
+      setSongThumb("");
+    }
+  };
 
   const steps = ["Basic Info", "Cast & Crew", "Collaborators", "Media", "Review & Submit"];
   const set   = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -89,8 +112,12 @@ export default function AddMovie({ production, onToast }) {
 
   const addNewCast = () => {
     if (!newName.trim()) return;
-    setCast(prev => [...prev, { name: newName.trim(), role: newRole.trim(), type: newType, photo: newPhoto.trim(), bio: newBio.trim(), isNew: true }]);
-    setNewName(""); setNewRole(""); setNewPhoto(""); setNewBio(""); setNewType("Actor");
+    if (cast.find(x => x.name.toLowerCase() === newName.trim().toLowerCase())) {
+      setShowNewCast(false); return;
+    }
+    setCast(prev => [...prev, { castId: "", isNew: true, name: newName.trim(), type: newType, role: newRole.trim(), photo: newPhoto.trim() }]);
+    setNewName(""); setNewRole(""); setNewPhoto(""); setNewType("Actor");
+    setShowNewCast(false);
   };
 
   const updateCastRole = (i, role) => setCast(prev => prev.map((c, idx) => idx === i ? { ...c, role } : c));
@@ -105,8 +132,15 @@ export default function AddMovie({ production, onToast }) {
 
   const addSong = () => {
     if (!songTitle.trim()) return;
-    setSongs(prev => [...prev, { title: songTitle.trim(), singer: songSinger.trim(), ytId: songYtId.trim() }]);
-    setSongTitle(""); setSongSinger(""); setSongYtId("");
+    const ytId = extractYtId(songUrl);
+    const thumb = songThumb || (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : "");
+    setSongs(prev => [...prev, {
+      title: songTitle.trim(),
+      singer: songSinger.trim(),
+      ytId,
+      thumbnailUrl: thumb,
+    }]);
+    setSongUrl(""); setSongTitle(""); setSongSinger(""); setSongThumb("");
   };
   const removeSong = (i) => setSongs(prev => prev.filter((_, idx) => idx !== i));
 
@@ -119,21 +153,45 @@ export default function AddMovie({ production, onToast }) {
       const director = cast.find(c => c.type === "Director")?.name || "";
       const producer = cast.find(c => c.type === "Producer")?.name || "";
 
+      // castId MUST be plain 24-char hex string — never a Mongoose ObjectId object
       const body = {
-        ...form,
-        releaseDate: form.releaseTBA ? "" : form.releaseDate,
+        title:       String(form.title      || ""),
+        category:    String(form.category   || "Feature Film"),
+        genre:       Array.isArray(form.genre) ? [...form.genre] : [],
+        releaseDate: form.releaseTBA ? "" : String(form.releaseDate || ""),
+        releaseTBA:  !!form.releaseTBA,
+        language:    String(form.language   || "Odia"),
+        budget:      String(form.budget     || ""),
+        synopsis:    String(form.synopsis   || ""),
+        posterUrl:   String(form.posterUrl  || ""),
+        thumbnailUrl: String(form.thumbnailUrl || ""),
         director,
         producer,
         cast: cast.map(c => {
-          const entry = { isNew: !!c.isNew, name: c.name, type: c.type, role: c.role || "", photo: c.photo || "", bio: c.bio || "" };
-          if (!c.isNew && c.castId) entry.castId = c.castId;
-          return entry;
+          const rawId = String(c.castId || "");
+          const hexId = (rawId.match(/([a-f0-9]{24})/i) || [])[1] || "";
+          return {
+            castId: hexId,
+            isNew:  c.isNew === true || !hexId,
+            name:   String(c.name  || ""),
+            type:   String(c.type  || "Actor"),
+            role:   String(c.role  || ""),
+            photo:  String(c.photo || ""),
+          };
         }),
         media: {
-          trailer: trailerYtId ? { ytId: trailerYtId } : {},
-          songs,
+          trailer: trailerYtId ? { ytId: String(trailerYtId) } : {},
+          songs: (songs || []).map(s => ({
+            title:        String(s.title        || ""),
+            singer:       String(s.singer       || ""),
+            ytId:         String(s.ytId         || ""),
+            thumbnailUrl: String(s.thumbnailUrl || (s.ytId ? `https://img.youtube.com/vi/${s.ytId}/hqdefault.jpg` : "")),
+          })),
         },
-        collaborators: collaborators.map(c => c._id),
+        collaborators: (collaborators || []).map(c => {
+          const raw = String(c._id || c || "");
+          return (raw.match(/([a-f0-9]{24})/i) || [])[1] || "";
+        }).filter(Boolean),
       };
 
       const movie = await API.createMovie(body);
@@ -156,6 +214,9 @@ export default function AddMovie({ production, onToast }) {
   return (
     <div className="register-page" style={{ maxWidth: 760 }}>
       <div className="register-header">
+        <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:12 }}>
+          <button className="btn btn-ghost btn-sm" type="button" onClick={() => navigate("/dashboard")}>← Back to Portal</button>
+        </div>
         <h1>Add New Film</h1>
         <p>Adding as <strong style={{ color: "var(--gold)" }}>{production.name}</strong></p>
       </div>
@@ -215,7 +276,16 @@ export default function AddMovie({ production, onToast }) {
             </div>
             <div className="form-group">
               <label className="form-label">Poster URL</label>
-              <input className="form-input" value={form.posterUrl} onChange={e => set("posterUrl", e.target.value)} placeholder="https://…" />
+              <input className="form-input" value={form.posterUrl} onChange={e => set("posterUrl", e.target.value)} placeholder="https://… (portrait poster)" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Thumbnail / Banner URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(wide image shown on homepage hero)</span></label>
+              <input className="form-input" value={form.thumbnailUrl} onChange={e => set("thumbnailUrl", e.target.value)} placeholder="https://… (landscape 16:9 image)" />
+              {form.thumbnailUrl && (
+                <img src={form.thumbnailUrl} alt="thumbnail preview"
+                  style={{ marginTop:8, width:"100%", maxHeight:160, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }}
+                  onError={e => e.target.style.display="none"} />
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Synopsis</label>
@@ -227,93 +297,91 @@ export default function AddMovie({ production, onToast }) {
         {/* ── STEP 1: Cast & Crew ── */}
         {step === 1 && (
           <>
-            {/* Quick-add Director / Producer if not already added */}
-            {(!hasDirector || !hasProducer) && (
-              <div style={{ background:"rgba(201,151,58,0.07)", border:"1px solid rgba(201,151,58,0.3)", borderRadius:6, padding:"12px 16px", marginBottom:20 }}>
-                <p style={{ fontSize:"0.8rem", color:"var(--gold)", fontWeight:700, marginBottom:8 }}>💡 Add your Director and Producer as crew members below — they'll appear in the Cast section of the movie page.</p>
-                <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-                  {!hasDirector && (
-                    <button className="btn btn-outline btn-sm" type="button"
-                      onClick={() => { setNewType("Director"); setNewRole("Director"); }}>
-                      + Add Director
-                    </button>
-                  )}
-                  {!hasProducer && (
-                    <button className="btn btn-outline btn-sm" type="button"
-                      onClick={() => { setNewType("Producer"); setNewRole("Producer"); }}>
-                      + Add Producer
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Search existing cast */}
-            <p className="form-label" style={{ marginBottom:8 }}>Search existing cast/crew in the system</p>
-            <div style={{ position:"relative", marginBottom:20 }}>
-              <input className="form-input" value={castQuery} onChange={e => setCastQuery(e.target.value)}
+            <p className="form-label" style={{ marginBottom:8 }}>Search existing cast & crew</p>
+            <div style={{ position:"relative", marginBottom:16 }}>
+              <input className="form-input" value={castQuery}
+                onChange={e => setCastQuery(e.target.value)}
                 placeholder="Type name to search… (e.g. Babushaan)" />
               {(castResults.length > 0 || castSearching) && (
                 <div className="search-dropdown">
                   {castSearching && <div className="search-dropdown-item muted">Searching…</div>}
-                  {castResults.map(c => (
-                    <div key={c._id} className="search-dropdown-item" onClick={() => addExistingCast(c)}>
-                      <span style={{ fontWeight:600 }}>{c.name}</span>
-                      <span style={{ color:"var(--gold)", fontSize:"0.75rem", marginLeft:8 }}>{c.type}</span>
-                      <span style={{ color:"var(--muted)", fontSize:"0.75rem", marginLeft:8 }}>
-                        {c.movies?.length || 0} film{c.movies?.length !== 1 ? "s" : ""}
-                      </span>
+                  {castResults.length === 0 && !castSearching && castQuery.trim() && (
+                    <div className="search-dropdown-item" style={{ color:"var(--muted)", fontSize:"0.82rem" }}>
+                      No results for "{castQuery}"
+                    </div>
+                  )}
+                  {castResults.map(r => (
+                    <div key={r._id} className="search-dropdown-item" onClick={() => addExistingCast(r)}>
+                      {r.photo && <img src={r.photo} alt={r.name} style={{ width:28,height:28,borderRadius:"50%",objectFit:"cover" }} onError={e=>e.target.style.display="none"} />}
+                      <div style={{ flex:1 }}>
+                        <span style={{ fontWeight:600 }}>{r.name}</span>
+                        <span style={{ color:"var(--gold)", fontSize:"0.72rem", marginLeft:8 }}>{r.type}</span>
+                      </div>
+                      <span style={{ color:"#2d6a4f", fontSize:"0.7rem" }}>✓ existing</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Add new cast/crew */}
-            <p className="form-label" style={{ marginBottom:8 }}>Or add a new member</p>
-            <div style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6, padding:"14px 16px", marginBottom:20 }}>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                <input className="form-input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Full Name *" />
-                <input className="form-input" value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="Role / Character" />
+            {!showNewCast ? (
+              <button className="btn btn-outline btn-sm" type="button"
+                style={{ marginBottom:20 }} onClick={() => setShowNewCast(true)}>
+                + Add New Member
+              </button>
+            ) : (
+              <div style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6, padding:"14px 16px", marginBottom:20 }}>
+                <p style={{ fontSize:"0.78rem", fontWeight:700, color:"var(--gold)", marginBottom:10 }}>New Cast / Crew Member</p>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                  <input className="form-input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Full Name *" autoFocus />
+                  <select className="form-select" value={newType} onChange={e => setNewType(e.target.value)}>
+                    {CAST_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                  <input className="form-input" value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="Role / Character" />
+                  <input className="form-input" value={newPhoto} onChange={e => setNewPhoto(e.target.value)} placeholder="Photo URL (optional)" />
+                </div>
+                <div style={{ background:"rgba(201,151,58,0.06)", border:"1px solid rgba(201,151,58,0.2)", borderRadius:4, padding:"8px 10px", marginBottom:10, fontSize:"0.75rem", color:"var(--muted)", lineHeight:1.8 }}>
+                  🔐 Login credentials auto-created on submit<br/>
+                  <strong style={{ color:"var(--text)" }}>Email:</strong>{" "}
+                  {newName.trim() ? newName.trim().toLowerCase().replace(/\s+/g, ".") + "@ollipedia.com" : "name@ollipedia.com"}<br/>
+                  <strong style={{ color:"var(--text)" }}>Password:</strong> Admin@123
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button className="btn btn-gold btn-sm" type="button" onClick={addNewCast} disabled={!newName.trim()}>✓ Add</button>
+                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setShowNewCast(false); setNewName(""); }}>Cancel</button>
+                </div>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                <select className="form-select" value={newType} onChange={e => setNewType(e.target.value)}>
-                  {CAST_TYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
-                <input className="form-input" value={newPhoto} onChange={e => setNewPhoto(e.target.value)} placeholder="Photo URL (optional)" />
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:8 }}>
-                <input className="form-input" value={newBio} onChange={e => setNewBio(e.target.value)} placeholder="Short bio (optional)" />
-                <button className="btn btn-gold btn-sm" type="button" onClick={addNewCast} disabled={!newName.trim()}>+ Add</button>
-              </div>
-            </div>
+            )}
 
-            {/* Cast list */}
             {cast.length > 0 ? (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <p className="form-label" style={{ marginBottom:4 }}>Added Cast & Crew ({cast.length})</p>
                 {cast.map((c, i) => (
                   <div key={i} style={{ display:"flex", alignItems:"center", gap:12, background:"var(--bg3)", padding:"10px 14px", borderRadius:4, border:"1px solid var(--border)" }}>
-                    <div style={{ width:36, height:36, borderRadius:"50%", background:"var(--bg2)", overflow:"hidden", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--border)", fontSize:"1.1rem" }}>
+                    <div style={{ width:36,height:36,borderRadius:"50%",background:"var(--bg2)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid var(--border)",fontSize:"1.1rem" }}>
                       {c.photo
-                        ? <img src={c.photo} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e => { e.target.style.display="none"; }} />
-                        : (c.type === "Director" ? "🎬" : c.type === "Producer" ? "🎥" : "👤")
-                      }
+                        ? <img src={c.photo} alt={c.name} style={{ width:"100%",height:"100%",objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
+                        : (c.type==="Director"?"🎬":c.type==="Producer"?"🎥":"👤")}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <span style={{ fontWeight:600 }}>{c.name}</span>
                       <span style={{ color:"var(--gold)", fontSize:"0.72rem", marginLeft:8, background:"rgba(201,151,58,0.12)", padding:"2px 8px", borderRadius:10 }}>{c.type}</span>
-                      {!c.isNew && <span style={{ color:"#2d6a4f", fontSize:"0.68rem", marginLeft:6 }}>✓ existing</span>}
+                      {c.isNew
+                        ? <span style={{ color:"#e8b96a", fontSize:"0.68rem", marginLeft:6 }}>✦ new</span>
+                        : <span style={{ color:"#2d6a4f", fontSize:"0.68rem", marginLeft:6 }}>✓ existing</span>}
                     </div>
-                    <input className="form-input" style={{ width:150 }}
-                      value={c.role} placeholder="Role"
-                      onChange={e => updateCastRole(i, e.target.value)} />
-                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeCast(i)} style={{ color:"var(--red)", flexShrink:0 }}>✕</button>
+                    <input className="form-input" style={{ width:150 }} value={c.role}
+                      placeholder="Role / Character" onChange={e => updateCastRole(i, e.target.value)} />
+                    <button className="btn btn-ghost btn-sm" type="button"
+                      onClick={() => removeCast(i)} style={{ color:"var(--red)", flexShrink:0 }}>✕</button>
                   </div>
                 ))}
               </div>
             ) : (
               <p style={{ color:"var(--muted)", textAlign:"center", padding:"24px 0", fontSize:"0.85rem" }}>
-                No cast/crew added yet. Search above or fill the form to add.
+                No cast added yet. Search above or add a new member.
               </p>
             )}
           </>
@@ -369,22 +437,51 @@ export default function AddMovie({ production, onToast }) {
             </div>
             <hr className="divider" />
             <label className="form-label">Songs</label>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr auto", gap:8, margin:"10px 0 12px" }}>
-              <input className="form-input" value={songTitle} onChange={e => setSongTitle(e.target.value)} placeholder="Song title" />
-              <input className="form-input" value={songSinger} onChange={e => setSongSinger(e.target.value)} placeholder="Singer(s)" />
-              <input className="form-input" value={songYtId} onChange={e => setSongYtId(e.target.value)} placeholder="YT ID (optional)" />
-              <button className="btn btn-outline btn-sm" type="button" onClick={addSong}>+ Add</button>
+
+            {/* YouTube URL → auto thumbnail */}
+            <div style={{ marginBottom:8 }}>
+              <input className="form-input" value={songUrl}
+                onChange={e => handleSongUrlChange(e.target.value)}
+                placeholder="Paste YouTube URL or ID (e.g. https://youtube.com/watch?v=abc or abc123)" />
             </div>
+
+            {/* Thumbnail preview — auto from URL */}
+            {songThumb && (
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10, padding:"8px 12px", background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:4 }}>
+                <img src={songThumb} alt="thumb" style={{ width:90, height:50, objectFit:"cover", borderRadius:3 }}
+                  onError={e => { e.target.style.opacity="0.3"; }} />
+                <div>
+                  <div style={{ fontSize:"0.72rem", color:"var(--gold)", marginBottom:4 }}>🎵 Thumbnail auto-detected</div>
+                  <div style={{ fontSize:"0.7rem", color:"var(--muted)" }}>ID: {extractYtId(songUrl)}</div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+              <input className="form-input" value={songTitle} onChange={e => setSongTitle(e.target.value)} placeholder="Song title *" />
+              <input className="form-input" value={songSinger} onChange={e => setSongSinger(e.target.value)} placeholder="Singer(s)" />
+            </div>
+            <button className="btn btn-outline btn-sm" type="button" onClick={addSong}
+              disabled={!songTitle.trim()} style={{ marginBottom:16 }}>
+              + Add Song
+            </button>
+
             {songs.length > 0 && (
-              <div className="song-list">
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <p className="form-label" style={{ marginBottom:4 }}>Added Songs ({songs.length})</p>
                 {songs.map((s, i) => (
-                  <div key={i} className="song-item">
-                    <span className="song-num">{i + 1}</span>
-                    <div className="song-info">
-                      <div className="song-title">{s.title}</div>
-                      {s.singer && <div className="song-singer">{s.singer}</div>}
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12, background:"var(--bg3)", padding:"8px 12px", borderRadius:4, border:"1px solid var(--border)" }}>
+                    {s.thumbnailUrl
+                      ? <img src={s.thumbnailUrl} alt={s.title} style={{ width:72, height:40, objectFit:"cover", borderRadius:3, flexShrink:0 }}
+                          onError={e => { e.target.style.opacity="0.2"; }} />
+                      : <div style={{ width:72, height:40, background:"var(--bg2)", borderRadius:3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.2rem", flexShrink:0 }}>🎵</div>
+                    }
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:"0.85rem" }}>{s.title}</div>
+                      {s.singer && <div style={{ fontSize:"0.72rem", color:"var(--gold)" }}>{s.singer}</div>}
+                      {s.ytId && <div style={{ fontSize:"0.65rem", color:"var(--muted)" }}>YT: {s.ytId}</div>}
                     </div>
-                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeSong(i)} style={{ color:"var(--red)", opacity:1 }}>✕</button>
+                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeSong(i)} style={{ color:"var(--red)", flexShrink:0 }}>✕</button>
                   </div>
                 ))}
               </div>

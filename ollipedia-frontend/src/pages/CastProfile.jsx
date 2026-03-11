@@ -19,7 +19,7 @@ const verdictClass = (v) => {
 
 const ROLE_ICON = { Director:"🎬", Producer:"🎥", "Music Director":"🎵", Cinematographer:"📷", Choreographer:"💃", Lyricist:"✍️", Actor:"🎭", Actress:"🎭" };
 
-export default function CastProfile() {
+export default function CastProfile({ portalMode }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const [person,  setPerson]  = useState(null);
@@ -109,7 +109,7 @@ export default function CastProfile() {
               // find role in this movie
               const castEntry = (m.cast || []).find(c => String(c.castId) === String(person._id));
               return (
-                <div key={m._id} className="filmography-item" onClick={() => navigate(`/movie/${m._id}`)}>
+                <div key={m._id} className="filmography-item" onClick={() => navigate(portalMode ? `/portal/movie/${m._id}` : `/movie/${m._id}`)}>
                   <div className="filmography-poster">
                     {m.posterUrl
                       ? <SafeImg src={m.posterUrl} alt={m.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />

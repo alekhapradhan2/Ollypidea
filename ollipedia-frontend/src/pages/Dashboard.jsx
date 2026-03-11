@@ -94,7 +94,7 @@ function SettingsPanel({ production, onToast, onUpdate }) {
       </div>
       <div style={{ display:"flex", gap:12 }}>
         <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "Saving…" : "💾 Save Changes"}</button>
-        <Link to={`/production/${production._id}`} className="btn btn-outline btn-sm" target="_blank">👁 View Public Profile</Link>
+
       </div>
     </div>
   );
@@ -146,7 +146,6 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
             {production.logo && <img src={production.logo} alt="" onError={e=>e.target.style.display="none"} />}
             {production.name}
           </span>
-          <Link to="/" className="btn btn-ghost btn-sm">Public Site ↗</Link>
           <button className="btn btn-outline btn-sm" onClick={onLogout}>Logout</button>
         </div>
       </header>
@@ -179,8 +178,7 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
           </nav>
 
           <div className="portal-sidebar-footer">
-            <Link to="/dashboard/add-movie" className="btn btn-gold" style={{ width:"100%", textAlign:"center", marginBottom:8 }}>+ Add Movie</Link>
-            <Link to={`/production/${production._id}`} className="btn btn-outline btn-sm" style={{ width:"100%", textAlign:"center" }} target="_blank">Public Profile ↗</Link>
+            <Link to="/dashboard/add-movie" className="btn btn-gold" style={{ width:"100%", textAlign:"center" }}>+ Add Movie</Link>
           </div>
         </aside>
 
@@ -212,7 +210,7 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
                     <button className="btn btn-ghost btn-sm" onClick={() => setTab("films")}>View All →</button>
                   </div>
                   <div className="movie-grid">
-                    {myMovies.slice(0, 4).map(m => <MovieCard key={m._id} movie={m} />)}
+                    {myMovies.slice(0, 4).map(m => <MovieCard key={m._id} movie={m} portalMode />)}
                   </div>
                 </div>
               )}
@@ -226,7 +224,7 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
                     { icon:"🎬", label:"Add New Film",     desc:"Register a new Odia film",           action:() => navigate("/dashboard/add-movie") },
                     { icon:"⚙️",  label:"Edit Profile",     desc:"Update your company details",         action:() => setTab("settings") },
                     { icon:"🎵", label:"All Songs",        desc:`${allSongs.length} songs in library`, action:() => setTab("songs") },
-                    { icon:"👁", label:"View Public Page", desc:"See how fans see you",                action:() => window.open(`/production/${production._id}`, "_blank") },
+
                   ].map(a => (
                     <button key={a.label} className="portal-action-card" onClick={a.action}>
                       <span className="portal-action-icon">{a.icon}</span>
@@ -269,7 +267,7 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
                   <Link to="/dashboard/add-movie" className="btn btn-gold" style={{ marginTop:20 }}>+ Add Film</Link>
                 </div>
               ) : (
-                <div className="movie-grid">{myMovies.map(m => <MovieCard key={m._id} movie={m} />)}</div>
+                <div className="movie-grid">{myMovies.map(m => <MovieCard key={m._id} movie={m} portalMode />)}</div>
               )}
             </>
           )}
@@ -290,7 +288,7 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
                   <p>When another production adds you as a collaborator, their films appear here.</p>
                 </div>
               ) : (
-                <div className="movie-grid">{collabMovies.map(m => <MovieCard key={m._id} movie={m} />)}</div>
+                <div className="movie-grid">{collabMovies.map(m => <MovieCard key={m._id} movie={m} portalMode />)}</div>
               )}
             </>
           )}
@@ -313,7 +311,7 @@ export default function Dashboard({ production, onToast, onLogout, onProductionU
               ) : (
                 <div className="cast-grid">
                   {allCast.map((c, i) => (
-                    <div key={i} className="cast-card cast-card-linked" onClick={() => c.castId && navigate(`/cast/${c.castId}`)}>
+                    <div key={i} className="cast-card cast-card-linked" onClick={() => c.castId && navigate(`/portal/cast/${c.castId}`)}>
                       <div className="cast-card-photo" style={{ display:"flex", alignItems:"center", justifyContent:"center" }}>
                         {c.photo
                           ? <img src={c.photo} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />

@@ -213,7 +213,7 @@ function AddSongModal({ movieId, onAdded, onClose }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function MovieDetails({ production, onToast }) {
+export default function MovieDetails({ production, onToast, portalMode }) {
   const { id }     = useParams();
   const navigate   = useNavigate();
   const [movie,    setMovie]   = useState(null);
@@ -512,7 +512,7 @@ export default function MovieDetails({ production, onToast }) {
               <h3 className="section-sub-title">Crew</h3>
               <div className="cast-grid" style={{marginBottom:32}}>
                 {crew.map((c,i)=>(
-                  <div key={c.castId||i} className="cast-card cast-card-linked" onClick={()=>c.castId&&navigate(`/cast/${c.castId}`)}>
+                  <div key={c.castId||i} className="cast-card cast-card-linked" onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:`/cast/${c.castId}`)}>
                     <div className="cast-card-photo" style={{display:"flex",alignItems:"center",justifyContent:"center",background:"var(--bg3)"}}>
                       {c.photo?<SafeImg src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />
                         :<span style={{fontSize:"2rem"}}>{c.type==="Director"?"🎬":c.type==="Producer"?"🎥":c.type==="Music Director"?"🎵":"🎭"}</span>
@@ -535,7 +535,7 @@ export default function MovieDetails({ production, onToast }) {
               <h3 className="section-sub-title">Cast</h3>
               <div className="cast-grid">
                 {actors.map((c,i)=>(
-                  <div key={c.castId||i} className="cast-card cast-card-linked" onClick={()=>c.castId&&navigate(`/cast/${c.castId}`)}>
+                  <div key={c.castId||i} className="cast-card cast-card-linked" onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:`/cast/${c.castId}`)}>
                     <div className="cast-card-photo" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
                       {c.photo?<SafeImg src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} />:<span style={{fontSize:"2rem"}}>👤</span>}
                     </div>

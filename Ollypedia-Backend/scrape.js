@@ -65,7 +65,7 @@ const MovieSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Cast  = mongoose.model("Cast",  CastSchema);
-const Movie = mongoose.model("Movie", MovieSchema);
+//  const Movie = mongoose.model("Movie", MovieSchema);
 
 // ── Helpers ──────────────────────────────────────────────
 
