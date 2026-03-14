@@ -293,17 +293,17 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([
-      API.getMovie(id),
-      API.getMovies().catch(()=>[]),
-    ]).then(([m, all]) => {
-      setMovie(m);
-      setEditForm({...m});
-      setBoForm({...(m.boxOffice||{}), verdict: m.verdict});
-      setTrailerInput(m.media?.trailer?.ytId||"");
-      setAllMovies(all);
-    }).catch(e => setError(typeof e==="string"?e:"Failed to load"))
-    .finally(() => setLoading(false));
+    // Load movie first for fast render, then fetch all movies in background
+    API.getMovie(id)
+      .then(m => {
+        setMovie(m);
+        setEditForm({...m});
+        setBoForm({...(m.boxOffice||{}), verdict: m.verdict});
+        setTrailerInput(m.media?.trailer?.ytId||"");
+        setLoading(false);
+        API.getMovies().catch(()=>[]).then(all => setAllMovies(all));
+      })
+      .catch(e => { setError(typeof e==="string"?e:"Failed to load"); setLoading(false); });
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
@@ -440,7 +440,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
       <div style={{
         position:"relative",
         width:"100%",
-        minHeight:580,
+        minHeight:"auto",
         background:"#0f0f0f",
         marginTop:-60,
         paddingTop:60,
@@ -453,31 +453,30 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             backgroundImage:`url(${bannerImg})`,
             backgroundSize:"cover",
             backgroundPosition:"center top",
-            filter:"blur(18px) brightness(0.3)",
+            filter:"blur(22px) brightness(0.25) saturate(1.4)",
             transform:"scale(1.08)",
           }} />
         )}
         {/* Gradient overlays */}
         <div style={{
           position:"absolute", inset:0,
-          background:"linear-gradient(to right, rgba(0,0,0,0.92) 45%, rgba(0,0,0,0.3) 100%), linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 40%)",
+          background:"linear-gradient(to right, rgba(0,0,0,0.95) 40%, rgba(0,0,0,0.4) 80%, rgba(0,0,0,0.15) 100%), linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.5) 35%, transparent 65%)",
         }} />
 
         {/* ── Back link ── */}
-        <div style={{position:"relative",zIndex:3,padding:"24px 60px 0"}}>
+        <div style={{position:"relative",zIndex:3,padding:"24px 28px 0"}}>
           <Link to="/movies" className="btn btn-ghost btn-sm" style={{opacity:0.7}}>← All Films</Link>
         </div>
 
         {/* ── Hero content ── */}
         <div style={{
           position:"relative", zIndex:3,
-          display:"flex", gap:48, alignItems:"flex-start",
-          padding:"32px 60px 60px",
-          maxWidth:1200,
+          display:"flex", gap:36, alignItems:"flex-start",
+          padding:"28px 28px 52px",
         }}>
           {/* Poster */}
           <div style={{
-            flexShrink:0, width:240, borderRadius:12,
+            flexShrink:0, width:220, borderRadius:12,
             overflow:"hidden", boxShadow:"0 24px 60px rgba(0,0,0,0.7)",
             border:"1px solid rgba(255,255,255,0.1)",
           }}>
@@ -533,7 +532,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               {movie.imdbRating && (
                 <span style={{display:"flex",alignItems:"center",gap:4}}>
                   <span style={{color:"#f5c518",fontWeight:700}}>IMDb</span>
-                  <span style={{fontWeight:700}}>{movie.imdbRating}</span>
+                  <span style={{fontWeight:700,}}>{movie.imdbRating}</span>
                 </span>
               )}
             </div>
@@ -602,9 +601,11 @@ export default function MovieDetails({ production, onToast, portalMode }) {
       ══════════════════════════════════════════════════ */}
       <div style={{
         borderBottom:"1px solid var(--border)",
-        background:"var(--bg2)",
+        background:"rgba(15,15,15,0.95)",
+backdropFilter:"blur(12px)",
         position:"sticky", top:60, zIndex:10,
-        padding:"0 60px",
+boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
+        padding:"0 20px",
       }}>
         <div className="tabs" style={{margin:0,border:"none"}}>
           {["overview","cast","media","boxoffice","news","reviews"].map(t=>(
@@ -625,7 +626,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── OVERVIEW ── */}
         {tab==="overview" && !editing && (
-          <div style={{padding:"40px 60px",maxWidth:980}}>
+          <div style={{padding:"32px 24px",maxWidth:980}}>
             {movie.synopsis
               ? <p style={{color:"#b0a898",lineHeight:1.8,fontSize:"0.98rem",marginBottom:32}}>{movie.synopsis}</p>
               : <p style={{color:"var(--muted)"}}>No synopsis available.</p>}
@@ -729,7 +730,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── OVERVIEW EDIT ── */}
         {tab==="overview" && editing && (
-          <div style={{padding:"40px 60px",maxWidth:900}}>
+          <div style={{padding:"32px 24px",maxWidth:900}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
               <h3 style={{fontSize:"1rem",textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--muted)"}}>Edit Movie Details</h3>
               <div style={{display:"flex",gap:10}}>
@@ -778,7 +779,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── CAST ── */}
         {tab==="cast" && (
-          <div style={{padding:"40px 60px"}}>
+          <div style={{padding:"32px 24px"}}>
             {isOwner && (
               <div style={{display:"flex",justifyContent:"flex-end",marginBottom:28}}>
                 <button className="btn btn-gold btn-sm" onClick={()=>setAddCastModal(true)}>+ Add Cast / Crew</button>
@@ -866,7 +867,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── MEDIA ── */}
         {tab==="media" && (
-          <div style={{padding:"40px 60px"}}>
+          <div style={{padding:"32px 24px"}}>
             {/* Trailer */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <h3 className="section-sub-title" style={{margin:0}}>Trailer</h3>
@@ -941,7 +942,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── BOX OFFICE ── */}
         {tab==="boxoffice" && !editBO && (
-          <div style={{padding:"40px 60px",maxWidth:700}}>
+          <div style={{padding:"32px 24px",maxWidth:700}}>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:32}}>
               {[["Opening Weekend",movie.boxOffice?.opening],["First Week",movie.boxOffice?.firstWeek],["Total Collection",movie.boxOffice?.total]].map(([label,val])=>(
                 <div key={label} className="boxoffice-card">
@@ -959,7 +960,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           </div>
         )}
         {tab==="boxoffice" && editBO && (
-          <div style={{padding:"40px 60px",maxWidth:700}}>
+          <div style={{padding:"32px 24px",maxWidth:700}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
               <h3 style={{fontSize:"1rem",textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--muted)"}}>Update Box Office</h3>
               <div style={{display:"flex",gap:10}}>
@@ -980,7 +981,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── NEWS ── */}
         {tab==="news" && (
-          <div style={{padding:"40px 60px"}}>
+          <div style={{padding:"32px 24px"}}>
             {canNews && <div style={{display:"flex",justifyContent:"flex-end",marginBottom:20}}><button className="btn btn-gold btn-sm" onClick={()=>{setEditingNews(null);setNewsModal(true);}}>+ Add News</button></div>}
             {movie.news?.length ? (
               <div className="news-grid">
@@ -1007,7 +1008,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── REVIEWS ── */}
         {tab==="reviews" && (
-          <div style={{padding:"40px 60px",maxWidth:800}}>
+          <div style={{padding:"32px 24px",maxWidth:800}}>
             <div className="review-form" style={{marginBottom:40}}>
               <h3 style={{marginBottom:16,fontSize:"1rem"}}>Write a Review</h3>
               <form onSubmit={submitReview}>

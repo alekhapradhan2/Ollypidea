@@ -1,99 +1,129 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
 
-// ── Constants ─────────────────────────────────────────────
 const GENRES   = ["All","Action","Drama","Romance","Comedy","Thriller","Family","Historical","Musical","Biographical"];
 const VERDICTS = ["All","Upcoming","Blockbuster","Super Hit","Hit","Average","Flop","Disaster"];
-const YEARS    = ["All", "2025","2024","2023","2022","2021","2020","2019","2018"];
 
-const VERDICT_COLOR = {
-  "Blockbuster": "#95e5b8", "Super Hit": "#95e5b8", "Hit": "#95e5b8",
-  "Average":     "#e8c87a",
-  "Flop":        "#e59595", "Disaster": "#e59595",
-  "Upcoming":    "#7aaae8",
+const VS = {
+  "Blockbuster":{ c:"#95e5b8" }, "Super Hit":{ c:"#95e5b8" }, "Hit":{ c:"#a3e8a0" },
+  "Average":{ c:"#e8c87a" }, "Flop":{ c:"#e59595" }, "Disaster":{ c:"#e59595" },
+  "Upcoming":{ c:"#7aaae8" },
 };
 
-// ── Horizontal scroll row ─────────────────────────────────
-function HomeRow({ title, tag, children, count }) {
+/* ─── Lazy image ─────────────────────────────────────────── */
+function LImg({ src, alt, style }) {
+  const [ok, setOk] = useState(false);
   const ref = useRef(null);
-  const slide = (n) => ref.current?.scrollBy({ left: n, behavior: "smooth" });
+  useEffect(() => {
+    if (!src) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { ref.current?.setAttribute("src", src); io.disconnect(); }
+    }, { rootMargin: "400px" });
+    if (ref.current) io.observe(ref.current);
+    return () => io.disconnect();
+  }, [src]);
+  return <img ref={ref} alt={alt || ""} style={{ ...style, opacity: ok ? 1 : 0, transition: "opacity .4s" }} onLoad={() => setOk(true)} onError={() => setOk(true)} />;
+}
 
+/* ─── Card ────────────────────────────────────────────────── */
+const Card = React.memo(({ movie, onClick }) => {
+  const [hov, setHov] = useState(false);
+  const v = movie.verdict || "Upcoming";
+  const c = VS[v]?.c || "#7aaae8";
+  const img = movie.posterUrl || movie.thumbnailUrl;
   return (
-    <div className="home-section">
-      <div className="home-section-header" style={{ padding: "0 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <h2 className="home-section-title">{title}</h2>
-          {tag  && <span className="home-tag">{tag}</span>}
-          {count != null && (
-            <span style={{
-              background: "rgba(201,151,58,0.15)", color: "var(--gold)",
-              fontSize: "0.68rem", fontWeight: 700,
-              padding: "2px 9px", borderRadius: 10,
-            }}>{count}</span>
-          )}
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ flexShrink: 0, width: 160, cursor: "pointer",
+        transform: hov ? "translateY(-8px) scale(1.03)" : "none",
+        transition: "transform .3s cubic-bezier(.34,1.56,.64,1)" }}>
+      <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", aspectRatio: "2/3",
+        background: "var(--bg3)",
+        boxShadow: hov ? "0 24px 56px rgba(0,0,0,.75)" : "0 4px 18px rgba(0,0,0,.4)",
+        border: `1px solid ${hov ? "rgba(201,151,58,.5)" : "rgba(255,255,255,.07)"}`,
+        transition: "box-shadow .3s, border .3s" }}>
+        {img
+          ? <LImg src={img} alt={movie.title} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"top", display:"block", position:"absolute", inset:0 }} />
+          : <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"2.5rem" }}>🎬</div>}
+        {/* gradient */}
+        <div style={{ position:"absolute", inset:0,
+          background:"linear-gradient(to top, rgba(0,0,0,.88) 0%, rgba(0,0,0,.1) 55%, transparent 100%)",
+          opacity: hov ? 1 : .55, transition:"opacity .3s" }} />
+        {/* verdict */}
+        <div style={{ position:"absolute", top:8, left:8,
+          background:`${c}20`, border:`1px solid ${c}99`, color:c,
+          fontSize:".58rem", fontWeight:800, padding:"2px 7px", borderRadius:3,
+          letterSpacing:".07em", textTransform:"uppercase" }}>{v}</div>
+        {/* genre */}
+        {movie.genre?.[0] && <div style={{ position:"absolute", bottom:8, left:8,
+          fontSize:".6rem", color:"rgba(255,255,255,.7)", fontWeight:600 }}>{movie.genre[0]}</div>}
+        {/* play */}
+        {hov && <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div style={{ width:42, height:42, borderRadius:"50%", background:"rgba(201,151,58,.92)",
+            display:"flex", alignItems:"center", justifyContent:"center", paddingLeft:3, fontSize:"1rem" }}>▶</div>
+        </div>}
+      </div>
+      <div style={{ padding:"9px 2px 0" }}>
+        <p style={{ margin:0, fontWeight:700, fontSize:".81rem", lineHeight:1.3,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+          color: hov ? "var(--gold)" : "var(--text)", transition:"color .2s" }}>{movie.title}</p>
+        <p style={{ margin:"3px 0 0", fontSize:".68rem", color:"var(--muted)" }}>{movie.releaseDate?.slice(0,4) || "TBA"}</p>
+      </div>
+    </div>
+  );
+});
+
+/* ─── Skeleton card ───────────────────────────────────────── */
+function SkCard() {
+  return (
+    <div style={{ flexShrink:0, width:160 }}>
+      <div style={{ borderRadius:10, aspectRatio:"2/3", background:"var(--bg3)",
+        animation:"mdpulse 1.5s ease-in-out infinite" }} />
+      <div style={{ height:12, background:"var(--bg3)", borderRadius:4, margin:"10px 2px 0",
+        animation:"mdpulse 1.5s ease-in-out .1s infinite" }} />
+    </div>
+  );
+}
+
+/* ─── Row ─────────────────────────────────────────────────── */
+function Row({ title, badge, badgeColor = "#c9973a", count, movies, onMovie, viewAll }) {
+  const navigate = useNavigate();
+  const ref = useRef(null);
+  const slide = n => ref.current?.scrollBy({ left: n, behavior: "smooth" });
+  if (!movies?.length) return null;
+  return (
+    <div style={{ marginBottom: 44 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+        marginBottom: 16, padding: "0 20px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <h2 style={{ margin:0, fontSize:"1.05rem", fontWeight:800, letterSpacing:".01em" }}>{title}</h2>
+          {badge && <span style={{ background:`${badgeColor}20`, border:`1px solid ${badgeColor}50`,
+            color:badgeColor, fontSize:".58rem", fontWeight:800,
+            padding:"2px 8px", borderRadius:3, letterSpacing:".08em", textTransform:"uppercase" }}>{badge}</span>}
+          {count != null && <span style={{ fontSize:".7rem", color:"var(--muted)" }}>{count}</span>}
         </div>
-        <div className="home-section-arrows">
-          <button className="home-arrow" onClick={() => slide(-400)}>‹</button>
-          <button className="home-arrow" onClick={() => slide(400)}>›</button>
+        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          {viewAll && <button className="home-view-all" onClick={() => navigate(viewAll)}>View All</button>}
+          <button onClick={() => slide(-640)} style={arrowBtn}>‹</button>
+          <button onClick={() => slide(640)}  style={arrowBtn}>›</button>
         </div>
       </div>
-      <div className="home-row" ref={ref} style={{ padding: "6px 24px 14px" }}>
-        {children}
+      <div ref={ref} style={{ display:"flex", gap:14, overflowX:"auto", paddingBottom:6,
+        paddingLeft:20, paddingRight:20, scrollbarWidth:"none", msOverflowStyle:"none" }}>
+        {movies.map(m => <Card key={m._id} movie={m} onClick={() => onMovie(m._id)} />)}
       </div>
     </div>
   );
 }
 
-// ── Single movie card — exact .home-card classes ──────────
-function Card({ movie, onClick }) {
-  const verdict = movie.verdict || "Upcoming";
-  const color   = VERDICT_COLOR[verdict] || "#7aaae8";
+const arrowBtn = {
+  width:30, height:30, borderRadius:"50%",
+  border:"1px solid rgba(255,255,255,.12)", background:"rgba(255,255,255,.05)",
+  color:"var(--text)", cursor:"pointer", fontSize:"1rem",
+  display:"flex", alignItems:"center", justifyContent:"center",
+};
 
-  return (
-    <div className="home-card" onClick={onClick}>
-      <div className="home-card-img">
-        {movie.posterUrl || movie.thumbnailUrl
-          ? <img
-              src={movie.posterUrl || movie.thumbnailUrl}
-              alt={movie.title}
-              onError={e => { e.target.style.display = "none"; }}
-            />
-          : <div className="home-card-fallback">🎬</div>
-        }
-        <div className="home-card-play">▶</div>
-        <div className="home-card-overlay">
-          <span className="home-card-verdict" style={{ color }}>{verdict}</span>
-          <span className="home-card-genre">{movie.genre?.[0] || ""}</span>
-        </div>
-      </div>
-      <div className="home-card-info">
-        <p className="home-card-title">{movie.title}</p>
-        <p className="home-card-date">{movie.releaseDate?.slice(0, 4) || "TBA"}</p>
-      </div>
-    </div>
-  );
-}
-
-// ── Skeleton row ──────────────────────────────────────────
-function SkeletonRow() {
-  return (
-    <div className="home-section">
-      <div className="home-section-header" style={{ padding: "0 24px" }}>
-        <div className="skeleton" style={{ height: 18, width: 200 }} />
-      </div>
-      <div className="home-row" style={{ padding: "6px 24px 14px" }}>
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="skeleton" style={{ flexShrink: 0, width: 180, height: 310, borderRadius: 8 }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════
-//  MAIN
-// ═══════════════════════════════════════════════════════════
+/* ═══════════════ MAIN ════════════════════════════════════ */
 export default function Movies() {
   const navigate = useNavigate();
   const [movies,  setMovies]  = useState([]);
@@ -101,238 +131,136 @@ export default function Movies() {
   const [search,  setSearch]  = useState("");
   const [genre,   setGenre]   = useState("All");
   const [verdict, setVerdict] = useState("All");
-  const [year,    setYear]    = useState("All");
-  const [view,    setView]    = useState("trending"); // "trending" | "all"
+  const [view,    setView]    = useState("browse");
 
   useEffect(() => {
     API.getMovies()
-      .then(data => {
-        // Sort: newest first (by releaseDate desc, then by createdAt desc)
-        const sorted = [...data].sort((a, b) => {
-          const da = a.releaseDate || "0000";
-          const db = b.releaseDate || "0000";
-          return db.localeCompare(da);
-        });
-        setMovies(sorted);
-      })
+      .then(d => setMovies([...d].sort((a,b) => (b.releaseDate||"0").localeCompare(a.releaseDate||"0"))))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  const goMovie = (id) => navigate(`/movie/${id}`);
+  const go = useCallback(id => navigate(`/movie/${id}`), [navigate]);
+  const srt = arr => [...arr].sort((a,b) => (b.releaseDate||"0").localeCompare(a.releaseDate||"0"));
+  const isFiltering = search || genre !== "All" || verdict !== "All";
 
-  // ── filter ───────────────────────────────────────────────
-  const filtered = movies.filter(m => {
-    const q            = search.toLowerCase();
-    const matchSearch  = !q || m.title?.toLowerCase().includes(q) || m.director?.toLowerCase().includes(q);
-    const matchGenre   = genre   === "All" || m.genre?.includes(genre);
-    const matchVerdict = verdict === "All" || (m.verdict || "Upcoming").toLowerCase() === verdict.toLowerCase();
-    const matchYear    = year    === "All" || (m.releaseDate || "").startsWith(year);
-    return matchSearch && matchGenre && matchVerdict && matchYear;
-  });
+  const filtered = useMemo(() => movies.filter(m => {
+    const q = search.toLowerCase();
+    return (!q || m.title?.toLowerCase().includes(q) || m.director?.toLowerCase().includes(q))
+      && (genre   === "All" || m.genre?.includes(genre))
+      && (verdict === "All" || (m.verdict||"Upcoming").toLowerCase() === verdict.toLowerCase());
+  }), [movies, search, genre, verdict]);
 
-  const isFiltering = search || genre !== "All" || verdict !== "All" || year !== "All";
+  const sections = useMemo(() => ({
+    upcoming:     srt(movies.filter(m => !m.verdict || m.verdict === "Upcoming")),
+    blockbusters: srt(movies.filter(m => ["Blockbuster","Super Hit"].includes(m.verdict))),
+    hits:         srt(movies.filter(m => m.verdict === "Hit")),
+    years:        [...new Set(movies.map(m => m.releaseDate?.slice(0,4)).filter(Boolean))].sort((a,b)=>b-a),
+  }), [movies]);
 
-  // ── grouped sections (for trending view) ────────────────
-  const sortNew      = (arr) => [...arr].sort((a,b) => new Date(b.releaseDate||0) - new Date(a.releaseDate||0));
-  const upcoming     = sortNew(movies.filter(m => !m.verdict || m.verdict === "Upcoming")).slice(0, 20);
-  const blockbusters = sortNew(movies.filter(m => ["Blockbuster","Super Hit"].includes(m.verdict))).slice(0, 20);
-  const hits         = sortNew(movies.filter(m => m.verdict === "Hit")).slice(0, 20);
-  const latest       = movies.slice(0, 20); // already sorted new→old on load
-
-  // Derive year list from actual data — newest year first, top 5
-  const allYears = [...new Set(
-    movies.map(m => m.releaseDate?.slice(0,4)).filter(Boolean)
-  )].sort((a,b) => b.localeCompare(a)).slice(0, 5);
-
-  // group by year for "All" view
-  const byYear = {};
-  filtered.forEach(m => {
-    const y = m.releaseDate?.slice(0, 4) || "Unknown";
-    if (!byYear[y]) byYear[y] = [];
-    byYear[y].push(m);
-  });
-  const yearGroups = Object.entries(byYear).sort((a, b) => b[0].localeCompare(a[0]));
+  const byYear = useMemo(() => {
+    const map = {};
+    filtered.forEach(m => { const y = m.releaseDate?.slice(0,4)||"Unknown"; (map[y]=map[y]||[]).push(m); });
+    return Object.entries(map).sort((a,b) => b[0].localeCompare(a[0]));
+  }, [filtered]);
 
   return (
-    <div className="home-root" style={{ paddingTop: 60 }}>
+    <div style={{ minHeight:"100vh", background:"var(--bg)", paddingTop:60 }}>
+      <style>{`@keyframes mdpulse{0%,100%{opacity:1}50%{opacity:.35}}`}</style>
 
-      {/* ── Page header banner ── */}
-      <div style={{
-        padding: "32px 24px 0",
-        background: "linear-gradient(to bottom, rgba(201,151,58,0.06), transparent)",
-        borderBottom: "1px solid var(--border)",
-        marginBottom: 0,
-      }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-
-          {/* Title + count */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 20 }}>
-            <h1 style={{
-              fontFamily: "'Playfair Display', serif",
-              fontSize: "clamp(1.6rem, 3vw, 2.4rem)",
-              fontWeight: 900, margin: 0,
-            }}>All Films</h1>
-            <span style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
-              {movies.length} films
-            </span>
-          </div>
-
-          {/* View toggle */}
-          <div className="tabs" style={{ marginBottom: 0, borderColor: "rgba(255,255,255,0.08)" }}>
-            <button className={`tab ${view === "trending" ? "active" : ""}`} onClick={() => setView("trending")}>
-              🔥 Trending
-            </button>
-            <button className={`tab ${view === "all" ? "active" : ""}`} onClick={() => setView("all")}>
-              🎬 Browse All
-            </button>
-          </div>
+      {/* ── HEADER ── */}
+      <div style={{ padding:"36px 20px 0", borderBottom:"1px solid var(--border)",
+        background:"linear-gradient(to bottom, rgba(201,151,58,.05), transparent)" }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:14, marginBottom:24 }}>
+          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(1.8rem,4vw,2.8rem)",
+            fontWeight:900, margin:0, letterSpacing:"-.02em" }}>Films</h1>
+          {!loading && <span style={{ fontSize:".85rem", color:"var(--muted)" }}>{movies.length} total</span>}
+        </div>
+        {/* Tabs */}
+        <div style={{ display:"flex" }}>
+          {[["browse","🎬 Browse"],["search","🔍 Search & Filter"]].map(([v,label]) => (
+            <button key={v} onClick={() => setView(v)} style={{
+              padding:"10px 22px", background:"none", border:"none", cursor:"pointer",
+              fontWeight:700, fontSize:".82rem",
+              color: view===v ? "var(--gold)" : "var(--muted)",
+              borderBottom: view===v ? "2px solid var(--gold)" : "2px solid transparent",
+              letterSpacing:".03em", transition:"all .2s",
+            }}>{label}</button>
+          ))}
         </div>
       </div>
 
-      {/* ── Filters bar — shown in Browse All mode or when searching ── */}
-      {(view === "all" || isFiltering) && (
-        <div style={{
-          padding: "14px 24px",
-          background: "var(--bg2)",
-          borderBottom: "1px solid var(--border)",
-          display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",
-        }}>
-          {/* Search */}
-          <div style={{ position: "relative", flex: 1, minWidth: 200, maxWidth: 300 }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)", fontSize: "0.85rem" }}>🔍</span>
-            <input
-              className="form-input"
-              style={{ paddingLeft: 34, width: "100%" }}
-              placeholder="Title or director…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+      {/* ── FILTER BAR ── */}
+      {view === "search" && (
+        <div style={{ padding:"16px 20px", background:"var(--bg2)", borderBottom:"1px solid var(--border)",
+          display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+          <div style={{ position:"relative", flex:1, minWidth:200 }}>
+            <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:".85rem" }}>🔍</span>
+            <input className="form-input" autoFocus style={{ paddingLeft:36, width:"100%" }}
+              placeholder="Search title or director…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-
-          {/* Genre */}
-          <select className="form-select" style={{ width: "auto" }} value={genre} onChange={e => setGenre(e.target.value)}>
+          <select className="form-select" style={{ width:"auto" }} value={genre}   onChange={e => setGenre(e.target.value)}>
             {GENRES.map(g => <option key={g}>{g}</option>)}
           </select>
-
-          {/* Verdict */}
-          <select className="form-select" style={{ width: "auto" }} value={verdict} onChange={e => setVerdict(e.target.value)}>
+          <select className="form-select" style={{ width:"auto" }} value={verdict} onChange={e => setVerdict(e.target.value)}>
             {VERDICTS.map(v => <option key={v}>{v}</option>)}
           </select>
-
-          {/* Year */}
-          <select className="form-select" style={{ width: "auto" }} value={year} onChange={e => setYear(e.target.value)}>
-            {YEARS.map(y => <option key={y}>{y}</option>)}
-          </select>
-
-          {/* Clear */}
-          {isFiltering && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => { setSearch(""); setGenre("All"); setVerdict("All"); setYear("All"); }}
-              style={{ color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)", borderRadius: 4 }}
-            >✕ Clear</button>
-          )}
-
-          {isFiltering && (
-            <span style={{ fontSize: "0.78rem", color: "var(--muted)", marginLeft: "auto" }}>
-              {filtered.length} result{filtered.length !== 1 ? "s" : ""}
-            </span>
-          )}
+          {isFiltering && <>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setGenre("All"); setVerdict("All"); }}
+              style={{ border:"1px solid var(--border)" }}>✕ Clear</button>
+            <span style={{ fontSize:".78rem", color:"var(--muted)", marginLeft:"auto" }}>{filtered.length} results</span>
+          </>}
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════
-          LOADING
-      ════════════════════════════════════════════════════ */}
-      {loading && (
-        <div className="home-sections" style={{ paddingTop: 32 }}>
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
-        </div>
-      )}
+      {/* ── CONTENT ── */}
+      <div style={{ paddingTop: 36, paddingBottom: 60 }}>
 
-      {/* ════════════════════════════════════════════════════
-          TRENDING VIEW — categorised rows
-      ════════════════════════════════════════════════════ */}
-      {!loading && view === "trending" && !isFiltering && (
-        <div className="home-sections" style={{ paddingTop: 32 }}>
+        {/* Loading */}
+        {loading && (
+          <div style={{ padding:"0 20px" }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ marginBottom:44 }}>
+                <div style={{ width:220, height:18, background:"var(--bg3)", borderRadius:4,
+                  marginBottom:16, animation:"mdpulse 1.5s infinite" }} />
+                <div style={{ display:"flex", gap:14 }}>
+                  {[...Array(8)].map((_,j) => <SkCard key={j} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-          {/* Latest releases */}
-          {latest.length > 0 && (
-            <HomeRow title="Latest Releases" tag="New" count={latest.length}>
-              {latest.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-            </HomeRow>
-          )}
+        {/* Search results */}
+        {!loading && view === "search" && (
+          filtered.length === 0
+            ? <div style={{ textAlign:"center", padding:"80px 20px", color:"var(--muted)" }}>
+                <div style={{ fontSize:"3rem", marginBottom:12 }}>🎬</div>
+                <p>No films match your filters.</p>
+                <button className="btn btn-outline btn-sm" style={{ marginTop:16 }}
+                  onClick={() => { setSearch(""); setGenre("All"); setVerdict("All"); }}>Clear Filters</button>
+              </div>
+            : byYear.map(([y, ym]) => (
+                <Row key={y} title={y} badge={`${ym.length} films`} movies={ym} onMovie={go} />
+              ))
+        )}
 
-          {/* Upcoming */}
-          {upcoming.length > 0 && (
-            <HomeRow title="Upcoming Films" tag="Soon" count={upcoming.length}>
-              {upcoming.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-            </HomeRow>
-          )}
-
-          {/* Blockbusters */}
-          {blockbusters.length > 0 && (
-            <HomeRow title="Blockbusters & Super Hits" count={blockbusters.length}>
-              {blockbusters.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-            </HomeRow>
-          )}
-
-          {/* Hits */}
-          {hits.length > 0 && (
-            <HomeRow title="Hit Films" count={hits.length}>
-              {hits.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-            </HomeRow>
-          )}
-
-          {/* By year — derived from actual data, newest first */}
-          {allYears.map(y => {
-            const yMovies = sortNew(movies.filter(m => (m.releaseDate || "").startsWith(y)));
-            if (!yMovies.length) return null;
-            return (
-              <HomeRow key={y} title={`${y} Films`} count={yMovies.length}>
-                {yMovies.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-              </HomeRow>
-            );
+        {/* Browse sections */}
+        {!loading && view === "browse" && <>
+          <Row title="🆕 Latest Releases" badge="New" badgeColor="#7aaae8"
+            movies={movies.slice(0,40)} onMovie={go} viewAll="/movies" />
+          <Row title="🚀 Upcoming" badge="Soon" badgeColor="#e8c87a"
+            movies={sections.upcoming} onMovie={go} />
+          <Row title="🏆 Blockbusters & Super Hits" badge="Hit" badgeColor="#95e5b8"
+            movies={sections.blockbusters} onMovie={go} />
+          {sections.hits.length > 0 &&
+            <Row title="🎯 Hit Films" movies={sections.hits} onMovie={go} />}
+          {sections.years.map(y => {
+            const ym = srt(movies.filter(m => (m.releaseDate||"").startsWith(y)));
+            return ym.length ? <Row key={y} title={`${y} Films`} count={ym.length} movies={ym} onMovie={go} /> : null;
           })}
-
-        </div>
-      )}
-
-      {/* ════════════════════════════════════════════════════
-          BROWSE ALL VIEW — grouped by year
-      ════════════════════════════════════════════════════ */}
-      {!loading && (view === "all" || isFiltering) && (
-        <div className="home-sections" style={{ paddingTop: 32 }}>
-
-          {filtered.length === 0 ? (
-            <div className="home-empty" style={{ padding: "80px 24px" }}>
-              <div style={{ fontSize: "3rem", marginBottom: 12 }}>🎬</div>
-              <p style={{ color: "var(--muted)" }}>No films match your filters.</p>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ marginTop: 16 }}
-                onClick={() => { setSearch(""); setGenre("All"); setVerdict("All"); setYear("All"); }}
-              >Clear Filters</button>
-            </div>
-          ) : yearGroups.length > 0 ? (
-            /* Grouped by year */
-            yearGroups.map(([y, yMovies]) => (
-              <HomeRow key={y} title={`${y} Films`} count={yMovies.length}>
-                {yMovies.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-              </HomeRow>
-            ))
-          ) : (
-            /* Flat list when all same year */
-            <HomeRow title="Results" count={filtered.length}>
-              {filtered.map(m => <Card key={m._id} movie={m} onClick={() => goMovie(m._id)} />)}
-            </HomeRow>
-          )}
-        </div>
-      )}
-
+        </>}
+      </div>
     </div>
   );
 }
