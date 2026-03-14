@@ -1,0 +1,40 @@
+# render.yaml — drop this in your PROJECT ROOT (next to both folders)
+# This lets Render auto-configure both services at once.
+# Go to render.com → New → Blueprint → connect repo → done.
+
+services:
+  # ── Backend API ──────────────────────────────────────────────────
+  - type: web
+    name: ollipedia-backend
+    runtime: node
+    rootDir: Ollypedia-Backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: MONGO_URI
+        sync: false          # ← you fill this in Render dashboard
+      - key: JWT_SECRET
+        sync: false          # ← you fill this in Render dashboard
+      - key: FRONTEND_URL
+        sync: false          # ← set to your frontend URL after first deploy
+      - key: ADMIN_REGISTER_SECRET
+        sync: false          # ← choose any secret word
+
+  # ── Frontend Static Site ─────────────────────────────────────────
+  - type: web
+    name: ollipedia-frontend
+    runtime: static
+    rootDir: ollipedia-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false          # ← set to https://ollipedia-backend.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
