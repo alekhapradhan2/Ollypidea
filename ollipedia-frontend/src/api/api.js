@@ -21,6 +21,14 @@ export const setCastToken = (t) => {
 };
 export const getCastToken = () => _castToken;
 
+// ── Admin token
+let _adminToken = (() => { try { return localStorage.getItem("admin_token"); } catch { return null; } })();
+export const setAdminToken = (t) => {
+  _adminToken = t;
+  try { t ? localStorage.setItem("admin_token", t) : localStorage.removeItem("admin_token"); } catch {}
+};
+export const getAdminToken = () => _adminToken;
+
 // ── Request helpers
 const authHeader = (token) => token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -46,6 +54,7 @@ export const API = {
   getMovie:          (id)       => get(`/movies/${id}`),
   getCast:           ()         => get("/cast"),
   searchCast:        (q)        => get(`/cast/search/${encodeURIComponent(q)}`),
+  searchCastByType:  (type, q)  => get(`/cast/search-type/${encodeURIComponent(type)}/${encodeURIComponent(q)}`),
   getCastMember:     (id)       => get(`/cast/${id}`),
   getNews:           ()         => get("/news"),
   getNewsItem:       (id)       => get(`/news/${id}`),
@@ -67,7 +76,7 @@ export const API = {
   castGetMe:     ()            => get("/cast-auth/me", _castToken),
   castUpdateMe:  (body)        => patch("/cast-auth/me", body, _castToken),
 
-  // ── Movie management (production token required)
+  // ── Movie management (production token)
   createMovie:         (body)      => post("/movies", body, _token),
   updateMovie:         (id, body)  => patch(`/movies/${id}`, body, _token),
   updateBoxOffice:     (id, body)  => patch(`/movies/${id}/boxoffice`, body, _token),
@@ -80,6 +89,44 @@ export const API = {
   addNews:             (id, body)  => post(`/movies/${id}/news`, body, _token),
   editNews:            (nid, body) => patch(`/news/${nid}`, body, _token),
   deleteNews:          (nid)       => del(`/news/${nid}`, _token),
+
+  // ── Admin auth
+  adminSetupStatus:    ()                                        => get("/admin/setup-status"),
+  adminRegister:       (username, email, password, adminSecret) => post("/admin/register", { username, email, password, adminSecret }),
+  adminLogin:          (username, password)                     => post("/admin/login", { username, password }),
+  adminChangePassword: (cur, newPw)                             => post("/admin/change-password", { currentPassword: cur, newPassword: newPw }, _adminToken),
+
+  // ── Admin — movies
+  adminCreateMovie:       (body)         => post("/admin/movies", body, _adminToken),
+  adminUpdateMovie:       (id, body)     => patch(`/admin/movies/${id}`, body, _adminToken),
+  adminDeleteMovie:       (id)           => del(`/admin/movies/${id}`, _adminToken),
+  adminAddCastToMovie:    (id, entry)    => post(`/admin/movies/${id}/cast`, entry, _adminToken),
+  adminRemoveCastFromMovie:(id, castId)  => del(`/admin/movies/${id}/cast/${castId}`, _adminToken),
+  adminAddSong:           (id, song)     => post(`/admin/movies/${id}/songs`, song, _adminToken),
+  adminUpdateSong:        (id, idx, song)=> patch(`/admin/movies/${id}/songs/${idx}`, song, _adminToken),
+  adminAddNewsToMovie:    (id, body)     => post(`/admin/movies/${id}/news`, body, _adminToken),
+
+  // ── Admin — cast
+  createCast:   (body)     => post("/admin/cast", body, _adminToken),
+  updateCast:   (id, body) => patch(`/admin/cast/${id}`, body, _adminToken),
+  deleteCast:   (id)       => del(`/admin/cast/${id}`, _adminToken),
+
+  // ── Admin — productions
+  createProduction:  (body)     => post("/admin/productions", body, _adminToken),
+  updateProduction:  (id, body) => patch(`/admin/productions/${id}`, body, _adminToken),
+  deleteProduction:  (id)       => del(`/admin/productions/${id}`, _adminToken),
+
+  // ── Admin — news
+  adminGetAllNews: ()           => get("/admin/news", _adminToken),
+  createNews:      (body)       => post("/admin/news", body, _adminToken),
+  updateNews:      (id, body)   => patch(`/admin/news/${id}`, body, _adminToken),
+  adminDeleteNews: (id)         => del(`/admin/news/${id}`, _adminToken),
+
+  // ── Admin — songs
+  deleteSong: (movieId, idx) => del(`/admin/movies/${movieId}/songs/${idx}`, _adminToken),
+
+  // ── Admin stats
+  adminStats: () => get("/admin/stats", _adminToken),
 };
 
 // ─────────────────────────────────────────────────────────────────

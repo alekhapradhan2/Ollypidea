@@ -8,7 +8,7 @@ function SafeImg({ src, alt, className }) {
   return <img src={src} alt={alt} className={className} onError={() => setBroken(true)} />;
 }
 
-// ── Global Search ─────────────────────────────────────────────────────────────
+// ── Global Search ────────────────────────────────────────────────
 function NavSearch() {
   const navigate = useNavigate();
   const [open,    setOpen]    = useState(false);
@@ -19,31 +19,24 @@ function NavSearch() {
   const wrapRef  = useRef(null);
   const timer    = useRef(null);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced search
   useEffect(() => {
     if (!query.trim()) { setResults({ movies:[], cast:[], songs:[] }); return; }
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const [movies, cast, allMovies] = await Promise.all([
-          API.getMovies(),
-          API.getCast(),
-          API.getMovies(),
-        ]);
+        const [movies, cast] = await Promise.all([API.getMovies(), API.getCast()]);
         const q = query.toLowerCase();
         const matchMovies = movies.filter(m => m.title?.toLowerCase().includes(q)).slice(0,5);
         const matchCast   = cast.filter(c => c.name?.toLowerCase().includes(q)).slice(0,4);
-        // Songs: flatten from movies
         const songs = [];
-        allMovies.forEach(m => (m.media?.songs||[]).forEach(s => {
+        movies.forEach(m => (m.media?.songs||[]).forEach(s => {
           if (s.title?.toLowerCase().includes(q)) songs.push({ ...s, movieTitle: m.title, movieId: m._id });
         }));
         setResults({ movies: matchMovies, cast: matchCast, songs: songs.slice(0,4) });
@@ -59,14 +52,8 @@ function NavSearch() {
       {open ? (
         <div className="nav-search-box">
           <span className="nav-search-icon">🔍</span>
-          <input
-            ref={inputRef}
-            className="nav-search-input"
-            placeholder="Search movies, cast, songs…"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            autoFocus
-          />
+          <input ref={inputRef} className="nav-search-input" placeholder="Search movies, cast, songs…"
+            value={query} onChange={e => setQuery(e.target.value)} autoFocus />
           {query && <button className="nav-search-clear" onClick={() => { setQuery(""); inputRef.current?.focus(); }}>✕</button>}
         </div>
       ) : (
@@ -77,7 +64,6 @@ function NavSearch() {
         <div className="nav-search-dropdown">
           {loading && <div className="nav-search-loading">Searching…</div>}
           {!loading && total === 0 && <div className="nav-search-empty">No results for "{query}"</div>}
-
           {results.movies.length > 0 && (
             <div className="nav-search-group">
               <div className="nav-search-group-label">🎬 Movies</div>
@@ -92,7 +78,6 @@ function NavSearch() {
               ))}
             </div>
           )}
-
           {results.cast.length > 0 && (
             <div className="nav-search-group">
               <div className="nav-search-group-label">👤 Cast & Crew</div>
@@ -107,7 +92,6 @@ function NavSearch() {
               ))}
             </div>
           )}
-
           {results.songs.length > 0 && (
             <div className="nav-search-group">
               <div className="nav-search-group-label">🎵 Songs</div>
@@ -128,7 +112,7 @@ function NavSearch() {
   );
 }
 
-export default function Navbar({ production, castMember, onLoginClick, onLogout, onCastLogout }) {
+export default function Navbar({ admin, onAdminLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const active = (p) => location.pathname === p ? "nav-link active" : "nav-link";
@@ -136,54 +120,24 @@ export default function Navbar({ production, castMember, onLoginClick, onLogout,
   return (
     <nav className="navbar">
       <Link to="/" className="navbar-brand">OLLI<span>PEDIA</span></Link>
-
       <Link to="/"       className={active("/")}>Home</Link>
       <Link to="/movies" className={active("/movies")}>Movies</Link>
       <Link to="/cast"   className={active("/cast")}>Cast</Link>
       <Link to="/news"   className={active("/news")}>News</Link>
-
+      <Link to="/songs"  className={active("/songs")}>Songs</Link>
       <NavSearch />
-
       <div className="nav-actions">
-        {/* Production logged in */}
-        {production && (
+        {admin ? (
           <>
-            <Link to="/dashboard" className="nav-prod-btn">
-              {production.logo
-                ? <SafeImg src={production.logo} alt={production.name} className="nav-prod-logo" />
-                : <span className="nav-prod-avatar">{production.name[0]}</span>
-              }
-              <span className="nav-prod-name">{production.name}</span>
+            <Link to="/admin" className="nav-prod-btn">
+              <span className="nav-prod-avatar">🛡</span>
+              <span className="nav-prod-name">{admin.username}</span>
             </Link>
-            <Link to="/dashboard/add-movie" className="btn btn-gold btn-sm">+ Add Movie</Link>
-            <button className="btn btn-ghost btn-sm" onClick={() => { onLogout(); navigate("/"); }}>Logout</button>
+            <span style={{ fontSize:"0.68rem", color:"var(--gold)", background:"rgba(201,151,58,0.12)", padding:"2px 9px", borderRadius:10, fontWeight:700 }}>ADMIN</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => { onAdminLogout(); navigate("/"); }}>Logout</button>
           </>
-        )}
-
-        {/* Cast member logged in */}
-        {!production && castMember && (
-          <>
-            <Link to="/cast-portal" className="nav-prod-btn">
-              {castMember.photo
-                ? <SafeImg src={castMember.photo} alt={castMember.name} className="nav-prod-logo" />
-                : <span className="nav-prod-avatar">{castMember.name[0]}</span>
-              }
-              <span className="nav-prod-name">{castMember.name}</span>
-            </Link>
-            <span style={{ fontSize:"0.72rem", color:"var(--gold)", background:"rgba(201,151,58,0.12)", padding:"2px 10px", borderRadius:10 }}>
-              {castMember.roles?.[0] || "Member"}
-            </span>
-            <button className="btn btn-ghost btn-sm" onClick={() => { onCastLogout(); navigate("/"); }}>Logout</button>
-          </>
-        )}
-
-        {/* Not logged in */}
-        {!production && !castMember && (
-          <>
-            <button className="btn btn-outline btn-sm" onClick={onLoginClick}>Login</button>
-            <Link to="/register" className="btn btn-gold btn-sm">Join as Production</Link>
-            <Link to="/cast-register" className="btn btn-outline btn-sm" style={{ borderColor:"var(--gold)", color:"var(--gold)" }}>Join as Artist</Link>
-          </>
+        ) : (
+          <Link to="/admin/login" className="btn btn-ghost btn-sm" style={{ color:"var(--muted)", fontSize:"0.75rem" }}>Admin</Link>
         )}
       </div>
     </nav>

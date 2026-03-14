@@ -1,377 +1,420 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { API, getToken } from "../api/api";
-import { MovieCard, SafeImg } from "../components/UI";
+import React, { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { API } from "../api/api";
 
-const NAV = [
-  { key: "overview",       icon: "⬛", label: "Overview"       },
-  { key: "films",          icon: "🎬", label: "My Films"       },
-  { key: "collaborations", icon: "🤝", label: "Collaborations" },
-  { key: "cast",           icon: "👤", label: "Cast & Crew"    },
-  { key: "songs",          icon: "🎵", label: "Songs"          },
-  { key: "settings",       icon: "⚙️",  label: "Settings"       },
-];
+// ── Helpers ───────────────────────────────────────────────
+const extractYtId = (input) => {
+  if (!input) return null;
+  const s = String(input).trim();
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  return null;
+};
+const ytThumb = (ytId) => {
+  const id = extractYtId(ytId);
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+};
+const heroImage = (m) =>
+  m.thumbnailUrl || ytThumb(m.media?.trailer?.ytId) || m.posterUrl || null;
 
-function StatCard({ icon, label, value, sub, accent }) {
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
+
+const now = new Date();
+
+// within N days from today (negative = past)
+const withinDays = (d, pastDays, futureDays) => {
+  if (!d) return false;
+  const diff = (new Date(d) - now) / 86400000;
+  return diff >= -pastDays && diff <= futureDays;
+};
+const isThisWeek  = (d) => withinDays(d, 7, 14);
+const isThisMonth = (d) => {
+  if (!d) return false;
+  const dt = new Date(d);
+  return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+};
+const isLastMonth = (d) => {
+  if (!d) return false;
+  const dt  = new Date(d);
+  const lm  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return dt.getMonth() === lm.getMonth() && dt.getFullYear() === lm.getFullYear();
+};
+const isLastWeek = (d) => withinDays(d, 14, 0);
+
+// ── Hero Slide ────────────────────────────────────────────
+function HeroSlide({ movie, active }) {
+  const navigate = useNavigate();
+  const img = heroImage(movie);
   return (
-    <div className="portal-stat-card">
-      <div className="portal-stat-icon" style={{ background: accent || "rgba(201,151,58,0.12)" }}>
-        {icon}
-      </div>
-      <div>
-        <div className="portal-stat-val">{value}</div>
-        <div className="portal-stat-label">{label}</div>
-        {sub && <div className="portal-stat-sub">{sub}</div>}
+    <div
+      className={`home-hero-slide ${active ? "active" : ""}`}
+      style={{ backgroundImage: img ? `url(${img})` : "none" }}
+    >
+      <div className="home-hero-overlay" />
+      <div className="home-hero-content">
+        <div className="home-hero-meta">
+          {movie.category && <span className="home-tag">{movie.category}</span>}
+          {movie.genre?.[0] && <span className="home-tag-outline">{movie.genre[0]}</span>}
+          {movie.language  && <span className="home-tag-outline">{movie.language}</span>}
+        </div>
+        <h1 className="home-hero-title">{movie.title}</h1>
+        <div className="home-hero-info">
+          {movie.releaseDate && (
+            <span>🗓 {new Date(movie.releaseDate).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}</span>
+          )}
+          {movie.director && <span>Dir. {movie.director}</span>}
+          {movie.verdict && movie.verdict !== "Upcoming" && (
+            <span className="home-hero-verdict-badge">{movie.verdict}</span>
+          )}
+        </div>
+        {movie.synopsis && (
+          <p className="home-hero-synopsis">
+            {movie.synopsis.slice(0, 160)}{movie.synopsis.length > 160 ? "…" : ""}
+          </p>
+        )}
+        <div className="home-hero-actions">
+          {movie.media?.trailer?.ytId && (
+            <a
+              href={`https://www.youtube.com/watch?v=${movie.media.trailer.ytId}`}
+              target="_blank" rel="noopener noreferrer"
+              className="btn-hero-play"
+            >▶ Watch Trailer</a>
+          )}
+          <button className="btn-hero-info" onClick={() => navigate(`/movie/${movie._id}`)}>
+            More Info
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function SettingsPanel({ production, onToast, onUpdate }) {
-  const [form, setForm] = useState({
-    name:     production.name     || "",
-    bio:      production.bio      || "",
-    logo:     production.logo     || "",
-    banner:   production.banner   || "",
-    website:  production.website  || "",
-    location: production.location || "",
-    founded:  production.founded  || "",
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+// ── Movie Card ────────────────────────────────────────────
+function MovieCard({ movie }) {
+  const navigate = useNavigate();
+  const img = movie.posterUrl || movie.thumbnailUrl || ytThumb(movie.media?.trailer?.ytId);
+  return (
+    <div className="home-card" onClick={() => navigate(`/movie/${movie._id}`)}>
+      <div className="home-card-img">
+        {img
+          ? <img src={img} alt={movie.title} loading="lazy"
+              onError={e => { e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }} />
+          : null}
+        <div className="home-card-fallback" style={{ display: img ? "none" : "flex" }}>🎬</div>
+        <div className="home-card-overlay">
+          <span className="home-card-verdict">{movie.verdict || "Upcoming"}</span>
+          {movie.genre?.[0] && <span className="home-card-genre">{movie.genre[0]}</span>}
+        </div>
+      </div>
+      <div className="home-card-info">
+        <p className="home-card-title">{movie.title}</p>
+        {movie.releaseDate && <p className="home-card-date">{fmtDate(movie.releaseDate)}</p>}
+      </div>
+    </div>
+  );
+}
 
-  const save = async () => {
-    setSaving(true);
-    try {
-      const updated = await API.updateProfile(form);
-      onUpdate(updated);
-      onToast("Profile updated!");
-    } catch (e) {
-      onToast(typeof e === "string" ? e : "Save failed", "error");
-    } finally { setSaving(false); }
-  };
+// ── Movie Row ─────────────────────────────────────────────
+function MovieRow({ title, movies, viewAllPath }) {
+  const navigate = useNavigate();
+  const rowRef = useRef(null);
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 280, behavior: "smooth" });
+  const limited = movies.slice(0, 15);
+  if (!movies.length) return null;
+  return (
+    <section className="home-section">
+      <div className="home-section-header">
+        <h2 className="home-section-title">{title}</h2>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {(movies.length > 15 || viewAllPath) && (
+            <button className="home-view-all" onClick={() => navigate(viewAllPath || "/movies")}>
+              View All ({movies.length})
+            </button>
+          )}
+          <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
+          <button className="home-arrow" onClick={() => scroll(1)}>›</button>
+        </div>
+      </div>
+      <div className="home-row" ref={rowRef}>
+        {limited.map(m => <MovieCard key={m._id} movie={m} />)}
+      </div>
+    </section>
+  );
+}
+
+// ── Trailers Row ──────────────────────────────────────────
+function TrailersRow({ movies }) {
+  const rowRef = useRef(null);
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 340, behavior: "smooth" });
+  const withTrailer = movies.filter(m => m.media?.trailer?.ytId).slice(0, 15);
+  if (!withTrailer.length) return null;
+  return (
+    <section className="home-section">
+      <div className="home-section-header">
+        <h2 className="home-section-title">🎬 Latest Trailers</h2>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
+          <button className="home-arrow" onClick={() => scroll(1)}>›</button>
+        </div>
+      </div>
+      <div className="home-row home-trailer-row" ref={rowRef}>
+        {withTrailer.map(m => (
+          <a key={m._id}
+            href={`https://www.youtube.com/watch?v=${m.media.trailer.ytId}`}
+            target="_blank" rel="noopener noreferrer"
+            className="home-trailer-card">
+            <div className="home-trailer-thumb">
+              <img src={ytThumb(m.media.trailer.ytId)} alt={m.title}
+                onError={e => e.target.style.opacity = "0"} />
+              <div className="home-trailer-play">▶</div>
+              <div className="home-trailer-duration">Trailer</div>
+            </div>
+            <div className="home-trailer-info">
+              <p className="home-trailer-title">{m.title}</p>
+              {m.releaseDate && <p className="home-trailer-date">{fmtDate(m.releaseDate)}</p>}
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── News Row ──────────────────────────────────────────────
+function NewsRow({ news }) {
+  const navigate = useNavigate();
+  const rowRef = useRef(null);
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 300, behavior: "smooth" });
+  if (!news.length) return null;
+  return (
+    <section className="home-section">
+      <div className="home-section-header">
+        <h2 className="home-section-title">📰 Latest News</h2>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="home-view-all" onClick={() => navigate("/news")}>View All</button>
+          <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
+          <button className="home-arrow" onClick={() => scroll(1)}>›</button>
+        </div>
+      </div>
+      <div className="home-row home-news-row" ref={rowRef}>
+        {news.map(n => (
+          <div key={n._id} className="home-news-card" onClick={() => navigate(`/news/${n._id}`)}>
+            {n.imageUrl && (
+              <div className="home-news-img">
+                <img src={n.imageUrl} alt={n.title} onError={e => e.target.style.display = "none"} />
+              </div>
+            )}
+            <div className="home-news-body">
+              {n.category && <span className="home-news-cat">{n.category}</span>}
+              <p className="home-news-title">{n.title}</p>
+              {n.movieTitle && <p className="home-news-movie">{n.movieTitle}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Songs Row ─────────────────────────────────────────────
+function SongsRow({ movies }) {
+  const rowRef = useRef(null);
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 220, behavior: "smooth" });
+  const songs = [];
+  movies.forEach(m => {
+    (m.media?.songs || []).forEach(s => {
+      if (s.ytId) songs.push({ ...s, movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl });
+    });
+  });
+  if (!songs.length) return null;
+  return (
+    <section className="home-section">
+      <div className="home-section-header">
+        <h2 className="home-section-title">🎵 Latest Songs</h2>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
+          <button className="home-arrow" onClick={() => scroll(1)}>›</button>
+        </div>
+      </div>
+      <div className="home-row home-songs-row" ref={rowRef}>
+        {songs.slice(0, 15).map((s, i) => (
+          <a key={i}
+            href={`https://www.youtube.com/watch?v=${s.ytId}`}
+            target="_blank" rel="noopener noreferrer"
+            className="home-song-card">
+            <div className="home-song-thumb">
+              <img src={s.thumbnailUrl || ytThumb(s.ytId) || s.posterUrl || ""}
+                alt={s.title} onError={e => e.target.style.opacity = "0.2"} />
+              <div className="home-song-play">♪</div>
+            </div>
+            <div className="home-song-info">
+              <p className="home-song-title">{s.title}</p>
+              <p className="home-song-singer">{s.singer}</p>
+              <p className="home-song-movie">{s.movieTitle}</p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
+export default function Home({ production }) {
+  const navigate  = useNavigate();
+  const [movies,  setMovies]  = useState([]);
+  const [news,    setNews]    = useState([]);
+  const [heroIdx, setHeroIdx] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    Promise.all([
+      API.getMovies().catch(() => []),
+      API.getNews().catch(() => []),
+    ]).then(([m, n]) => {
+      setMovies(m);
+      setNews(n.slice(0, 12));
+      setLoading(false);
+    });
+  }, []);
+
+  // ── Hero pool: upcoming + last 60 days + this month + last month ──
+  const heroMovies = movies
+    .filter(m => {
+      const hasImg = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
+      if (!hasImg) return false;
+      // include: upcoming (any future date)
+      if (!m.verdict || m.verdict === "Upcoming") return true;
+      // include: released within last 60 days
+      if (m.releaseDate && withinDays(m.releaseDate, 60, 0)) return true;
+      // include: this month and last month explicitly
+      if (isThisMonth(m.releaseDate) || isLastMonth(m.releaseDate)) return true;
+      return false;
+    })
+    .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
+    .slice(0, 8);
+
+  useEffect(() => {
+    if (!heroMovies.length) return;
+    timerRef.current = setInterval(() => setHeroIdx(i => (i + 1) % heroMovies.length), 5500);
+    return () => clearInterval(timerRef.current);
+  }, [heroMovies.length]);
+
+  const goHero = (i) => { setHeroIdx(i); clearInterval(timerRef.current); };
+
+  // ── Sections ──────────────────────────────────────────────
+  const allMovies   = [...movies].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const thisWeek    = movies.filter(m => isThisWeek(m.releaseDate) && !m.releaseTBA);
+  const thisMonth   = movies.filter(m => isThisMonth(m.releaseDate));
+  const lastMonth   = movies.filter(m => isLastMonth(m.releaseDate));
+  const lastWeek    = movies.filter(m => isLastWeek(m.releaseDate) && !isThisWeek(m.releaseDate));
+  const upcoming    = movies.filter(m => !m.verdict || m.verdict === "Upcoming");
+  const inTheatres  = movies.filter(m => ["Hit","Average","Flop","Super Hit","Blockbuster"].includes(m.verdict));
+  const highRated   = movies
+    .filter(m => m.reviews?.length >= 1)
+    .map(m => ({ ...m, avg: m.reviews.reduce((s, r) => s + (r.rating || 0), 0) / m.reviews.length }))
+    .filter(m => m.avg >= 3.5)
+    .sort((a, b) => b.avg - a.avg);
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", color: "var(--muted)" }}>
+      Loading…
+    </div>
+  );
 
   return (
-    <div className="portal-settings">
-      <div className="portal-section-header">
-        <h2 className="portal-section-title">Production Settings</h2>
-        <p className="portal-section-sub">Update your public profile and company details</p>
-      </div>
-      {form.banner && (
-        <div style={{ width:"100%", height:140, borderRadius:8, overflow:"hidden", marginBottom:20, border:"1px solid var(--border)" }}>
-          <img src={form.banner} alt="Banner" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
+    <div className="home-root">
+
+      {/* ── HERO ── */}
+      {heroMovies.length > 0 && (
+        <div className="home-hero">
+          {heroMovies.map((m, i) => (
+            <HeroSlide key={m._id} movie={m} active={i === heroIdx} />
+          ))}
+
+          <div className="home-hero-dots">
+            {heroMovies.map((_, i) => (
+              <button key={i} className={`home-hero-dot ${i === heroIdx ? "active" : ""}`}
+                onClick={() => goHero(i)} />
+            ))}
+          </div>
+
+          <div className="home-hero-strip">
+            {heroMovies.map((m, i) => {
+              const img = heroImage(m);
+              return (
+                <div key={m._id}
+                  className={`home-hero-strip-item ${i === heroIdx ? "active" : ""}`}
+                  onClick={() => goHero(i)}>
+                  {img
+                    ? <img src={img} alt={m.title} onError={e => e.target.style.display = "none"} />
+                    : <div className="home-strip-fallback">🎬</div>}
+                  {m.media?.trailer?.ytId && <div className="home-strip-play">▶</div>}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
-      <div className="portal-form-grid">
-        <div className="form-group">
-          <label className="form-label">Company Name</label>
-          <input className="form-input" value={form.name} onChange={e => set("name", e.target.value)} />
+
+      {/* ── CTA Bar ── */}
+      {production && (
+        <div className="home-cta-bar">
+          <span>Welcome back, <strong>{production.name}</strong></span>
+          <button className="btn btn-gold btn-sm" onClick={() => navigate("/dashboard/add-movie")}>+ Add Movie</button>
         </div>
-        <div className="form-group">
-          <label className="form-label">Location</label>
-          <input className="form-input" value={form.location} onChange={e => set("location", e.target.value)} placeholder="e.g. Bhubaneswar, Odisha" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Founded Year</label>
-          <input className="form-input" value={form.founded} onChange={e => set("founded", e.target.value)} placeholder="e.g. 2010" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Website</label>
-          <input className="form-input" value={form.website} onChange={e => set("website", e.target.value)} placeholder="https://…" />
-        </div>
-        <div className="form-group" style={{ gridColumn:"1/-1" }}>
-          <label className="form-label">Logo URL</label>
-          <input className="form-input" value={form.logo} onChange={e => set("logo", e.target.value)} placeholder="https://…" />
-        </div>
-        <div className="form-group" style={{ gridColumn:"1/-1" }}>
-          <label className="form-label">Banner URL</label>
-          <input className="form-input" value={form.banner} onChange={e => set("banner", e.target.value)} placeholder="https://… (wide image)" />
-        </div>
-        <div className="form-group" style={{ gridColumn:"1/-1" }}>
-          <label className="form-label">Bio / About</label>
-          <textarea className="form-textarea" value={form.bio} onChange={e => set("bio", e.target.value)} style={{ minHeight:100 }} />
-        </div>
-      </div>
-      <div style={{ display:"flex", gap:12 }}>
-        <button className="btn btn-gold" onClick={save} disabled={saving}>{saving ? "Saving…" : "💾 Save Changes"}</button>
+      )}
 
-      </div>
-    </div>
-  );
-}
+      <div className="home-sections">
 
-export default function Dashboard({ production, onToast, onLogout, onProductionUpdate }) {
-  const navigate     = useNavigate();
-  const [movies,  setMovies]  = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [tab,     setTab]     = useState("overview");
-  const [sideOpen, setSideOpen] = useState(false);
+        {/* This week */}
+        {thisWeek.length > 0 && <MovieRow title="🔥 Releasing This Week" movies={thisWeek} />}
 
-  const load = useCallback(() => {
-    if (!production || !getToken()) { navigate("/"); return; }
-    API.getProductionMovies(production._id)
-      .then(setMovies).catch(console.error).finally(() => setLoading(false));
-  }, [production]);
+        {/* This month */}
+        {thisMonth.length > 0 && <MovieRow title="🗓 This Month" movies={thisMonth} />}
 
-  useEffect(() => { load(); }, [load]);
+        {/* Last week — if different from this month */}
+        {lastWeek.length > 0 && <MovieRow title="📅 Last Week" movies={lastWeek} />}
 
-  if (!production || !getToken()) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", gap:16 }}>
-      <h2>Not logged in</h2>
-      <Link to="/" className="btn btn-gold">Go Home</Link>
-    </div>
-  );
+        {/* Last month */}
+        {lastMonth.length > 0 && <MovieRow title="📆 Last Month" movies={lastMonth} />}
 
-  const myMovies     = movies.filter(m => String(m.productionId?._id) === String(production._id));
-  const collabMovies = movies.filter(m => String(m.productionId?._id) !== String(production._id));
-  const allSongs     = movies.flatMap(m => (m.media?.songs || []).map(s => ({ ...s, movieTitle: m.title, movieId: m._id })));
-  const allCast      = [...new Map(movies.flatMap(m => m.cast || []).map(c => [String(c.castId), c])).values()];
-  const hits         = myMovies.filter(m => ["Hit","Super Hit","Blockbuster"].includes(m.verdict)).length;
-  const upcoming     = myMovies.filter(m => !m.verdict || m.verdict === "Upcoming").length;
+        {/* Now in theatres */}
+        {inTheatres.length > 0 && <MovieRow title="🎭 Now in Theatres" movies={inTheatres} />}
 
-  return (
-    <div className="portal-layout">
+        {/* Trailers */}
+        <TrailersRow movies={allMovies} />
 
-      {/* ── TOP BAR ── */}
-      <header className="portal-topbar">
-        <div className="portal-topbar-left">
-          <button className="portal-mobile-toggle" onClick={() => setSideOpen(o => !o)}>
-            {sideOpen ? "✕" : "☰"}
-          </button>
-          <span className="portal-topbar-wordmark">OLLI<span>PEDIA</span></span>
-          <span className="portal-topbar-badge">Production Portal</span>
-        </div>
-        <div className="portal-topbar-right">
-          <span className="portal-topbar-user">
-            {production.logo && <img src={production.logo} alt="" onError={e=>e.target.style.display="none"} />}
-            {production.name}
-          </span>
-          <button className="btn btn-outline btn-sm" onClick={onLogout}>Logout</button>
-        </div>
-      </header>
+        {/* News */}
+        <NewsRow news={news} />
 
-      {/* ── BODY (sidebar + main) ── */}
-      <div className="portal-body">
+        {/* Songs */}
+        <SongsRow movies={allMovies} />
 
-        {/* Sidebar */}
-        <aside className={`portal-sidebar ${sideOpen ? "open" : ""}`} onClick={() => setSideOpen(false)}>
-          <div className="portal-sidebar-brand">
-            <div className="portal-sidebar-logo">
-              {production.logo
-                ? <img src={production.logo} alt="" onError={e=>e.target.style.display="none"} />
-                : <span>{production.name[0]}</span>}
-            </div>
-            <div className="portal-sidebar-name">{production.name}</div>
+        {/* High rated */}
+        {highRated.length > 0 && <MovieRow title="⭐ Top Rated" movies={highRated} />}
+
+        {/* Upcoming */}
+        {upcoming.length > 0 && <MovieRow title="🚀 Upcoming Movies" movies={upcoming} viewAllPath="/movies" />}
+
+        {/* All movies */}
+        <MovieRow title="🎬 All Movies" movies={allMovies} viewAllPath="/movies" />
+
+        {movies.length === 0 && (
+          <div className="home-empty">
+            <div style={{ fontSize: "4rem", marginBottom: 16 }}>🎬</div>
+            <h2>No movies yet</h2>
+            <p style={{ color: "var(--muted)" }}>Be the first to add a film to Ollipedia</p>
+            {production && (
+              <button className="btn btn-gold" onClick={() => navigate("/dashboard/add-movie")}>+ Add Movie</button>
+            )}
           </div>
-
-          <nav className="portal-nav" onClick={e => e.stopPropagation()}>
-            {NAV.map(n => (
-              <button key={n.key}
-                className={`portal-nav-item ${tab === n.key ? "active" : ""}`}
-                onClick={() => { setTab(n.key); setSideOpen(false); }}>
-                <span className="portal-nav-icon">{n.icon}</span>
-                <span className="portal-nav-label">{n.label}</span>
-                {n.key === "films"          && myMovies.length > 0     && <span className="portal-nav-badge">{myMovies.length}</span>}
-                {n.key === "collaborations" && collabMovies.length > 0 && <span className="portal-nav-badge">{collabMovies.length}</span>}
-              </button>
-            ))}
-          </nav>
-
-          <div className="portal-sidebar-footer">
-            <Link to="/dashboard/add-movie" className="btn btn-gold" style={{ width:"100%", textAlign:"center" }}>+ Add Movie</Link>
-          </div>
-        </aside>
-
-        {/* Main */}
-        <main className="portal-main">
-
-          {/* OVERVIEW */}
-          {tab === "overview" && (
-            <>
-              <div className="portal-page-header">
-                <div>
-                  <h1 className="portal-page-title">Welcome back, {production.name.split(" ")[0]} 👋</h1>
-                  <p className="portal-page-sub">Here's your production house at a glance</p>
-                </div>
-                <Link to="/dashboard/add-movie" className="btn btn-gold">+ Add New Film</Link>
-              </div>
-
-              <div className="portal-stats-grid">
-                <StatCard icon="🎬" label="Total Films"    value={myMovies.length}     sub={`${upcoming} upcoming`} />
-                <StatCard icon="🏆" label="Hits"           value={hits}                sub="Hit / Super Hit / Blockbuster" accent="rgba(45,106,79,0.25)" />
-                <StatCard icon="🤝" label="Collaborations" value={collabMovies.length} sub="as co-producer"         accent="rgba(58,90,138,0.25)" />
-                <StatCard icon="👤" label="Cast & Crew"    value={allCast.length}      sub="across all films"       accent="rgba(106,58,106,0.25)" />
-              </div>
-
-              {myMovies.length > 0 && (
-                <div className="portal-section">
-                  <div className="portal-section-header">
-                    <h2 className="portal-section-title">Recent Films</h2>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setTab("films")}>View All →</button>
-                  </div>
-                  <div className="movie-grid">
-                    {myMovies.slice(0, 4).map(m => <MovieCard key={m._id} movie={m} portalMode />)}
-                  </div>
-                </div>
-              )}
-
-              <div className="portal-section">
-                <div className="portal-section-header">
-                  <h2 className="portal-section-title">Quick Actions</h2>
-                </div>
-                <div className="portal-actions-grid">
-                  {[
-                    { icon:"🎬", label:"Add New Film",     desc:"Register a new Odia film",           action:() => navigate("/dashboard/add-movie") },
-                    { icon:"⚙️",  label:"Edit Profile",     desc:"Update your company details",         action:() => setTab("settings") },
-                    { icon:"🎵", label:"All Songs",        desc:`${allSongs.length} songs in library`, action:() => setTab("songs") },
-
-                  ].map(a => (
-                    <button key={a.label} className="portal-action-card" onClick={a.action}>
-                      <span className="portal-action-icon">{a.icon}</span>
-                      <div>
-                        <div className="portal-action-label">{a.label}</div>
-                        <div className="portal-action-desc">{a.desc}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {myMovies.length === 0 && !loading && (
-                <div className="portal-empty-hero">
-                  <div className="portal-empty-icon">🎬</div>
-                  <h2>Your filmography is empty</h2>
-                  <p>Start building your portfolio by adding your first film.</p>
-                  <Link to="/dashboard/add-movie" className="btn btn-gold" style={{ marginTop:20 }}>+ Add Your First Film</Link>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* MY FILMS */}
-          {tab === "films" && (
-            <>
-              <div className="portal-page-header">
-                <div>
-                  <h1 className="portal-page-title">My Films</h1>
-                  <p className="portal-page-sub">{myMovies.length} film{myMovies.length !== 1 ? "s" : ""} in your portfolio</p>
-                </div>
-                <Link to="/dashboard/add-movie" className="btn btn-gold">+ Add Film</Link>
-              </div>
-              {loading ? (
-                <div className="movie-grid">{[...Array(4)].map((_,i) => <div key={i} className="skeleton" style={{ aspectRatio:"2/3" }} />)}</div>
-              ) : myMovies.length === 0 ? (
-                <div className="portal-empty-hero">
-                  <div className="portal-empty-icon">🎬</div>
-                  <h2>No films yet</h2>
-                  <Link to="/dashboard/add-movie" className="btn btn-gold" style={{ marginTop:20 }}>+ Add Film</Link>
-                </div>
-              ) : (
-                <div className="movie-grid">{myMovies.map(m => <MovieCard key={m._id} movie={m} portalMode />)}</div>
-              )}
-            </>
-          )}
-
-          {/* COLLABORATIONS */}
-          {tab === "collaborations" && (
-            <>
-              <div className="portal-page-header">
-                <div>
-                  <h1 className="portal-page-title">Collaborations</h1>
-                  <p className="portal-page-sub">Films where {production.name} is a co-producer</p>
-                </div>
-              </div>
-              {collabMovies.length === 0 ? (
-                <div className="portal-empty-hero">
-                  <div className="portal-empty-icon">🤝</div>
-                  <h2>No collaborations yet</h2>
-                  <p>When another production adds you as a collaborator, their films appear here.</p>
-                </div>
-              ) : (
-                <div className="movie-grid">{collabMovies.map(m => <MovieCard key={m._id} movie={m} portalMode />)}</div>
-              )}
-            </>
-          )}
-
-          {/* CAST */}
-          {tab === "cast" && (
-            <>
-              <div className="portal-page-header">
-                <div>
-                  <h1 className="portal-page-title">Cast & Crew</h1>
-                  <p className="portal-page-sub">{allCast.length} people across all your films</p>
-                </div>
-              </div>
-              {allCast.length === 0 ? (
-                <div className="portal-empty-hero">
-                  <div className="portal-empty-icon">👤</div>
-                  <h2>No cast added yet</h2>
-                  <p>Add cast members when creating or editing a film.</p>
-                </div>
-              ) : (
-                <div className="cast-grid">
-                  {allCast.map((c, i) => (
-                    <div key={i} className="cast-card cast-card-linked" onClick={() => c.castId && navigate(`/portal/cast/${c.castId}`)}>
-                      <div className="cast-card-photo" style={{ display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        {c.photo
-                          ? <img src={c.photo} alt={c.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
-                          : <span style={{ fontSize:"1.8rem" }}>{c.type==="Director"?"🎬":c.type==="Producer"?"🎥":"👤"}</span>
-                        }
-                      </div>
-                      <div className="cast-card-body">
-                        <div className="cast-card-name">{c.name}</div>
-                        {c.role && <div className="cast-card-role">{c.role}</div>}
-                        <div className="cast-card-role" style={{ color:"var(--gold)" }}>{c.type}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* SONGS */}
-          {tab === "songs" && (
-            <>
-              <div className="portal-page-header">
-                <div>
-                  <h1 className="portal-page-title">Songs Library</h1>
-                  <p className="portal-page-sub">{allSongs.length} songs across all your films</p>
-                </div>
-              </div>
-              {allSongs.length === 0 ? (
-                <div className="portal-empty-hero">
-                  <div className="portal-empty-icon">🎵</div>
-                  <h2>No songs yet</h2>
-                  <p>Add songs through the Media section of each film.</p>
-                </div>
-              ) : (
-                <div className="song-list">
-                  {allSongs.map((s, i) => (
-                    <div key={i} className="song-item" style={{ cursor:"pointer" }} onClick={() => navigate(`/movie/${s.movieId}`)}>
-                      <span className="song-num">{i + 1}</span>
-                      <div className="song-info">
-                        <div className="song-title">{s.title}</div>
-                        <div className="song-singer">{s.singer && `${s.singer} · `}<span style={{ color:"var(--gold)" }}>{s.movieTitle}</span></div>
-                      </div>
-                      {s.ytId && (
-                        <a href={`https://youtube.com/watch?v=${s.ytId}`} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}>
-                          <button className="song-play" style={{ opacity:1 }}>▶</button>
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* SETTINGS */}
-          {tab === "settings" && (
-            <SettingsPanel production={production} onToast={onToast} onUpdate={onProductionUpdate || (() => {})} />
-          )}
-
-        </main>
+        )}
       </div>
     </div>
   );

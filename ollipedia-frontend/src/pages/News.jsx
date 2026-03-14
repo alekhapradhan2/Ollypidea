@@ -26,9 +26,18 @@ function NewsCard({ n, onClick }) {
         <div className="news-card-content news-card-content-clamp">{n.content}</div>
         <div className="news-card-footer">
           {n.movieTitle && <span className="news-card-movie">🎬 {n.movieTitle}</span>}
-          <span className="news-card-date">
-            {new Date(n.createdAt).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}
-          </span>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginLeft:"auto" }}>
+            {n.sourceUrl && (
+              <a href={n.sourceUrl} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize:"0.65rem", color:"var(--muted)", textDecoration:"none", border:"1px solid var(--border)", borderRadius:4, padding:"1px 6px", whiteSpace:"nowrap" }}
+                onClick={e => e.stopPropagation()}>
+                Source ↗
+              </a>
+            )}
+            <span className="news-card-date">
+              {new Date(n.createdAt).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}
+            </span>
+          </div>
         </div>
       </div>
     </div>

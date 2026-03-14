@@ -2,8 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-// Extract bare 11-char YT ID from URL, embed, or bare ID
+// ── Helpers ───────────────────────────────────────────────
 const extractYtId = (input) => {
   if (!input) return null;
   const s = String(input).trim();
@@ -16,53 +15,71 @@ const ytThumb = (ytId) => {
   const id = extractYtId(ytId);
   return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
 };
-
 const heroImage = (m) =>
   m.thumbnailUrl || ytThumb(m.media?.trailer?.ytId) || m.posterUrl || null;
 
-const isThisWeek = (d) => {
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+
+const now = new Date();
+const RECENT_CUTOFF = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+
+const withinDays = (d, pastDays, futureDays) => {
   if (!d) return false;
-  const diff = (new Date(d) - new Date()) / 86400000;
-  return diff >= -7 && diff <= 14;
+  const diff = (new Date(d) - now) / 86400000;
+  return diff >= -pastDays && diff <= futureDays;
 };
+const isThisWeek  = (d) => withinDays(d, 7, 14);
 const isThisMonth = (d) => {
   if (!d) return false;
-  const dt = new Date(d), now = new Date();
+  const dt = new Date(d);
   return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
 };
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day:"numeric", month:"short" }) : "";
+const isLastMonth = (d) => {
+  if (!d) return false;
+  const dt  = new Date(d);
+  const lm  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return dt.getMonth() === lm.getMonth() && dt.getFullYear() === lm.getFullYear();
+};
+const isLastWeek = (d) => withinDays(d, 14, 0);
 
-// ── Hero Slide ────────────────────────────────────────────────────────────────
+// ── Hero Slide ────────────────────────────────────────────
 function HeroSlide({ movie, active }) {
   const navigate = useNavigate();
   const img = heroImage(movie);
   return (
-    <div className={`home-hero-slide ${active ? "active" : ""}`}
-      style={{ backgroundImage: img ? `url(${img})` : "none" }}>
+    <div
+      className={`home-hero-slide ${active ? "active" : ""}`}
+      style={{ backgroundImage: img ? `url(${img})` : "none" }}
+    >
       <div className="home-hero-overlay" />
       <div className="home-hero-content">
         <div className="home-hero-meta">
           {movie.category && <span className="home-tag">{movie.category}</span>}
           {movie.genre?.[0] && <span className="home-tag-outline">{movie.genre[0]}</span>}
-          {movie.language && <span className="home-tag-outline">{movie.language}</span>}
+          {movie.language  && <span className="home-tag-outline">{movie.language}</span>}
         </div>
         <h1 className="home-hero-title">{movie.title}</h1>
         <div className="home-hero-info">
-          {movie.releaseDate && <span>🗓 {new Date(movie.releaseDate).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</span>}
+          {movie.releaseDate && (
+            <span>🗓 {new Date(movie.releaseDate).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}</span>
+          )}
           {movie.director && <span>Dir. {movie.director}</span>}
-          {movie.verdict && movie.verdict !== "Upcoming" && <span className="home-hero-verdict-badge">{movie.verdict}</span>}
+          {movie.verdict && movie.verdict !== "Upcoming" && (
+            <span className="home-hero-verdict-badge">{movie.verdict}</span>
+          )}
         </div>
         {movie.synopsis && (
           <p className="home-hero-synopsis">
-            {movie.synopsis.slice(0,160)}{movie.synopsis.length > 160 ? "…" : ""}
+            {movie.synopsis.slice(0, 160)}{movie.synopsis.length > 160 ? "…" : ""}
           </p>
         )}
         <div className="home-hero-actions">
           {movie.media?.trailer?.ytId && (
-            <a href={`https://www.youtube.com/watch?v=${movie.media.trailer.ytId}`}
-              target="_blank" rel="noopener noreferrer" className="btn-hero-play">
-              ▶ Watch Trailer
-            </a>
+            <button
+              className="btn-hero-play"
+              onClick={() => navigate(`/movie/${movie._id}`, { state: { scrollTo: "trailer" } })}
+            >▶ Watch Trailer</button>
           )}
           <button className="btn-hero-info" onClick={() => navigate(`/movie/${movie._id}`)}>
             More Info
@@ -73,10 +90,9 @@ function HeroSlide({ movie, active }) {
   );
 }
 
-// ── Movie Card ────────────────────────────────────────────────────────────────
+// ── Movie Card ────────────────────────────────────────────
 function MovieCard({ movie }) {
   const navigate = useNavigate();
-  // Portrait: prefer posterUrl, fallback to thumbnailUrl, then YT thumb
   const img = movie.posterUrl || movie.thumbnailUrl || ytThumb(movie.media?.trailer?.ytId);
   return (
     <div className="home-card" onClick={() => navigate(`/movie/${movie._id}`)}>
@@ -99,22 +115,20 @@ function MovieCard({ movie }) {
   );
 }
 
-// ── Movie Row ─────────────────────────────────────────────────────────────────
+// ── Movie Row ─────────────────────────────────────────────
 function MovieRow({ title, movies, viewAllPath }) {
   const navigate = useNavigate();
   const rowRef = useRef(null);
-  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 280, behavior:"smooth" });
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 280, behavior: "smooth" });
   const limited = movies.slice(0, 15);
-  const hasMore = movies.length > 15;
   if (!movies.length) return null;
   return (
     <section className="home-section">
       <div className="home-section-header">
         <h2 className="home-section-title">{title}</h2>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          {(hasMore || viewAllPath) && (
-            <button className="home-view-all"
-              onClick={() => navigate(viewAllPath || "/movies")}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {(movies.length > 15 || viewAllPath) && (
+            <button className="home-view-all" onClick={() => navigate(viewAllPath || "/movies")}>
               View All ({movies.length})
             </button>
           )}
@@ -129,33 +143,31 @@ function MovieRow({ title, movies, viewAllPath }) {
   );
 }
 
-// ── Trailers Row ──────────────────────────────────────────────────────────────
+// ── Trailers Row ──────────────────────────────────────────
 function TrailersRow({ movies }) {
+  const navigate = useNavigate();
   const rowRef = useRef(null);
-  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 340, behavior:"smooth" });
-  const withTrailer = movies.filter(m => m.media?.trailer?.ytId);
-  const limited = withTrailer.slice(0, 15);
-  const hasMore = withTrailer.length > 15;
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 340, behavior: "smooth" });
+  const withTrailer = movies.filter(m => m.media?.trailer?.ytId).slice(0, 15);
   if (!withTrailer.length) return null;
   return (
     <section className="home-section">
       <div className="home-section-header">
         <h2 className="home-section-title">🎬 Latest Trailers</h2>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          {hasMore && <span className="home-view-all" style={{ cursor:"default" }}>{withTrailer.length} trailers</span>}
+        <div style={{ display: "flex", gap: 8 }}>
           <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
           <button className="home-arrow" onClick={() => scroll(1)}>›</button>
         </div>
       </div>
       <div className="home-row home-trailer-row" ref={rowRef}>
-        {limited.map(m => (
-          <a key={m._id}
-            href={`https://www.youtube.com/watch?v=${m.media.trailer.ytId}`}
-            target="_blank" rel="noopener noreferrer"
-            className="home-trailer-card">
+        {withTrailer.map(m => (
+          <div key={m._id}
+            className="home-trailer-card"
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate(`/movie/${m._id}`, { state: { scrollTo: "trailer" } })}>
             <div className="home-trailer-thumb">
               <img src={ytThumb(m.media.trailer.ytId)} alt={m.title}
-                onError={e => e.target.style.opacity="0"} />
+                onError={e => e.target.style.opacity = "0"} />
               <div className="home-trailer-play">▶</div>
               <div className="home-trailer-duration">Trailer</div>
             </div>
@@ -163,24 +175,24 @@ function TrailersRow({ movies }) {
               <p className="home-trailer-title">{m.title}</p>
               {m.releaseDate && <p className="home-trailer-date">{fmtDate(m.releaseDate)}</p>}
             </div>
-          </a>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-// ── News Row ──────────────────────────────────────────────────────────────────
+// ── News Row ──────────────────────────────────────────────
 function NewsRow({ news }) {
   const navigate = useNavigate();
   const rowRef = useRef(null);
-  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 300, behavior:"smooth" });
+  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 300, behavior: "smooth" });
   if (!news.length) return null;
   return (
     <section className="home-section">
       <div className="home-section-header">
         <h2 className="home-section-title">📰 Latest News</h2>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button className="home-view-all" onClick={() => navigate("/news")}>View All</button>
           <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
           <button className="home-arrow" onClick={() => scroll(1)}>›</button>
@@ -191,13 +203,13 @@ function NewsRow({ news }) {
           <div key={n._id} className="home-news-card" onClick={() => navigate(`/news/${n._id}`)}>
             {n.imageUrl && (
               <div className="home-news-img">
-                <img src={n.imageUrl} alt={n.title} onError={e => e.target.style.display="none"} />
+                <img src={n.imageUrl} alt={n.title} onError={e => e.target.style.display = "none"} />
               </div>
             )}
             <div className="home-news-body">
-              <span className="home-news-cat">{n.category || "News"}</span>
+              {n.category && <span className="home-news-cat">{n.category}</span>}
               <p className="home-news-title">{n.title}</p>
-              <p className="home-news-movie">{n.movieTitle}</p>
+              {n.movieTitle && <p className="home-news-movie">{n.movieTitle}</p>}
             </div>
           </div>
         ))}
@@ -206,56 +218,97 @@ function NewsRow({ news }) {
   );
 }
 
-// ── Songs Row ─────────────────────────────────────────────────────────────────
-function SongsRow({ movies }) {
-  const rowRef = useRef(null);
-  const scroll = (d) => rowRef.current?.scrollBy({ left: d * 220, behavior:"smooth" });
-  // Flatten all songs from all movies
-  const songs = [];
-  movies.forEach(m => {
-    (m.media?.songs || []).forEach(s => {
-      if (s.ytId) songs.push({ ...s, movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl });
+// ── Shared SongCard ───────────────────────────────────────
+function SongCard({ s, onClick }) {
+  return (
+    <div className="home-song-card" onClick={onClick}>
+      <div className="home-song-thumb">
+        <img
+          src={s.thumbnailUrl || ytThumb(s.ytId) || s.posterUrl || ""}
+          alt={s.title}
+          onError={e => e.target.style.opacity = "0.2"}
+        />
+        <div className="home-song-play">♪</div>
+      </div>
+      <div className="home-song-info">
+        <p className="home-song-title">{s.title}</p>
+        {s.singer && <p className="home-song-singer">🎤 {s.singer}</p>}
+        <p className="home-song-movie">{s.movieTitle}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Trending Songs Row (home page) ────────────────────────
+// "Trending" = songs from movies released in last 90 days, newest first
+function TrendingSongsRow({ movies }) {
+  const navigate = useNavigate();
+  const rowRef   = useRef(null);
+  const scroll   = (d) => rowRef.current?.scrollBy({ left: d * 200, behavior: "smooth" });
+
+  // Collect songs only from recent movies (last 90 days) + upcoming
+  const trendingSongs = [];
+  [...movies]
+    .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
+    .filter(m => {
+      const isUpcoming = !m.verdict || m.verdict === "Upcoming";
+      const isRecent   = m.releaseDate && withinDays(m.releaseDate, 90, 60);
+      return isUpcoming || isRecent;
+    })
+    .forEach(m => {
+      (m.media?.songs || []).forEach((s, idx) => {
+        if (s.ytId) trendingSongs.push({
+          ...s, songIndex: idx,
+          movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl,
+          movieDate: m.releaseDate,
+        });
+      });
     });
-  });
-  const limited = songs.slice(0, 15);
-  const hasMore  = songs.length > 15;
-  if (!songs.length) return null;
+
+  // If not enough recent songs, pad with latest songs from all movies
+  if (trendingSongs.length < 6) {
+    movies.forEach(m => {
+      (m.media?.songs || []).forEach((s, idx) => {
+        if (s.ytId && !trendingSongs.find(t => t.movieId === m._id && t.songIndex === idx)) {
+          trendingSongs.push({
+            ...s, songIndex: idx,
+            movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl,
+          });
+        }
+      });
+    });
+  }
+
+  const shown = trendingSongs.slice(0, 15);
+  if (!shown.length) return null;
+
   return (
     <section className="home-section">
       <div className="home-section-header">
-        <h2 className="home-section-title">🎵 Latest Songs</h2>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          {hasMore && <span className="home-view-all" style={{ cursor:"default" }}>{songs.length} songs</span>}
+        <h2 className="home-section-title">🔥 Trending Songs</h2>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="home-view-all" onClick={() => navigate("/songs")}>
+            View All Songs
+          </button>
           <button className="home-arrow" onClick={() => scroll(-1)}>‹</button>
           <button className="home-arrow" onClick={() => scroll(1)}>›</button>
         </div>
       </div>
       <div className="home-row home-songs-row" ref={rowRef}>
-        {limited.map((s, i) => (
-          <a key={i} href={s.ytId ? `https://www.youtube.com/watch?v=${s.ytId}` : "#"}
-            target="_blank" rel="noopener noreferrer"
-            className="home-song-card">
-            <div className="home-song-thumb">
-              <img
-                src={s.thumbnailUrl || ytThumb(s.ytId) || s.moviePoster || ""}
-                alt={s.title}
-                onError={e => { e.target.style.opacity="0.2"; }}
-              />
-              <div className="home-song-play">♪</div>
-            </div>
-            <div className="home-song-info">
-              <p className="home-song-title">{s.title}</p>
-              <p className="home-song-singer">{s.singer}</p>
-              <p className="home-song-movie">{s.movieTitle}</p>
-            </div>
-          </a>
+        {shown.map((s, i) => (
+          <SongCard
+            key={i} s={s}
+            onClick={() => navigate(`/song/${s.movieId}/${s.songIndex}`)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
 export default function Home({ production }) {
   const navigate  = useNavigate();
   const [movies,  setMovies]  = useState([]);
@@ -276,32 +329,47 @@ export default function Home({ production }) {
   }, []);
 
   const heroMovies = movies
-    .filter(m => (m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl) && isThisMonth(m.releaseDate))
-    .sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0))
-    .slice(0, 6);
+    .filter(m => {
+      const hasImg = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
+      if (!hasImg) return false;
+      if (!m.verdict || m.verdict === "Upcoming") return true;
+      if (m.releaseDate && withinDays(m.releaseDate, 60, 0)) return true;
+      if (isThisMonth(m.releaseDate) || isLastMonth(m.releaseDate)) return true;
+      return false;
+    })
+    .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
+    .slice(0, 8);
 
   useEffect(() => {
     if (!heroMovies.length) return;
-    timerRef.current = setInterval(() => setHeroIdx(i => (i+1) % heroMovies.length), 5500);
+    timerRef.current = setInterval(() => setHeroIdx(i => (i + 1) % heroMovies.length), 5500);
     return () => clearInterval(timerRef.current);
   }, [heroMovies.length]);
 
   const goHero = (i) => { setHeroIdx(i); clearInterval(timerRef.current); };
 
-  // Sections
-  const inTheatres = movies.filter(m => ["Hit","Average","Flop"].includes(m.verdict) || m.status === "Released");
-  const thisWeek   = movies.filter(m => isThisWeek(m.releaseDate) && !m.releaseTBA);
-  const thisMonth  = movies.filter(m => isThisMonth(m.releaseDate));
-  const upcoming   = movies.filter(m => m.verdict === "Upcoming" || m.status === "Upcoming");
-  const highRated  = movies
-    .filter(m => m.reviews?.length >= 1)
-    .map(m => ({ ...m, avg: m.reviews.reduce((s,r)=>s+(r.rating||0),0)/m.reviews.length }))
+  const sortNew = (arr) => [...arr].sort((a, b) => {
+    if (!a.releaseDate && !b.releaseDate) return 0;
+    if (!a.releaseDate) return 1;
+    if (!b.releaseDate) return -1;
+    return new Date(b.releaseDate) - new Date(a.releaseDate);
+  });
+
+  const allMovies   = sortNew(movies);
+  const thisWeek    = sortNew(movies.filter(m => isThisWeek(m.releaseDate) && !m.releaseTBA));
+  const thisMonth   = sortNew(movies.filter(m => isThisMonth(m.releaseDate)));
+  const lastMonth   = sortNew(movies.filter(m => isLastMonth(m.releaseDate)));
+  const lastWeek    = sortNew(movies.filter(m => isLastWeek(m.releaseDate) && !isThisWeek(m.releaseDate)));
+  const upcoming    = sortNew(movies.filter(m => !m.verdict || m.verdict === "Upcoming"));
+  const inTheatres  = sortNew(movies.filter(m => m.releaseDate && withinDays(m.releaseDate, 10, 10)));
+  const highRated   = movies
+    .filter(m => m.reviews?.length >= 1 && m.releaseDate && new Date(m.releaseDate) >= RECENT_CUTOFF)
+    .map(m => ({ ...m, avg: m.reviews.reduce((s, r) => s + (r.rating || 0), 0) / m.reviews.length }))
     .filter(m => m.avg >= 3.5)
-    .sort((a,b) => b.avg - a.avg);
-  const allMovies  = [...movies].sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+    .sort((a, b) => b.avg - a.avg);
 
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", color:"var(--muted)" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", color: "var(--muted)" }}>
       Loading…
     </div>
   );
@@ -312,24 +380,24 @@ export default function Home({ production }) {
       {/* ── HERO ── */}
       {heroMovies.length > 0 && (
         <div className="home-hero">
-          {heroMovies.map((m,i) => <HeroSlide key={m._id} movie={m} active={i===heroIdx} />)}
-
-          {/* Dot nav */}
+          {heroMovies.map((m, i) => (
+            <HeroSlide key={m._id} movie={m} active={i === heroIdx} />
+          ))}
           <div className="home-hero-dots">
-            {heroMovies.map((_,i) => (
-              <button key={i} className={`home-hero-dot ${i===heroIdx?"active":""}`} onClick={() => goHero(i)} />
+            {heroMovies.map((_, i) => (
+              <button key={i} className={`home-hero-dot ${i === heroIdx ? "active" : ""}`}
+                onClick={() => goHero(i)} />
             ))}
           </div>
-
-          {/* Thumbnail strip */}
           <div className="home-hero-strip">
-            {heroMovies.map((m,i) => {
+            {heroMovies.map((m, i) => {
               const img = heroImage(m);
               return (
-                <div key={m._id} className={`home-hero-strip-item ${i===heroIdx?"active":""}`}
+                <div key={m._id}
+                  className={`home-hero-strip-item ${i === heroIdx ? "active" : ""}`}
                   onClick={() => goHero(i)}>
                   {img
-                    ? <img src={img} alt={m.title} onError={e=>e.target.style.display="none"} />
+                    ? <img src={img} alt={m.title} onError={e => e.target.style.display = "none"} />
                     : <div className="home-strip-fallback">🎬</div>}
                   {m.media?.trailer?.ytId && <div className="home-strip-play">▶</div>}
                 </div>
@@ -348,40 +416,27 @@ export default function Home({ production }) {
       )}
 
       <div className="home-sections">
+        {thisWeek.length > 0   && <MovieRow title="🔥 Releasing This Week" movies={thisWeek} />}
+        {thisMonth.length > 0  && <MovieRow title="🗓 This Month"          movies={thisMonth} />}
+        {lastWeek.length > 0   && <MovieRow title="📅 Last Week"           movies={lastWeek} />}
+        {lastMonth.length > 0  && <MovieRow title="📆 Last Month"          movies={lastMonth} />}
+        {inTheatres.length > 0 && <MovieRow title="🎭 Now in Theatres"     movies={inTheatres} />}
 
-        {/* This week */}
-        {thisWeek.length > 0 && <MovieRow title="🔥 Releasing This Week" movies={thisWeek} />}
-
-        {/* Now in theatres */}
-        {inTheatres.length > 0 && <MovieRow title="🎭 Now in Theatres" movies={inTheatres} />}
-
-        {/* Latest Trailers */}
         <TrailersRow movies={allMovies} />
-
-        {/* This month */}
-        {thisMonth.length > 0 && <MovieRow title="🗓 Movies This Month" movies={thisMonth} />}
-
-        {/* Latest News */}
         <NewsRow news={news} />
 
-        {/* Songs */}
-        <SongsRow movies={allMovies} />
+        {/* 🔥 Trending Songs — new, replaces plain "Latest Songs" */}
+        <TrendingSongsRow movies={allMovies} />
 
-        {/* High rated */}
-        {highRated.length > 0 && <MovieRow title="⭐ Top Rated" movies={highRated} />}
+        {highRated.length > 0  && <MovieRow title="⭐ Top Rated"           movies={highRated} />}
+        {upcoming.length > 0   && <MovieRow title="🚀 Upcoming Movies"     movies={upcoming}  viewAllPath="/movies" />}
+        <MovieRow title="🎬 All Movies" movies={allMovies} viewAllPath="/movies" />
 
-        {/* Upcoming */}
-        {upcoming.length > 0 && <MovieRow title="🚀 Upcoming Movies" movies={upcoming} />}
-
-        {/* All movies */}
-        <MovieRow title="🎬 All Movies" movies={allMovies} />
-
-        {/* Empty */}
         {movies.length === 0 && (
           <div className="home-empty">
-            <div style={{ fontSize:"4rem", marginBottom:16 }}>🎬</div>
+            <div style={{ fontSize: "4rem", marginBottom: 16 }}>🎬</div>
             <h2>No movies yet</h2>
-            <p style={{ color:"var(--muted)" }}>Be the first to add a film to Ollipedia</p>
+            <p style={{ color: "var(--muted)" }}>Be the first to add a film to Ollipedia</p>
             {production && (
               <button className="btn btn-gold" onClick={() => navigate("/dashboard/add-movie")}>+ Add Movie</button>
             )}
