@@ -115,61 +115,72 @@ function SongScrollRow({ title, songs, onSongClick }) {
 //  Route: /song/:movieId/:songIndex
 // ═══════════════════════════════════════════════════════════
 export default function SongDetail() {
-  const { movieId, songIndex: songIndexParam } = useParams();
+  const { movieId: urlMovieId, songIndex: urlSongIdx } = useParams();
   const location = useLocation();
   const navigate  = useNavigate();
 
-  const initMovie = location.state?.movie || null;
+  const [allMovies,  setAllMovies]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(null);
 
-  const [movie,     setMovie]     = useState(initMovie);
-  const [allMovies, setAllMovies] = useState([]);
-  const [loading,   setLoading]   = useState(!initMovie);
-  const [error,     setError]     = useState(null);
-  const [activeSongIdx, setActiveSongIdx] = useState(
-    songIndexParam != null ? Number(songIndexParam) : 0
-  );
+  // currentMovieId / currentSongIdx drive everything — separate from URL params
+  // so clicking a related song from a different movie works immediately
+  const [currentMovieId,  setCurrentMovieId]  = useState(urlMovieId);
+  const [currentSongIdx,  setCurrentSongIdx]  = useState(urlSongIdx != null ? Number(urlSongIdx) : 0);
 
+  // Derived: current movie object from allMovies
+  const movie = allMovies.find(m => String(m._id) === currentMovieId) || null;
+
+  // Load all movies once on mount
   useEffect(() => {
-    if (!movieId) { setError("No movie specified."); setLoading(false); return; }
     Promise.all([
-      movie ? Promise.resolve(movie) : API.getMovie(movieId),
       API.getMovies().catch(()=>[]),
-    ]).then(([m, all]) => {
-      setMovie(m);
+    ]).then(([all]) => {
       setAllMovies(all);
     }).catch(e => setError(typeof e==="string"?e:"Failed to load"))
     .finally(() => setLoading(false));
-  }, [movieId]);
+  }, []);
 
+  // Sync URL params → current state when navigating via browser back/forward
   useEffect(() => {
-    if (songIndexParam != null) setActiveSongIdx(Number(songIndexParam));
-  }, [songIndexParam]);
+    setCurrentMovieId(urlMovieId);
+    setCurrentSongIdx(urlSongIdx != null ? Number(urlSongIdx) : 0);
+  }, [urlMovieId, urlSongIdx]);
 
+  // Play a song from the SAME movie
   const changeActiveSong = (idx) => {
-    setActiveSongIdx(idx);
-    navigate(`/song/${movieId}/${idx}`, { replace: true, state: { movie } });
+    setCurrentSongIdx(idx);
+    navigate(`/song/${currentMovieId}/${idx}`, { replace: true });
   };
 
+  // Play a song from ANY movie (related sections) — updates state immediately
   const handleRelatedSongClick = (s) => {
-    navigate(`/song/${s.movieId}/${s.songIdx}`, {
-      state: { movie: allMovies.find(m=>String(m._id)===s.movieId) }
-    });
+    setCurrentMovieId(s.movieId);
+    setCurrentSongIdx(s.songIdx);
+    navigate(`/song/${s.movieId}/${s.songIdx}`, { replace: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   if (loading) return (
     <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,color:"var(--muted)"}}>
-      <div style={{fontSize:"2.5rem"}}>🎵</div><p>Loading song…</p>
+      <div style={{fontSize:"2.5rem"}}>🎵</div><p>Loading…</p>
     </div>
   );
-  if (error||!movie) return (
+  if (error) return (
     <div className="page empty-state">
       <h3>Song not found</h3><p>{error}</p>
       <button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(-1)}>← Go Back</button>
     </div>
   );
+  // Movie not yet found in allMovies — fetch individually
+  if (!movie) return (
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)"}}>
+      <p>Loading movie…</p>
+    </div>
+  );
 
   const songs      = movie.media?.songs || [];
-  const activeSong = songs[activeSongIdx] || songs[0];
+  const activeSong = songs[currentSongIdx] || songs[0];
 
   if (!activeSong) return (
     <div className="page empty-state">
@@ -182,18 +193,19 @@ export default function SongDetail() {
   const bannerImg = movie.thumbnailUrl || ytThumb(movie.media?.trailer?.ytId) || movie.posterUrl;
 
   // Build flat song list from all movies for related sections
+  // Uses currentMovieId + currentSongIdx so clicking related songs updates everything
   const allSongs = [];
   allMovies.forEach(m => {
     (m.media?.songs||[]).forEach((s,i) => {
       allSongs.push({
         ...s, movieId:String(m._id), movieTitle:m.title,
         moviePoster:m.posterUrl, songIdx:i,
-        isCurrent: String(m._id)===movieId && i===activeSongIdx,
+        isCurrent: String(m._id)===currentMovieId && i===currentSongIdx,
       });
     });
   });
 
-  // Related by role — exact first-token match
+  // Related by role — exact first-token match on currently playing song
   const bySinger = activeSong.singer
     ? allSongs.filter(s=>!s.isCurrent && s.ytId && s.singer && firstToken(s.singer)===firstToken(activeSong.singer))
     : [];
@@ -316,7 +328,7 @@ export default function SongDetail() {
                 <div style={{padding:"6px"}}>
                   {songs.map((s,i) => (
                     <SongItem key={i} song={s} movieTitle={null}
-                      active={i===activeSongIdx} onClick={()=>changeActiveSong(i)} />
+                      active={i===currentSongIdx} onClick={()=>changeActiveSong(i)} />
                   ))}
                 </div>
               </div>
@@ -332,22 +344,24 @@ export default function SongDetail() {
             maxHeight:"calc(100vh - 100px)",
             display:"flex",flexDirection:"column",
           }}>
-            {/* Movie info header */}
+            {/* Movie info header — updates when related song from different movie plays */}
             <div style={{padding:"14px 14px 10px",borderBottom:"1px solid rgba(255,255,255,0.07)",flexShrink:0}}>
               <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:10}}>
                 {movie.posterUrl && (
                   <img src={movie.posterUrl} alt={movie.title}
-                    style={{width:46,height:64,objectFit:"cover",borderRadius:5,border:"1px solid var(--border)",flexShrink:0}}
+                    style={{width:46,height:64,objectFit:"cover",borderRadius:5,border:"1px solid var(--border)",flexShrink:0,cursor:"pointer"}}
+                    onClick={()=>navigate(`/movie/${movie._id}`)}
                     onError={e=>e.target.style.display="none"} />
                 )}
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:700,fontSize:"0.86rem",lineHeight:1.3}}>{movie.title}</div>
+                  <div style={{fontWeight:700,fontSize:"0.86rem",lineHeight:1.3,cursor:"pointer",color:"var(--gold)"}}
+                    onClick={()=>navigate(`/movie/${movie._id}`)}>{movie.title}</div>
                   {movie.releaseDate && <div style={{fontSize:"0.68rem",color:"var(--muted)",marginTop:3}}>{fmtDate(movie.releaseDate)}</div>}
-                  {movie.language && <div style={{fontSize:"0.65rem",color:"var(--gold)",marginTop:2}}>{movie.language}</div>}
+                  {movie.language && <div style={{fontSize:"0.65rem",color:"rgba(201,151,58,0.7)",marginTop:2}}>{movie.language}</div>}
                 </div>
               </div>
               <div style={{fontSize:"0.62rem",fontWeight:800,letterSpacing:"0.1em",textTransform:"uppercase",color:"var(--muted)"}}>
-                🎵 Songs in this film ({songs.length})
+                🎵 {songs.length} song{songs.length!==1?"s":""} in this film
               </div>
             </div>
 
@@ -357,7 +371,7 @@ export default function SongDetail() {
                 ? <div style={{padding:"20px 12px",color:"var(--muted)",fontSize:"0.82rem",textAlign:"center"}}>No songs</div>
                 : songs.map((s,i) => (
                     <SongItem key={i} song={s} movieTitle={null}
-                      active={i===activeSongIdx} onClick={()=>changeActiveSong(i)} />
+                      active={i===currentSongIdx} onClick={()=>changeActiveSong(i)} />
                   ))
               }
             </div>
@@ -435,7 +449,7 @@ export default function SongDetail() {
         {/* Related movies */}
         {(() => {
           const related = allMovies
-            .filter(m=>String(m._id)!==movieId && movie.genre?.length && m.genre?.some(g=>movie.genre.includes(g)))
+            .filter(m=>String(m._id)!==currentMovieId && movie.genre?.length && m.genre?.some(g=>movie.genre.includes(g)))
             .sort((a,b)=>new Date(b.releaseDate||0)-new Date(a.releaseDate||0))
             .slice(0,15);
           if (!related.length) return null;
