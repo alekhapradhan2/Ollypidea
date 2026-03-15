@@ -6,7 +6,7 @@
 import { Helmet } from "react-helmet-async";
 
 const SITE      = "Ollipedia";
-const SITE_URL  = import.meta.env.VITE_SITE_URL || "https://ollipedia-frontend.onrender.com";
+const SITE_URL  = import.meta.env.VITE_SITE_URL || "https://ollypedia.in";
 const SITE_DESC = "Ollipedia — The complete Odia film encyclopedia. Movies, cast, songs, trailers and more.";
 const SITE_IMG  = `${SITE_URL}/og-default.jpg`;
 

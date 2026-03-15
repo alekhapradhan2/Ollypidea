@@ -1,10 +1,12 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ollipedia-frontend.onrender.com/sitemap.xml
+Sitemap: https://ollypedia.in/sitemap.xml
 
-# Block admin routes from indexing
 Disallow: /admin
 Disallow: /admin/
 Disallow: /dashboard
 Disallow: /dashboard/
+Disallow: /cast-portal
+Disallow: /register
+Disallow: /cast-register

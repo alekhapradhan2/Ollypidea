@@ -7,7 +7,7 @@
  *   <SEO {...movieSEO(movie)} />
  */
 
-const SITE_URL  = "https://ollipedia-frontend.onrender.com"; // ← your domain
+const SITE_URL  = "https://ollypedia.in"; // ← your domain
 const SITE_NAME = "Ollipedia";
 
 const truncate = (str = "", n = 160) =>
