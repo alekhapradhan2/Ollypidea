@@ -304,48 +304,76 @@ function parseWikiSongs(html) {
  * Uses Data API v3 if YOUTUBE_API_KEY is set, otherwise scrapes HTML.
  * Returns ytId string or "".
  */
+/**
+ * Search YouTube for one video.
+ * Returns { id, title } or null.
+ */
 async function ytSearch(query) {
   await sleep(DELAY_YT);
 
-  // ── Try Data API v3 first (cleanest) ──────────────────────────
+  // ── YouTube Data API v3 (clean, accurate) ─────────────────────
   if (YT_KEY) {
     const url = new URL("https://www.googleapis.com/youtube/v3/search");
-    url.searchParams.set("part", "snippet");
-    url.searchParams.set("type", "video");
-    url.searchParams.set("maxResults", "1");
-    url.searchParams.set("q", query);
-    url.searchParams.set("key", YT_KEY);
-
+    url.searchParams.set("part",       "snippet");
+    url.searchParams.set("type",       "video");
+    url.searchParams.set("maxResults", "3");
+    url.searchParams.set("q",          query);
+    url.searchParams.set("key",        YT_KEY);
     try {
       const res = await fetchSafe(url.toString());
       if (res.ok) {
         const data = await res.json();
-        const id = data?.items?.[0]?.id?.videoId;
-        if (id) return id;
+        for (const item of (data?.items || [])) {
+          const id    = item?.id?.videoId;
+          const title = item?.snippet?.title || "";
+          if (id && title) return { id, title };
+        }
       }
     } catch { /* fall through */ }
   }
 
-  // ── Fallback: scrape YouTube search results page ───────────────
+  // ── Fallback: scrape YouTube search HTML ──────────────────────
+  // Extract all {videoId, title} pairs — pick the best match
   const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
   try {
     const res = await fetchSafe(searchUrl, {
       headers: {
-        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept":          "text/html,application/xhtml+xml",
       },
     });
-    if (!res.ok) return "";
+    if (!res.ok) return null;
     const html = await res.text();
+    return extractYtCandidates(html, query, 1)[0] || null;
+  } catch { return null; }
+}
 
-    // YouTube embeds all video data as JSON in the page source
-    // "videoId":"XXXXXXXXXXX" appears many times; the first one is usually the top result
-    const m = html.match(/"videoId"\s*:\s*"([A-Za-z0-9_-]{11})"/);
-    if (m) return m[1];
-  } catch { /* ignore */ }
+/**
+ * Extract up to `limit` {id, title} candidates from YouTube HTML.
+ * Skips jukeboxes / full albums unless allowJukebox is true.
+ */
+function extractYtCandidates(html, query = "", limit = 10, allowJukebox = false) {
+  const JUKEBOX = /jukebox|full album|all songs|audio jukebox|songs playlist|lyrical.*collection/i;
+  const seen    = new Set();
+  const results = [];
 
-  return "";
+  // YouTube embeds initial data as ytInitialData JSON — parse videoRenderer blocks
+  // Pattern: "videoId":"ID" ... nearby "text":"TITLE"
+  const re = /"videoId"\s*:\s*"([A-Za-z0-9_-]{11})"[\s\S]{0,600}?"text"\s*:\s*"([^"]{3,120})"/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const id    = m[1];
+    const title = m[2];
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    if (!allowJukebox && JUKEBOX.test(title)) continue;
+
+    results.push({ id, title });
+    if (results.length >= limit) break;
+  }
+  return results;
 }
 
 // ── Song enrichment ───────────────────────────────────────────────────────────
@@ -387,54 +415,110 @@ async function buildSongList(movie) {
   const results = [];
 
   if (wikiSongs.length === 0) {
-    // No tracklist found — try a broad YouTube search for the full album/all songs
-    console.log(`     🔎  No tracklist — searching YouTube for full album…`);
-    const query = `${title} ${year} Odia movie songs full album`.trim();
-    const id    = await ytSearch(query);
-    if (id) {
-      console.log(`     ▶️   https://youtu.be/${id}`);
+    // No tracklist from Wikipedia — scrape YouTube search for individual songs
+    console.log(`     🔎  No tracklist — scraping YouTube for individual songs…`);
+    await sleep(DELAY_YT);
+
+    const query      = `${title} ${year} Odia movie song`.trim();
+    const searchUrl  = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    let   candidates = [];
+
+    try {
+      const res = await fetchSafe(searchUrl, {
+        headers: {
+          "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Accept":          "text/html,application/xhtml+xml",
+        },
+      });
+      if (res.ok) {
+        const html = await res.text();
+        // Get up to 15 candidates, allow jukeboxes too as fallback
+        candidates = extractYtCandidates(html, query, 15, false);
+        if (candidates.length === 0) {
+          candidates = extractYtCandidates(html, query, 15, true);
+        }
+      }
+    } catch (e) {
+      console.log(`     ⚠️  YouTube fetch error: ${e.message}`);
+    }
+
+    if (candidates.length === 0) {
+      console.log(`     ⚠️  Nothing found on YouTube`);
+      return results;
+    }
+
+    // Filter to videos that look like songs from THIS movie
+    // Keep: title contains movie name OR contains "odia"/"song"
+    const movieWords = title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+    const isSongVideo = (t) => {
+      const tl = t.toLowerCase();
+      return movieWords.some(w => tl.includes(w)) ||
+             /odia|song|\bost\b/i.test(tl);
+    };
+
+    const songVideos = candidates.filter(c => isSongVideo(c.title));
+    const finalList  = songVideos.length > 0 ? songVideos : candidates.slice(0, 5);
+
+    console.log(`     🎵  Found ${finalList.length} song video(s) from YouTube`);
+
+    for (const v of finalList) {
+      // Clean up the YouTube title to use as song title:
+      // Remove the movie name, year, "Odia", "official", "video", "song" suffixes
+      let songTitle = v.title
+        .replace(new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "")
+        .replace(/\b(official|audio|video|full|hd|4k|odia|song|music|lyrical?|ft\.?|feat\.?)\b/gi, "")
+        .replace(/[|\-–—]+/g, " ")
+        .replace(/\(.*?\)/g, "")
+        .replace(/\[.*?\]/g, "")
+        .replace(new RegExp(String(year), "g"), "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      // If cleaning removed everything, fall back to raw title
+      if (songTitle.length < 2) songTitle = v.title;
+
+      console.log(`     ▶️  "${songTitle}"  →  https://youtu.be/${v.id}`);
+
       results.push({
-        title:           `${title} — Songs`,
+        title:           songTitle,
         singer:          "",
         singerRef:       [],
         musicDirector:   "",
         musicDirectorRef:[],
         lyricist:        "",
         lyricistRef:     [],
-        ytId:            id,
-        url:             `https://www.youtube.com/watch?v=${id}`,
-        thumbnailUrl:    `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+        ytId:            v.id,
+        url:             `https://www.youtube.com/watch?v=${v.id}`,
+        thumbnailUrl:    `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`,
       });
-    } else {
-      console.log(`     ⚠️  Nothing found on YouTube either`);
     }
+
     return results;
   }
 
   // We have song names from Wikipedia — find each on YouTube
   for (const s of wikiSongs) {
     // Build a targeted query: song title + movie name + singer (if known) + language
-    const ytQuery = [
-      `"${s.title}"`,
-      title,
-      s.singer        || "",
-      year            || "",
-      lang === "Odia" ? "Odia" : lang,
-      "song",
-    ].filter(Boolean).join(" ");
+    // Anchor every search: "Song" MovieTitle Singer YEAR Odia movie song
+    const suffix  = [String(year||""), lang === "Odia" ? "Odia" : lang, "movie", "song"].filter(Boolean).join(" ");
+    const ytQuery = [`"${s.title}"`, title, s.singer||"", suffix].filter(Boolean).join(" ");
 
     console.log(`     🔎  "${s.title}"${s.singer ? "  🎤 " + s.singer : ""}${s.musicDirector ? "  🎼 " + s.musicDirector : ""}`);
 
-    const id = await ytSearch(ytQuery);
+    const ytResult = await ytSearch(ytQuery);
+    const id       = ytResult?.id    || "";
+    // Use Wikipedia title (authoritative) — YouTube title is just for logging
+    const ytTitle  = ytResult?.title || "";
 
     if (id) {
-      console.log(`          ▶️  https://youtu.be/${id}`);
+      console.log(`          ▶️  https://youtu.be/${id}  "${ytTitle}"`);
     } else {
       console.log(`          ⚠️  No YouTube match`);
     }
 
     results.push({
-      title:           s.title,
+      title:           s.title,          // ← always use Wikipedia song title
       singer:          s.singer,
       singerRef:       [],
       musicDirector:   s.musicDirector,

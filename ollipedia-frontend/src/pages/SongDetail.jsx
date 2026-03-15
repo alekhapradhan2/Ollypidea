@@ -11,7 +11,7 @@ const extractYtId = (input) => {
   if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
   return null;
 };
-const ytThumb = (id) => id ? `https://img.youtube.com/vi/${extractYtId(id)||id}/hqdefault.jpg` : null;
+const ytThumb = (id) => id ? `https://img.youtube.com/vi/${extractYtId(id)||id}/mqdefault.jpg` : null;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "";
 const firstToken = (str) => (str||"").split(/[,&\/]/)[0].trim().toLowerCase();
 
@@ -131,15 +131,25 @@ export default function SongDetail() {
   // Derived: current movie object from allMovies
   const movie = allMovies.find(m => String(m._id) === currentMovieId) || null;
 
-  // Load all movies once on mount
+  // Phase 1: load current movie only — shows player immediately
+  // Phase 2: load all movies in background for related sections
   useEffect(() => {
-    Promise.all([
-      API.getMovies().catch(()=>[]),
-    ]).then(([all]) => {
-      setAllMovies(all);
-    }).catch(e => setError(typeof e==="string"?e:"Failed to load"))
-    .finally(() => setLoading(false));
-  }, []);
+    API.getMovie(urlMovieId)
+      .then(m => {
+        setAllMovies(prev => {
+          // Inject the fetched movie so it's available immediately
+          const without = prev.filter(x => String(x._id) !== String(m._id));
+          return [m, ...without];
+        });
+        setLoading(false);
+        // Defer loading all movies for related sections
+        const tid = typeof requestIdleCallback !== "undefined"
+          ? requestIdleCallback(() => API.getMovies().catch(()=>[]).then(all => setAllMovies(all)))
+          : setTimeout(() => API.getMovies().catch(()=>[]).then(all => setAllMovies(all)), 200);
+        return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(tid) : clearTimeout(tid);
+      })
+      .catch(e => { setError(typeof e==="string"?e:"Failed to load"); setLoading(false); });
+  }, [urlMovieId]);
 
   // Sync URL params → current state when navigating via browser back/forward
   useEffect(() => {

@@ -22,7 +22,7 @@ const extractYtId = (input) => {
   if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
   return null;
 };
-const ytThumb = (id) => id ? `https://img.youtube.com/vi/${extractYtId(id)||id}/hqdefault.jpg` : null;
+const ytThumb = (id) => id ? `https://img.youtube.com/vi/${extractYtId(id)||id}/mqdefault.jpg` : null;
 
 const VERDICT_COLOR = {
   "Blockbuster":"#95e5b8","Super Hit":"#95e5b8","Hit":"#95e5b8",
@@ -301,7 +301,11 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         setBoForm({...(m.boxOffice||{}), verdict: m.verdict});
         setTrailerInput(m.media?.trailer?.ytId||"");
         setLoading(false);
-        API.getMovies().catch(()=>[]).then(all => setAllMovies(all));
+        // Defer allMovies — only needed for related sections at bottom of page
+        const tid = typeof requestIdleCallback !== "undefined"
+          ? requestIdleCallback(() => API.getMovies().catch(()=>[]).then(all => setAllMovies(all)))
+          : setTimeout(() => API.getMovies().catch(()=>[]).then(all => setAllMovies(all)), 300);
+        return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(tid) : clearTimeout(tid);
       })
       .catch(e => { setError(typeof e==="string"?e:"Failed to load"); setLoading(false); });
   }, [id]);
@@ -481,7 +485,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             border:"1px solid rgba(255,255,255,0.1)",
           }}>
             {movie.posterUrl
-              ? <img src={movie.posterUrl} alt={movie.title} style={{width:"100%",display:"block"}}
+              ? <img src={movie.posterUrl} alt={movie.title} style={{width:"100%",display:"block"}} loading="eager" decoding="async"
                   onError={e=>e.target.style.display="none"} />
               : <div style={{width:240,height:360,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"4rem"}}>🎬</div>
             }
@@ -645,7 +649,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                       <div key={c.castId||i} style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"7px 12px",cursor:c.castId?"pointer":"default"}}
                         onClick={()=>c.castId&&navigate(`/cast/${c.castId}`)}>
                         <div style={{width:32,height:32,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.9rem"}}>
-                          {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:"👤"}
+                          {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" decoding="async" onError={e=>e.target.style.display="none"}/>:"👤"}
                         </div>
                         <div>
                           <div style={{fontWeight:700,fontSize:"0.82rem",lineHeight:1.2}}>{c.name}</div>
@@ -664,7 +668,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                         <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",background:"var(--bg3)",margin:"0 auto 6px",border:"2px solid var(--border)",transition:"border-color 0.15s",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.6rem"}}
                           onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
                           onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-                          {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:"👤"}
+                          {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" decoding="async" onError={e=>e.target.style.display="none"}/>:"👤"}
                         </div>
                         <div style={{fontSize:"0.72rem",fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</div>
                         {c.role&&<div style={{fontSize:"0.62rem",color:"var(--gold)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.role}</div>}
@@ -805,7 +809,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                           onMouseEnter={e=>{ if(c.castId) e.currentTarget.style.borderColor="var(--gold)"; }}
                           onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
                           <div style={{width:48,height:48,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.3rem",border:"2px solid var(--border)"}}>
-                            {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:"👤"}
+                            {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" decoding="async" onError={e=>e.target.style.display="none"}/>:"👤"}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontWeight:700,fontSize:"0.9rem",lineHeight:1.3}}>{c.name}</div>

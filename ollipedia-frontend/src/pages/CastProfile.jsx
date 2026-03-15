@@ -84,7 +84,7 @@ function MovieCard({ movie, role, onClick }) {
     <div className="home-card" onClick={onClick}>
       <div className="home-card-img">
         {movie.posterUrl
-          ? <img src={movie.posterUrl} alt={movie.title} onError={e => e.target.style.display = "none"} />
+          ? <img src={movie.posterUrl} alt={movie.title} loading="lazy" decoding="async" onError={e => e.target.style.display = "none"} />
           : <div className="home-card-fallback">🎬</div>
         }
         <div className="home-card-play">▶</div>
@@ -121,7 +121,7 @@ function SongCard({ song }) {
       ) : (
         <div className="home-song-thumb">
           {song.thumbnailUrl
-            ? <img src={song.thumbnailUrl} alt={song.title} onError={e => e.target.style.display = "none"} />
+            ? <img src={song.thumbnailUrl} alt={song.title} loading="lazy" decoding="async" onError={e => e.target.style.display = "none"} />
             : <div style={{ width:"100%", height:"100%", background:"linear-gradient(135deg,#111,#222)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.8rem" }}>🎵</div>
           }
           <div className="home-song-play">▶</div>
@@ -153,7 +153,7 @@ function TrailerCard({ trailer }) {
         </div>
       ) : (
         <div className="home-trailer-thumb">
-          <img src={`https://img.youtube.com/vi/${trailer.ytId}/hqdefault.jpg`} alt={trailer.movieTitle} />
+          <img src={`https://img.youtube.com/vi/${trailer.ytId}/mqdefault.jpg`} loading="lazy" decoding="async" alt={trailer.movieTitle} />
           <div className="home-trailer-play">▶</div>
           <div className="home-trailer-duration">Trailer</div>
         </div>
@@ -173,7 +173,7 @@ function NewsCard({ news, onClick }) {
     <div className="home-news-card" style={{ flexShrink: 0, width: 260 }} onClick={onClick}>
       <div className="home-news-img">
         {news.imageUrl
-          ? <img src={news.imageUrl} alt={news.title} onError={e => e.target.style.display = "none"} />
+          ? <img src={news.imageUrl} alt={news.title} loading="lazy" decoding="async" onError={e => e.target.style.display = "none"} />
           : <div style={{ width:"100%", height:"100%", background:"linear-gradient(135deg,#111,#1a1a1a)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"2rem" }}>📰</div>
         }
       </div>
@@ -228,13 +228,18 @@ export default function CastProfile({ portalMode }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([
-      API.getCastMember(id),
-      API.getNews().catch(() => []),
-    ])
-      .then(([p, news]) => { setPerson(p); setAllNews(news); })
-      .catch(e => setError(e?.message || "Not found"))
-      .finally(() => setLoading(false));
+    // Load person first — show hero immediately
+    API.getCastMember(id)
+      .then(p => {
+        setPerson(p);
+        setLoading(false);
+        // Defer news load — non-critical, load after person renders
+        const id2 = typeof requestIdleCallback !== "undefined"
+          ? requestIdleCallback(() => API.getNews().catch(()=>[]).then(n => setAllNews(n)))
+          : setTimeout(() => API.getNews().catch(()=>[]).then(n => setAllNews(n)), 150);
+        return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id2) : clearTimeout(id2);
+      })
+      .catch(e => { setError(e?.message || "Not found"); setLoading(false); });
   }, [id]);
 
   if (loading) return <Skeleton />;
@@ -321,7 +326,7 @@ export default function CastProfile({ portalMode }) {
         </div>
 
         {/* Content — constrained width, sits over backdrop */}
-        <div style={{ position:"relative", zIndex:1, maxWidth:1200, margin:"0 auto", padding:"24px 24px 32px" }}>
+        <div style={{ position:"relative", zIndex:1, maxWidth:1400, margin:"0 auto", padding:"24px 24px 32px" }}>
 
           {/* Back button */}
           <button
