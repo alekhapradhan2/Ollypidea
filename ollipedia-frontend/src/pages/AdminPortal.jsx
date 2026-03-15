@@ -1863,7 +1863,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
         flexShrink:0, zIndex:200,
       }}>
         <button onClick={() => handleTabChange("dashboard")} style={{ fontFamily:"'Cinzel',serif", fontWeight:900, fontSize:"1.1rem", letterSpacing:"0.08em", color:"var(--gold)", background:"none", border:"none", cursor:"pointer" }}>
-          OLLI<span style={{ color:"var(--text)" }}>PEDIA</span>
+          OLLY<span style={{ color:"var(--text)" }}>PEDIA</span>
         </button>
         <span style={{ fontSize:"0.65rem", fontWeight:700, letterSpacing:"0.14em", textTransform:"uppercase", background:"var(--gold)", color:"#000", padding:"2px 8px", borderRadius:4 }}>
           ADMIN

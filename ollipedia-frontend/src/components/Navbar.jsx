@@ -131,14 +131,14 @@ export default function Navbar({ admin, onAdminLogout }) {
 
   return (
     <nav className="navbar">
-      <Link to="/" className="navbar-brand">OLLI<span>PEDIA</span></Link>
+      <Link to="/" className="navbar-brand">OLLY<span>PEDIA</span></Link>
       <Link to="/"       className={active("/")}>Home</Link>
       <Link to="/movies" className={active("/movies")}>Movies</Link>
       <Link to="/cast"   className={active("/cast")}>Cast</Link>
       <Link to="/news"   className={active("/news")}>News</Link>
       <Link to="/songs"  className={active("/songs")}>Songs</Link>
       <NavSearch />
-      <div className="nav-actions">
+      {/* <div className="nav-actions">
         {admin ? (
           <>
             <Link to="/admin" className="nav-prod-btn">
@@ -148,10 +148,11 @@ export default function Navbar({ admin, onAdminLogout }) {
             <span style={{ fontSize:"0.68rem", color:"var(--gold)", background:"rgba(201,151,58,0.12)", padding:"2px 9px", borderRadius:10, fontWeight:700 }}>ADMIN</span>
             <button className="btn btn-ghost btn-sm" onClick={() => { onAdminLogout(); navigate("/"); }}>Logout</button>
           </>
-        ) : (
+        ) : 
+        (
           <Link to="/admin/login" className="btn btn-ghost btn-sm" style={{ color:"var(--muted)", fontSize:"0.75rem" }}>Admin</Link>
         )}
-      </div>
+      </div> */}
     </nav>
   );
 }
