@@ -1,39 +1,52 @@
-import React, { useState, useCallback } from "react";
-import { BrowserRouter, Routes, Route, useLocation, Navigate, useParams } from "react-router-dom";
+import React, { useState, useCallback, Suspense, lazy } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { setToken } from "./api/api";
-import { extractId } from "./utils/slugs";
 
-import Navbar     from "./components/Navbar";
-import { Toast }  from "./components/UI";
+import Navbar    from "./components/Navbar";
+import Footer    from "./components/Footer";
+import { Toast } from "./components/UI";
 
-import Home             from "./pages/Home";
-import Movies           from "./pages/Movies";
-import MovieDetails     from "./pages/MovieDetails";
-import Cast             from "./pages/Cast";
-import CastProfile      from "./pages/CastProfile";
-import News             from "./pages/News";
-import NewsDetail       from "./pages/NewsDetail";
-import ProductionProfile from "./pages/ProductionProfile";
-import SongDetail        from "./pages/SongDetail";
-import AllSongs          from "./pages/AllSongs";
-import AdminLogin   from "./pages/AdminLogin";
-import AdminPortal  from "./pages/AdminPortal";
+// ── Critical path — loaded eagerly (above the fold) ───────────────
+import Home from "./pages/Home";
 
-/**
- * Redirect legacy bare-id URLs to slug URLs.
- * e.g. /movie/686abc123ef456def789012 → /movie/daman-2024-686abc123ef456def789012
- * We do this by checking: if the param looks like ONLY a 24-char hex id (no hyphens),
- * redirect to the same path (the page component will handle building the slug URL
- * on first load via replaceState — simpler than fetching here).
- *
- * Actually the cleanest approach: just let the page components use extractId()
- * to get the real id from whatever slug format arrives. No redirect needed.
- */
+// ── All other pages — code-split, loaded on demand ────────────────
+// Each lazy() creates a separate JS chunk that only downloads when
+// the user navigates to that route — dramatically reduces initial bundle.
+const Movies           = lazy(() => import("./pages/Movies"));
+const MovieDetails     = lazy(() => import("./pages/MovieDetails"));
+const Cast             = lazy(() => import("./pages/Cast"));
+const CastProfile      = lazy(() => import("./pages/CastProfile"));
+const News             = lazy(() => import("./pages/News"));
+const NewsDetail       = lazy(() => import("./pages/NewsDetail"));
+const SongDetail       = lazy(() => import("./pages/SongDetail"));
+const AllSongs         = lazy(() => import("./pages/AllSongs"));
+const ProductionProfile= lazy(() => import("./pages/ProductionProfile"));
+const AdminLogin       = lazy(() => import("./pages/AdminLogin"));
+const AdminPortal      = lazy(() => import("./pages/AdminPortal"));
+// Legal / info pages (tiny, also lazy)
+const PrivacyPolicy    = lazy(() => import("./pages/PrivacyPolicy"));
+const AboutUs          = lazy(() => import("./pages/AboutUs"));
+const ContactUs        = lazy(() => import("./pages/ContactUs"));
+
+// ── Minimal fallback shown during chunk load ──────────────────────
+function PageLoader() {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      minHeight: "60vh", color: "var(--muted)", flexDirection: "column", gap: 12,
+    }}>
+      <div style={{ fontSize: "1.8rem" }}>🎬</div>
+      <p style={{ fontSize: ".82rem" }}>Loading…</p>
+    </div>
+  );
+}
 
 function AppInner({ admin, setAdmin }) {
   const location = useLocation();
   const [toast, setToast] = useState(null);
   const isAdminPortal = location.pathname.startsWith("/admin");
+  // Don't show public Footer inside admin portal
+  const showFooter = !isAdminPortal;
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
@@ -56,26 +69,35 @@ function AppInner({ admin, setAdmin }) {
     <>
       {!isAdminPortal && <Navbar admin={admin} onAdminLogout={handleAdminLogout} />}
 
-      <Routes>
-        {/* ── Public ── */}
-        <Route path="/"        element={<Home />} />
-        <Route path="/movies"  element={<Movies />} />
-        <Route path="/cast"    element={<Cast />} />
-        <Route path="/news"    element={<News />} />
-        <Route path="/songs"   element={<AllSongs />} />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* ── Public ── */}
+          <Route path="/"       element={<Home />} />
+          <Route path="/movies" element={<Movies />} />
+          <Route path="/cast"   element={<Cast />} />
+          <Route path="/news"   element={<News />} />
+          <Route path="/songs"  element={<AllSongs />} />
 
-        {/* Slug routes — param contains "title-year-id" or bare "id" */}
-        <Route path="/movie/:slug"                  element={<MovieDetails onToast={showToast} />} />
-        <Route path="/cast/:slug"                   element={<CastProfile />} />
-        <Route path="/news/:slug"                   element={<NewsDetail />} />
-        <Route path="/song/:movieSlug/:songIndex"   element={<SongDetail />} />
-        <Route path="/song/:movieSlug"              element={<SongDetail />} />
-        <Route path="/production/:id"               element={<ProductionProfile />} />
+          {/* Slug / detail routes */}
+          <Route path="/movie/:slug"                element={<MovieDetails onToast={showToast} />} />
+          <Route path="/cast/:slug"                 element={<CastProfile />} />
+          <Route path="/news/:slug"                 element={<NewsDetail />} />
+          <Route path="/song/:movieSlug/:songIndex" element={<SongDetail />} />
+          <Route path="/song/:movieSlug"            element={<SongDetail />} />
+          <Route path="/production/:id"             element={<ProductionProfile />} />
 
-        {/* ── Admin ── */}
-        <Route path="/admin/login" element={<AdminLogin onSuccess={handleAdminAuth} onToast={showToast} />} />
-        <Route path="/admin/*"     element={<AdminPortal admin={admin} onLogout={handleAdminLogout} onToast={showToast} />} />
-      </Routes>
+          {/* ── Info / Legal ── */}
+          <Route path="/privacy-policy"  element={<PrivacyPolicy />} />
+          <Route path="/about"           element={<AboutUs />} />
+          <Route path="/contact"         element={<ContactUs />} />
+
+          {/* ── Admin ── */}
+          <Route path="/admin/login" element={<AdminLogin onSuccess={handleAdminAuth} onToast={showToast} />} />
+          <Route path="/admin/*"     element={<AdminPortal admin={admin} onLogout={handleAdminLogout} onToast={showToast} />} />
+        </Routes>
+      </Suspense>
+
+      {showFooter && <Footer />}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </>
