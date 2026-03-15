@@ -269,36 +269,260 @@ function Row({ title, badge, badgeColor = "#c9973a", viewAll, children, gap = 14
   );
 }
 
+// ─── Hero CSS — 100% self-contained, zero external class deps ────
+const heroCss = `
+/* ── Outer wrapper — sits right below the fixed 58px navbar ── */
+.hh-wrap {
+  position: relative;
+  width: 100%;
+  background: #0a0a0a;
+  overflow: hidden;
+}
+
+/* ── Each slide ── */
+.hh-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 25%;
+  opacity: 0;
+  transition: opacity .7s ease;
+  pointer-events: none;
+}
+/* Active slide becomes the document-flow element that sizes the wrapper */
+.hh-slide.active {
+  position: relative;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Inner — sets the height responsively ── */
+.hh-inner {
+  position: relative;
+  /* clamp: 300px min on tiny phones → 56vw on tablets → 580px max on desktop */
+  min-height: clamp(300px, 56vw, 580px);
+}
+
+/* ── Two-layer gradient overlay ──
+   Layer 1 (bottom→top): strong dark at bottom so text is always readable
+   Layer 2 (right→left): dark on left to separate content from the image   */
+.hh-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top,
+      rgba(0,0,0,.96) 0%,
+      rgba(0,0,0,.65) 35%,
+      rgba(0,0,0,.15) 65%,
+      transparent    100%
+    ),
+    linear-gradient(to right,
+      rgba(0,0,0,.80) 0%,
+      rgba(0,0,0,.40) 50%,
+      transparent    80%
+    );
+}
+
+/* ── Text content — anchored to bottom-left ── */
+.hh-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px 16px 48px;
+  z-index: 2;
+  max-width: 720px;
+}
+@media(min-width:480px)  { .hh-content { padding: 20px 24px 56px; } }
+@media(min-width:768px)  { .hh-content { padding: 28px 36px 68px; } }
+@media(min-width:1100px) { .hh-content { padding: 32px 52px 76px; } }
+
+/* Tags row */
+.hh-tags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:9px; }
+.hh-tag {
+  font-size:.6rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  padding:3px 9px; border-radius:20px;
+  background:rgba(201,151,58,.18); border:1px solid rgba(201,151,58,.5); color:#c9973a;
+}
+.hh-tag-gl {
+  font-size:.6rem; font-weight:600;
+  padding:3px 9px; border-radius:20px;
+  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.22);
+  color:rgba(255,255,255,.82);
+}
+
+/* Title */
+.hh-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.4rem, 5.5vw, 3rem);
+  font-weight: 900;
+  line-height: 1.08;
+  color: #fff;
+  margin: 0 0 7px;
+  text-shadow: 0 2px 20px rgba(0,0,0,.7);
+}
+
+/* Meta row — director / date / verdict */
+.hh-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 12px;
+  margin-bottom: 8px;
+  font-size: clamp(.68rem, 2vw, .79rem);
+  color: rgba(255,255,255,.58);
+}
+.hh-badge {
+  font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+  padding: 2px 9px; border-radius: 3px;
+}
+
+/* Synopsis — hidden on tiny screens, clamped on larger */
+.hh-synopsis {
+  font-size: clamp(.78rem, 2.2vw, .86rem);
+  color: rgba(255,255,255,.62);
+  line-height: 1.6;
+  margin: 0 0 14px;
+  display: none;
+}
+@media(min-width:420px) {
+  .hh-synopsis {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+@media(min-width:768px) { .hh-synopsis { -webkit-line-clamp: 3; } }
+
+/* Buttons */
+.hh-btns { display:flex; gap:8px; flex-wrap:wrap; }
+.hh-btn-play {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: #c9973a; color: #000; border: none;
+  padding: clamp(9px,2vw,12px) clamp(14px,3vw,24px);
+  border-radius: 8px;
+  font-size: clamp(.76rem, 2vw, .88rem); font-weight: 800;
+  cursor: pointer; transition: opacity .18s; white-space: nowrap;
+}
+.hh-btn-play:hover { opacity: .85; }
+.hh-btn-info {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.1); color: #f1f1f1;
+  border: 1px solid rgba(255,255,255,.28);
+  padding: clamp(9px,2vw,12px) clamp(12px,2.5vw,20px);
+  border-radius: 8px;
+  font-size: clamp(.74rem, 2vw, .86rem); font-weight: 600;
+  cursor: pointer; transition: background .18s; white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+.hh-btn-info:hover { background: rgba(255,255,255,.18); }
+
+/* ── Dots ── */
+.hh-dots {
+  position: absolute;
+  bottom: 14px; left: 16px;
+  display: flex; gap: 6px; z-index: 5;
+}
+@media(min-width:480px) { .hh-dots { bottom: 18px; left: 24px; } }
+@media(min-width:768px) { .hh-dots { left: 36px; bottom: 22px; } }
+@media(min-width:1100px){ .hh-dots { left: 52px; } }
+.hh-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,.3); border: none;
+  cursor: pointer; padding: 0; transition: all .25s;
+}
+.hh-dot.active { width: 24px; border-radius: 4px; background: #c9973a; }
+
+/* ── Thumbnail strip — desktop only ── */
+.hh-strip {
+  position: absolute;
+  bottom: 14px; right: 16px;
+  display: none;
+  gap: 5px; z-index: 5;
+}
+@media(min-width:900px) { .hh-strip { display: flex; bottom: 18px; right: 24px; } }
+.hh-strip-item {
+  width: 72px; height: 48px;
+  border-radius: 5px; overflow: hidden;
+  cursor: pointer; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,.15);
+  background: #1c1c1c;
+  position: relative; transition: border-color .2s;
+}
+.hh-strip-item.active { border-color: #c9973a; }
+.hh-strip-item img { width:100%; height:100%; object-fit:cover; display:block; }
+.hh-strip-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.28); font-size: .55rem; color: #fff;
+}
+
+/* ── Skeleton ── */
+.hh-skel {
+  width: 100%;
+  min-height: clamp(300px, 56vw, 580px);
+  background: #141414;
+  animation: homepulse 1.5s ease-in-out infinite;
+}
+`;
+
 // ─── Hero Slide ───────────────────────────────────────────────────
-function HeroSlide({ movie, active, eager }) {
+function HeroSlide({ movie, active }) {
   const navigate = useNavigate();
   const img = heroImage(movie);
+  const vc  = VS[movie.verdict] || "#7aaae8";
+
   return (
     <div
-      className={`home-hero-slide ${active ? "active" : ""}`}
+      className={`hh-slide${active ? " active" : ""}`}
       style={{ backgroundImage: img ? `url(${img})` : "none" }}
     >
-      <div className="home-hero-overlay" />
-      <div className="home-hero-content">
-        <div className="home-hero-meta">
-          {movie.category && <span className="home-tag">{movie.category}</span>}
-          {movie.genre?.[0] && <span className="home-tag-outline">{movie.genre[0]}</span>}
-          {movie.language  && <span className="home-tag-outline">{movie.language}</span>}
-        </div>
-        <h1 className="home-hero-title">{movie.title}</h1>
-        <div className="home-hero-info">
-          {movie.releaseDate && <span>🗓 {new Date(movie.releaseDate).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}</span>}
-          {movie.director && <span>Dir. {movie.director}</span>}
-          {movie.verdict && movie.verdict !== "Upcoming" && <span className="home-hero-verdict-badge">{movie.verdict}</span>}
-        </div>
-        {movie.synopsis && (
-          <p className="home-hero-synopsis">{movie.synopsis.slice(0,160)}{movie.synopsis.length>160?"…":""}</p>
-        )}
-        <div className="home-hero-actions">
-          {movie.media?.trailer?.ytId && (
-            <button className="btn-hero-play" onClick={()=>navigate(`/movie/${movie._id}`,{state:{scrollTo:"trailer"}})}>▶ Watch Trailer</button>
+      <div className="hh-inner">
+        <div className="hh-overlay" />
+        <div className="hh-content">
+          {/* Category / genre / language tags */}
+          <div className="hh-tags">
+            {movie.category   && <span className="hh-tag">{movie.category}</span>}
+            {movie.genre?.[0] && <span className="hh-tag-gl">{movie.genre[0]}</span>}
+            {movie.language   && <span className="hh-tag-gl">{movie.language}</span>}
+          </div>
+
+          {/* Title */}
+          <h2 className="hh-title">{movie.title}</h2>
+
+          {/* Meta */}
+          <div className="hh-meta">
+            {movie.releaseDate && <span>🗓 {fmtDate(movie.releaseDate)}</span>}
+            {movie.director   && <span>🎬 {movie.director}</span>}
+            {movie.verdict && movie.verdict !== "Upcoming" && (
+              <span className="hh-badge" style={{
+                background:`${vc}22`, border:`1px solid ${vc}`, color:vc,
+              }}>{movie.verdict}</span>
+            )}
+          </div>
+
+          {/* Synopsis */}
+          {movie.synopsis && (
+            <p className="hh-synopsis">
+              {movie.synopsis.slice(0, 180)}{movie.synopsis.length > 180 ? "…" : ""}
+            </p>
           )}
-          <button className="btn-hero-info" onClick={()=>navigate(movie ? moviePath(movie) : "")}>More Info</button>
+
+          {/* Buttons */}
+          <div className="hh-btns">
+            {movie.media?.trailer?.ytId && (
+              <button className="hh-btn-play"
+                onClick={() => navigate(`/movie/${movie._id}`, { state:{ scrollTo:"trailer" } })}>
+                ▶ Watch Trailer
+              </button>
+            )}
+            <button className="hh-btn-info"
+              onClick={() => navigate(moviePath(movie))}>
+              More Info
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -307,12 +531,7 @@ function HeroSlide({ movie, active, eager }) {
 
 // ─── Hero skeleton ────────────────────────────────────────────────
 function HeroSkeleton() {
-  return (
-    <div style={{
-      minHeight: 480, background: "var(--bg2)",
-      animation: "homepulse 1.5s ease-in-out infinite",
-    }} />
-  );
+  return <div className="hh-skel" />;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -426,7 +645,7 @@ export default function Home({ production }) {
   // ── Show skeleton until Phase 1 completes ─────────────────────
   if (!moviesReady) return (
     <>
-      <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}`}</style>
+      <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}${heroCss}`}</style>
       <HeroSkeleton />
     </>
   );
@@ -435,35 +654,42 @@ export default function Home({ production }) {
   return (
     <div className="home-root">
       <SEO {...homeSEO()} />
-      <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}`}</style>
+      <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}${heroCss}`}</style>
 
       {/* ══ HERO ══ */}
       {heroMovies.length > 0 && (
-        <div className="home-hero">
+        <div className="hh-wrap">
           {heroMovies.map((m, i) => {
-            // Only mount active slide + its two neighbours
             const isAdjacentOrActive =
               i === heroIdx ||
               i === (heroIdx + 1) % heroMovies.length ||
               i === (heroIdx - 1 + heroMovies.length) % heroMovies.length;
             return isAdjacentOrActive
-              ? <HeroSlide key={m._id} movie={m} active={i === heroIdx} eager={i === heroIdx} />
-              : <div key={m._id} className={`home-hero-slide${i === heroIdx ? " active" : ""}`} />;
+              ? <HeroSlide key={m._id} movie={m} active={i === heroIdx} />
+              : <div key={m._id} className="hh-slide" />;
           })}
-          <div className="home-hero-dots">
+
+          {/* Dots */}
+          <div className="hh-dots">
             {heroMovies.map((_, i) => (
-              <button key={i} className={`home-hero-dot${i === heroIdx ? " active" : ""}`} onClick={() => goHero(i)} />
+              <button key={i} className={`hh-dot${i === heroIdx ? " active" : ""}`}
+                onClick={() => goHero(i)} />
             ))}
           </div>
-          <div className="home-hero-strip">
+
+          {/* Thumbnail strip — desktop only, hidden via CSS on mobile */}
+          <div className="hh-strip">
             {heroMovies.map((m, i) => {
               const img = heroImage(m);
               return (
-                <div key={m._id} className={`home-hero-strip-item${i === heroIdx ? " active" : ""}`} onClick={() => goHero(i)}>
+                <div key={m._id}
+                  className={`hh-strip-item${i === heroIdx ? " active" : ""}`}
+                  onClick={() => goHero(i)}>
                   {img
-                    ? <img src={img} alt={m.title} loading="lazy" decoding="async" onError={e => e.target.style.display = "none"} />
-                    : <div className="home-strip-fallback">🎬</div>}
-                  {m.media?.trailer?.ytId && <div className="home-strip-play">▶</div>}
+                    ? <img src={img} alt={m.title} loading="lazy" decoding="async"
+                        onError={e => e.target.style.display="none"} />
+                    : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:".9rem" }}>🎬</div>}
+                  {m.media?.trailer?.ytId && <div className="hh-strip-play">▶</div>}
                 </div>
               );
             })}
