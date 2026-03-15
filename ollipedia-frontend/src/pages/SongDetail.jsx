@@ -1,3 +1,5 @@
+import SEO, { songDetailSEO } from "../components/SEO";
+import { extractId, moviePath, songPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { API } from "../api/api";
@@ -115,7 +117,8 @@ function SongScrollRow({ title, songs, onSongClick }) {
 //  Route: /song/:movieId/:songIndex
 // ═══════════════════════════════════════════════════════════
 export default function SongDetail() {
-  const { movieId: urlMovieId, songIndex: urlSongIdx } = useParams();
+  const { movieSlug: _rawMovieSlug, songIndex: urlSongIdx } = useParams();
+  const urlMovieId = extractId(_rawMovieSlug);
   const location = useLocation();
   const navigate  = useNavigate();
 
@@ -160,14 +163,15 @@ export default function SongDetail() {
   // Play a song from the SAME movie
   const changeActiveSong = (idx) => {
     setCurrentSongIdx(idx);
-    navigate(`/song/${currentMovieId}/${idx}`, { replace: true });
+    navigate(movie ? songPath(movie, idx) : `/song/${currentMovieId}/${idx}`, { replace: true });
   };
 
   // Play a song from ANY movie (related sections) — updates state immediately
   const handleRelatedSongClick = (s) => {
     setCurrentMovieId(s.movieId);
     setCurrentSongIdx(s.songIdx);
-    navigate(`/song/${s.movieId}/${s.songIdx}`, { replace: false });
+    const relM = allMovies.find(x=>String(x._id)===s.movieId);
+    navigate(relM ? songPath(relM, s.songIdx) : `/song/${s.movieId}/${s.songIdx}`, { replace: false });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -195,7 +199,7 @@ export default function SongDetail() {
   if (!activeSong) return (
     <div className="page empty-state">
       <h3>No songs for this movie</h3>
-      <button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(`/movie/${movie._id}`)}>← Back to Movie</button>
+      <button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(movie ? moviePath(movie) : `/movie/${movie?._id}`)}>← Back to Movie</button>
     </div>
   );
 
@@ -228,6 +232,7 @@ export default function SongDetail() {
 
   return (
     <div className="home-root" style={{minHeight:"100vh"}}>
+      <SEO {...songDetailSEO({...activeSong, songIndex:currentSongIdx}, movie)} />
 
       {/* ══════════ HERO ZONE ══════════ */}
       <div style={{position:"relative",background:"#0a0a0a",paddingTop:24,overflow:"hidden"}}>
@@ -241,7 +246,7 @@ export default function SongDetail() {
 
         {/* Back */}
         <div style={{position:"relative",zIndex:3,padding:"0 48px 8px"}}>
-          <button className="btn btn-ghost btn-sm" style={{opacity:0.7}} onClick={()=>navigate(`/movie/${movie._id}`)}>
+          <button className="btn btn-ghost btn-sm" style={{opacity:0.7}} onClick={()=>navigate(movie ? moviePath(movie) : `/movie/${movie?._id}`)}>
             ← {movie.title}
           </button>
         </div>
@@ -305,7 +310,7 @@ export default function SongDetail() {
               <div style={{display:"flex",gap:10,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
                 <span style={{fontSize:"0.68rem",fontWeight:700,color:"var(--muted)",textTransform:"uppercase",letterSpacing:"0.08em",width:90,flexShrink:0}}>From Film</span>
                 <span style={{fontSize:"0.88rem",color:"var(--gold)",fontWeight:600,cursor:"pointer",textDecoration:"underline"}}
-                  onClick={()=>navigate(`/movie/${movie._id}`)}>🎬 {movie.title}</span>
+                  onClick={()=>navigate(movie ? moviePath(movie) : `/movie/${movie?._id}`)}>🎬 {movie.title}</span>
               </div>
               {movie.director && (
                 <div style={{display:"flex",gap:10,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
@@ -360,12 +365,12 @@ export default function SongDetail() {
                 {movie.posterUrl && (
                   <img src={movie.posterUrl} alt={movie.title}
                     style={{width:46,height:64,objectFit:"cover",borderRadius:5,border:"1px solid var(--border)",flexShrink:0,cursor:"pointer"}}
-                    onClick={()=>navigate(`/movie/${movie._id}`)}
+                    onClick={()=>navigate(movie ? moviePath(movie) : `/movie/${movie?._id}`)}
                     onError={e=>e.target.style.display="none"} />
                 )}
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:700,fontSize:"0.86rem",lineHeight:1.3,cursor:"pointer",color:"var(--gold)"}}
-                    onClick={()=>navigate(`/movie/${movie._id}`)}>{movie.title}</div>
+                    onClick={()=>navigate(movie ? moviePath(movie) : `/movie/${movie?._id}`)}>{movie.title}</div>
                   {movie.releaseDate && <div style={{fontSize:"0.68rem",color:"var(--muted)",marginTop:3}}>{fmtDate(movie.releaseDate)}</div>}
                   {movie.language && <div style={{fontSize:"0.65rem",color:"rgba(201,151,58,0.7)",marginTop:2}}>{movie.language}</div>}
                 </div>
@@ -390,7 +395,7 @@ export default function SongDetail() {
             <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,255,255,0.07)",flexShrink:0}}>
               <button className="btn btn-outline btn-sm"
                 style={{width:"100%",justifyContent:"center",fontSize:"0.76rem"}}
-                onClick={()=>navigate(`/movie/${movie._id}`)}>
+                onClick={()=>navigate(movie ? moviePath(movie) : `/movie/${movie?._id}`)}>
                 🎬 View Full Movie Page
               </button>
             </div>
@@ -470,7 +475,7 @@ export default function SongDetail() {
               </div>
               <div className="home-row">
                 {related.map(m=>(
-                  <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)} />
+                  <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))} />
                 ))}
               </div>
             </section>

@@ -1,3 +1,6 @@
+import SEO, { castSEO } from "../components/SEO";
+import { extractId, moviePath, castPath } from "../utils/slugs";
+import { Helmet } from "react-helmet-async";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -217,7 +220,8 @@ function Skeleton() {
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════
 export default function CastProfile({ portalMode }) {
-  const { id }        = useParams();
+  const { slug }      = useParams();
+  const id            = extractId(slug);
   const navigate      = useNavigate();
   const [person,  setPerson]  = useState(null);
   const [allNews, setAllNews] = useState([]);
@@ -305,10 +309,14 @@ export default function CastProfile({ portalMode }) {
                 || movies.find(m => m.posterUrl)?.posterUrl
                 || null;
 
-  const goMovie = (mId) => navigate(portalMode ? `/portal/movie/${mId}` : `/movie/${mId}`);
+  const goMovie = (m) => navigate(portalMode ? `/portal/movie/${typeof m==="object"?m._id:m}` : (typeof m==="object" ? moviePath(m) : `/movie/${m}`));
 
   return (
     <div className="home-root">
+      <SEO {...castSEO(person)} />
+      <Helmet>
+        {person && <script type="application/ld+json">{JSON.stringify({"@context":"https://schema.org","@type":"Person","name":person.name,"image":person.photo,"description":person.bio,"jobTitle":person.type,"nationality":{"@type":"Country","name":"India"}})}</script>}
+      </Helmet>
 
       {/* ════════════════════════════════════════════════════
           HERO — compact banner, no full-viewport height
@@ -417,7 +425,7 @@ export default function CastProfile({ portalMode }) {
             {/* CTA buttons — stacked vertically on the right */}
             <div style={{ display:"flex", flexDirection:"column", gap:8, flexShrink:0 }}>
               {movies.length > 0 && (
-                <button className="btn-hero-play" style={{ fontSize:"0.8rem", padding:"10px 20px" }} onClick={() => goMovie(movies[0]._id)}>
+                <button className="btn-hero-play" style={{ fontSize:"0.8rem", padding:"10px 20px" }} onClick={() => goMovie(movies[0])}>
                   ▶ Latest Film
                 </button>
               )}
@@ -467,7 +475,7 @@ export default function CastProfile({ portalMode }) {
                   key={m._id}
                   movie={m}
                   role={entry?.role}
-                  onClick={() => goMovie(m._id)}
+                  onClick={() => goMovie(m)}
                 />
               );
             })}
@@ -488,7 +496,7 @@ export default function CastProfile({ portalMode }) {
                 key={i}
                 className="home-card"
                 style={{ width: 150, cursor: c.castId ? "pointer" : "default" }}
-                onClick={() => c.castId && navigate(`/cast/${c.castId}`)}
+                onClick={() => c.castId && navigate(castPath({ _id: c.castId }))}
               >
                 <div className="home-card-img" style={{ height: 150 }}>
                   <SafeImg

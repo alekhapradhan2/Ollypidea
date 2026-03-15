@@ -1,4 +1,5 @@
 import SEO, { staticSEO } from "../components/SEO";
+import { moviePath, castPath, songPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -79,7 +80,7 @@ function CastRow({ title, people, tag }) {
       </div>
       <div className="home-row" ref={rowRef} style={{padding:"6px 24px 14px"}}>
         {vis
-          ? people.map(p=><CastCard key={p._id} person={p} onClick={()=>navigate(`/cast/${p._id}`)}/>)
+          ? people.map(p=><CastCard key={p._id} person={p} onClick={()=>navigate(castPath(p))}/>)
           : Array.from({length:6},(_,i)=><div key={i} style={{flexShrink:0,width:160,height:240,borderRadius:8,background:"var(--bg3)",animation:`cpulse 1.5s ease-in-out ${i*.1}s infinite`}}/>)
         }
       </div>
@@ -186,7 +187,7 @@ export default function Cast() {
           {filtered.length===0
             ? <div className="home-empty" style={{padding:"80px 24px"}}><div style={{fontSize:"3rem",marginBottom:12}}>👤</div><p style={{color:"var(--muted)"}}>No results found.</p><button className="btn btn-outline btn-sm" style={{marginTop:16}} onClick={()=>{setSearch("");setTypeFilter("All");}}>Clear Filters</button></div>
             : search
-              ? <section className="home-section"><div className="home-section-header" style={{padding:"0 24px"}}><h2 className="home-section-title">Results</h2><span style={{fontSize:".8rem",color:"var(--muted)"}}>{filtered.length} people</span></div><div style={{padding:"8px 24px 24px",display:"flex",flexWrap:"wrap",gap:14}}>{filtered.map(p=><CastCard key={p._id} person={p} onClick={()=>navigate(`/cast/${p._id}`)}/>)}</div></section>
+              ? <section className="home-section"><div className="home-section-header" style={{padding:"0 24px"}}><h2 className="home-section-title">Results</h2><span style={{fontSize:".8rem",color:"var(--muted)"}}>{filtered.length} people</span></div><div style={{padding:"8px 24px 24px",display:"flex",flexWrap:"wrap",gap:14}}>{filtered.map(p=><CastCard key={p._id} person={p} onClick={()=>navigate(castPath(p))}/>)}</div></section>
               : types.filter(t=>t!=="All").map(t=>{ const g=filtered.filter(c=>c.type===t); return g.length?<CastRow key={t} title={t+"s"} people={g}/>:null; })
           }
         </div>

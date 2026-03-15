@@ -1,4 +1,5 @@
 import SEO, { staticSEO } from "../components/SEO";
+import { moviePath, castPath, songPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -125,13 +126,14 @@ export default function AllSongs() {
         list.push({
           ...s,
           songIndex:  idx,
-          movieId:    m._id,
+          movieId:    String(m._id),
           movieTitle: m.title,
           movieYear:  year ? String(year) : "",
           moviePoster:m.posterUrl || m.thumbnailUrl || "",
           releaseDate:m.releaseDate || "",
           verdict:    m.verdict || "",
           language:   m.language || "Odia",
+          _movieSlug: moviePath(m),   // pre-compute slug
         });
       });
     });
@@ -183,7 +185,7 @@ export default function AllSongs() {
   // No date = misc/ungrouped
   const undatedSongs = useMemo(() => base.filter(s => !s.releaseDate), [base]);
 
-  const handleSongClick = (s) => navigate(`/song/${s.movieId}/${s.songIndex}`);
+  const handleSongClick = (s) => { const slug = s._movieSlug?.replace('/movie/', '/song/'); navigate(slug ? `${slug}/${s.songIndex}` : `/song/${s.movieId}/${s.songIndex}`); };
 
   const TAB_FILTERS = [
     { key: "all",      label: "🎵 All",           count: base.length },

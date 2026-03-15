@@ -1,3 +1,6 @@
+import SEO, { movieSEO } from "../components/SEO";
+import { extractId, moviePath, castPath, songPath } from "../utils/slugs";
+import { Helmet } from "react-helmet-async";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { API, getToken } from "../api/api";
@@ -258,7 +261,8 @@ function AddSongModal({ movieId, onAdded, onClose }) {
 //  MAIN
 // ═══════════════════════════════════════════════════════════
 export default function MovieDetails({ production, onToast, portalMode }) {
-  const { id }       = useParams();
+  const { slug }     = useParams();
+  const id           = extractId(slug);
   const navigate     = useNavigate();
   const location     = useLocation();
   const trailerRef   = useRef(null);
@@ -437,6 +441,20 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
   return (
     <div className="home-root" style={{minHeight:"100vh"}}>
+      <SEO {...movieSEO(movie)} />
+      <Helmet>
+        {movie && <script type="application/ld+json">{JSON.stringify({
+          "@context":"https://schema.org","@type":"Movie",
+          "name":movie.title,"description":movie.synopsis?.slice(0,300),
+          "image":movie.posterUrl||movie.thumbnailUrl,
+          "datePublished":movie.releaseDate,"duration":movie.runtime,
+          "director":movie.director?{"@type":"Person","name":movie.director}:undefined,
+          "contentRating":movie.contentRating,"genre":movie.genre,
+          "inLanguage":movie.language||"or",
+          "aggregateRating":movie.reviews?.length?{"@type":"AggregateRating","ratingValue":(movie.reviews.reduce((s,r)=>s+(r.rating||0),0)/movie.reviews.length).toFixed(1),"reviewCount":movie.reviews.length,"bestRating":"5","worstRating":"1"}:undefined,
+          "trailer":movie.media?.trailer?.ytId?{"@type":"VideoObject","name":movie.title+" Trailer","embedUrl":"https://www.youtube.com/embed/"+movie.media.trailer.ytId}:undefined,
+        })}</script>}
+      </Helmet>
 
       {/* ══════════════════════════════════════════════════
           HERO BANNER — full-width background
@@ -647,7 +665,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                   <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:14}}>
                     {crew.slice(0,6).map((c,i)=>(
                       <div key={c.castId||i} style={{display:"flex",alignItems:"center",gap:8,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"7px 12px",cursor:c.castId?"pointer":"default"}}
-                        onClick={()=>c.castId&&navigate(`/cast/${c.castId}`)}>
+                        onClick={()=>c.castId&&navigate(castPath({ _id: c.castId }))}>
                         <div style={{width:32,height:32,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.9rem"}}>
                           {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" decoding="async" onError={e=>e.target.style.display="none"}/>:"👤"}
                         </div>
@@ -664,7 +682,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                   <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8}}>
                     {actors.slice(0,12).map((c,i)=>(
                       <div key={c.castId||i} style={{flexShrink:0,width:90,cursor:c.castId?"pointer":"default",textAlign:"center"}}
-                        onClick={()=>c.castId&&navigate(`/cast/${c.castId}`)}>
+                        onClick={()=>c.castId&&navigate(castPath({ _id: c.castId }))}>
                         <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",background:"var(--bg3)",margin:"0 auto 6px",border:"2px solid var(--border)",transition:"border-color 0.15s",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.6rem"}}
                           onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
                           onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
@@ -696,7 +714,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                 <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:4}}>
                   {movie.media.songs.slice(0,8).map((s,i)=>(
                     <div key={i} style={{flexShrink:0,width:130,cursor:"pointer",borderRadius:8,overflow:"hidden",background:"var(--bg2)",border:"1px solid var(--border)",transition:"border-color 0.15s"}}
-                      onClick={()=>navigate(`/song/${id}/${i}`)}
+                      onClick={()=>navigate(movie ? songPath(movie, i) : `/song/${id}/${i}`)}
                       onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
                       onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
                       <div style={{width:"100%",height:80,background:"var(--bg3)",position:"relative",overflow:"hidden"}}>
@@ -805,7 +823,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                       {crew.map((c,i)=>(
                         <div key={c.castId||i}
                           style={{display:"flex",alignItems:"center",gap:14,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 16px",cursor:c.castId?"pointer":"default",transition:"border-color 0.15s"}}
-                          onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:`/cast/${c.castId}`)}
+                          onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id: c.castId }))}
                           onMouseEnter={e=>{ if(c.castId) e.currentTarget.style.borderColor="var(--gold)"; }}
                           onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
                           <div style={{width:48,height:48,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.3rem",border:"2px solid var(--border)"}}>
@@ -832,7 +850,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                       {actors.map((c,i)=>(
                         <div key={c.castId||i}
                           style={{cursor:c.castId?"pointer":"default",textAlign:"center",position:"relative"}}
-                          onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:`/cast/${c.castId}`)}>
+                          onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id: c.castId }))}>
                           {/* Remove button */}
                           {isOwner&&<button style={{position:"absolute",top:4,right:4,zIndex:5,background:"rgba(0,0,0,0.7)",border:"none",color:"var(--red)",cursor:"pointer",width:22,height:22,borderRadius:"50%",fontSize:"0.75rem",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity 0.15s"}}
                             onClick={e=>{e.stopPropagation();removeCast(String(c.castId));}}
@@ -899,7 +917,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
                 {movie.media.songs.map((s,i)=>(
                   <div key={i}
                     style={{display:"flex",alignItems:"center",gap:0,borderBottom:i<movie.media.songs.length-1?"1px solid rgba(255,255,255,0.05)":"none",cursor:"pointer",transition:"background 0.12s"}}
-                    onClick={()=>navigate(`/song/${id}/${i}`)}
+                    onClick={()=>navigate(movie ? songPath(movie, i) : `/song/${id}/${i}`)}
                     onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.04)"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                     {/* Track number */}
@@ -1058,7 +1076,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
           <HomeRow title="🎭 Full Cast">
             {[...crew,...actors].map((c,i)=>(
               <MiniCastCard key={c.castId||i} person={c}
-                onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:`/cast/${c.castId}`)} />
+                onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id: c.castId }))} />
             ))}
           </HomeRow>
         )}
@@ -1067,7 +1085,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
         {sameDirector.length>0 && (
           <HomeRow title={`🎬 More by ${movie.director}`}>
             {sameDirector.map(m=>(
-              <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)} />
+              <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))} />
             ))}
           </HomeRow>
         )}
@@ -1076,7 +1094,7 @@ boxShadow:"0 1px 0 rgba(255,255,255,0.08)",
         {relatedMovies.length>0 && (
           <HomeRow title="🎥 Similar Films" tag="Related">
             {relatedMovies.map(m=>(
-              <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)} />
+              <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))} />
             ))}
           </HomeRow>
         )}

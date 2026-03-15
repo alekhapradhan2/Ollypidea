@@ -1,4 +1,5 @@
 import SEO, { newsItemSEO } from "../components/SEO";
+import { extractId, moviePath, newsPath } from "../utils/slugs";
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { API } from "../api/api";
@@ -58,7 +59,8 @@ function NewsCard({ n, onClick }) {
 }
 
 export default function NewsDetail() {
-  const { id }    = useParams();
+  const { slug }  = useParams();
+  const id        = extractId(slug);
   const navigate  = useNavigate();
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +148,7 @@ export default function NewsDetail() {
           <div className="section-header">
             <span className="section-title">About the Film</span>
           </div>
-          <div className="news-related-movie" onClick={() => navigate(`/movie/${movie._id}`)}>
+          <div className="news-related-movie" onClick={() => navigate(movie ? moviePath(movie) : `/movie/${movie._id}`)}>
             <div className="news-related-movie-poster">
               {movie.posterUrl
                 ? <SafeImg src={movie.posterUrl} alt={movie.title} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
@@ -185,7 +187,7 @@ export default function NewsDetail() {
           </div>
           <div className="news-grid">
             {related.map(n => (
-              <NewsCard key={n._id} n={n} onClick={(nid) => navigate(`/news/${nid}`)} />
+              <NewsCard key={n._id} n={n} onClick={(nid) => navigate(newsPath({ _id: nid, title: '' }))} />
             ))}
           </div>
         </section>

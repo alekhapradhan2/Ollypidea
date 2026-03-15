@@ -1,4 +1,5 @@
 import SEO, { homeSEO } from "../components/SEO";
+import { moviePath, castPath, songPath } from "../utils/slugs";
 import React, {
   useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense
 } from "react";
@@ -279,7 +280,7 @@ function HeroSlide({ movie, active, eager }) {
           {movie.media?.trailer?.ytId && (
             <button className="btn-hero-play" onClick={()=>navigate(`/movie/${movie._id}`,{state:{scrollTo:"trailer"}})}>▶ Watch Trailer</button>
           )}
-          <button className="btn-hero-info" onClick={()=>navigate(`/movie/${movie._id}`)}>More Info</button>
+          <button className="btn-hero-info" onClick={()=>navigate(movie ? moviePath(movie) : "")}>More Info</button>
         </div>
       </div>
     </div>
@@ -448,11 +449,11 @@ export default function Home({ production }) {
       {/* ══ SECTIONS — rows virtualize themselves ══ */}
       <div className="home-sections">
 
-        {thisWeek.length>0   && <Row title="🔥 Releasing This Week" badge="New" badgeColor="#e59595">{thisWeek.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
-        {thisMonth.length>0  && <Row title="🗓 This Month" badge="New">{thisMonth.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
-        {inTheatres.length>0 && <Row title="🎭 Now in Theatres" badge="Live" badgeColor="#95e5b8">{inTheatres.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
-        {lastWeek.length>0   && <Row title="📅 Last Week">{lastWeek.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
-        {lastMonth.length>0  && <Row title="📆 Last Month">{lastMonth.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
+        {thisWeek.length>0   && <Row title="🔥 Releasing This Week" badge="New" badgeColor="#e59595">{thisWeek.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
+        {thisMonth.length>0  && <Row title="🗓 This Month" badge="New">{thisMonth.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
+        {inTheatres.length>0 && <Row title="🎭 Now in Theatres" badge="Live" badgeColor="#95e5b8">{inTheatres.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
+        {lastWeek.length>0   && <Row title="📅 Last Week">{lastWeek.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
+        {lastMonth.length>0  && <Row title="📆 Last Month">{lastMonth.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
 
         {withTrailer.length>0 && (
           <Row title="🎬 Latest Trailers" gap={16}>
@@ -469,15 +470,15 @@ export default function Home({ production }) {
 
         {trendingSongs.length>0 && (
           <Row title="🎵 Trending Songs" viewAll="/songs" gap={14}>
-            {trendingSongs.map((s,i)=><SongCard key={i} s={s} onClick={()=>navigate(`/song/${s.movieId}/${s.songIndex}`)}/>)}
+            {trendingSongs.map((s,i)=><SongCard key={i} s={s} onClick={()=>navigate(s._movieSlug ? s._movieSlug.replace('/movie/','/song/')+'/'+s.songIndex : `/song/${s.movieId}/${s.songIndex}`)}/>)}
           </Row>
         )}
 
-        {highRated.length>0 && <Row title="⭐ Top Rated" badge="Critic Pick" badgeColor="#e8c87a">{highRated.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
-        {upcoming.length>0  && <Row title="🚀 Upcoming" viewAll="/movies">{upcoming.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}</Row>}
+        {highRated.length>0 && <Row title="⭐ Top Rated" badge="Critic Pick" badgeColor="#e8c87a">{highRated.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
+        {upcoming.length>0  && <Row title="🚀 Upcoming" viewAll="/movies">{upcoming.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}</Row>}
 
         <Row title="🎬 All Films" viewAll="/movies">
-          {allFilmsRow.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(`/movie/${m._id}`)}/>)}
+          {allFilmsRow.map(m=><MovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))}/>)}
         </Row>
 
         {movies.length===0 && (

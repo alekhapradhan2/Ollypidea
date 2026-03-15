@@ -1,4 +1,5 @@
 import SEO, { staticSEO } from "../components/SEO";
+import { moviePath, castPath, songPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";

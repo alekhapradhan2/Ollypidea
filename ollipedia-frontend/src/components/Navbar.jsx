@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API } from "../api/api";
+import { moviePath, castPath } from "../utils/slugs";
 
 function SafeImg({ src, alt, className }) {
   const [broken, setBroken] = React.useState(false);
@@ -42,7 +43,7 @@ function NavSearch() {
           // Pre-build song list once
           _searchCache.songs = [];
           movies.forEach(m => (m.media?.songs||[]).forEach(s => {
-            _searchCache.songs.push({ ...s, movieTitle: m.title, movieId: m._id });
+            _searchCache.songs.push({ ...s, movieTitle: m.title, movieId: String(m._id), _movieObj: { _id: m._id, title: m.title, releaseDate: m.releaseDate } });
           }));
         }
         const q = query.toLowerCase();
@@ -79,7 +80,7 @@ function NavSearch() {
             <div className="nav-search-group">
               <div className="nav-search-group-label">🎬 Movies</div>
               {results.movies.map(m => (
-                <div key={m._id} className="nav-search-item" onClick={() => { navigate(`/movie/${m._id}`); setOpen(false); setQuery(""); }}>
+                <div key={m._id} className="nav-search-item" onClick={() => { navigate(moviePath(m)); setOpen(false); setQuery(""); }}>
                   {m.posterUrl && <img src={m.posterUrl} alt={m.title} className="nav-search-thumb" />}
                   <div className="nav-search-item-info">
                     <span className="nav-search-item-title">{m.title}</span>
@@ -93,7 +94,7 @@ function NavSearch() {
             <div className="nav-search-group">
               <div className="nav-search-group-label">👤 Cast & Crew</div>
               {results.cast.map(c => (
-                <div key={c._id} className="nav-search-item" onClick={() => { navigate(`/cast/${c._id}`); setOpen(false); setQuery(""); }}>
+                <div key={c._id} className="nav-search-item" onClick={() => { navigate(castPath(c)); setOpen(false); setQuery(""); }}>
                   {c.photo && <img src={c.photo} alt={c.name} className="nav-search-thumb nav-search-thumb-round" />}
                   <div className="nav-search-item-info">
                     <span className="nav-search-item-title">{c.name}</span>
