@@ -440,7 +440,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
     .slice(0, 12);
 
   return (
-    <div className="home-root" style={{minHeight:"100vh"}}>
+    <div style={{ minHeight:"100vh", background:"#0f0f0f", color:"#f1f1f1" }}>
       <SEO {...movieSEO(movie)} />
       <Helmet>
         {movie && <script type="application/ld+json">{JSON.stringify({
@@ -456,272 +456,467 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         })}</script>}
       </Helmet>
 
-      {/* ══════════════════════════════════════════════════
-          HERO BANNER — full-width background
-      ══════════════════════════════════════════════════ */}
-      <div style={{
-        position:"relative",
-        width:"100%",
-        minHeight:"auto",
-        background:"#0f0f0f",
-        marginTop:-60,
-        paddingTop:60,
-        overflow:"hidden",
-      }}>
-        {/* Blurred background banner */}
+      <style>{`
+        /* ── Movie Detail Page ── */
+        .md-root { min-height:100vh; background:#0f0f0f; color:#f1f1f1; padding-top:58px; }
+
+        /* ── Hero ── */
+        .md-hero {
+          position: relative;
+          overflow: hidden;
+          background: #0a0a0a;
+          /* min-height so the hero feels tall even without long content */
+          min-height: 420px;
+        }
+        @media(min-width:600px){ .md-hero { min-height: 480px; } }
+        @media(min-width:900px){ .md-hero { min-height: 520px; } }
+
+        /* Blurred backdrop — the key: fill the whole hero, not clipped too tight */
+        .md-hero-bg {
+          position: absolute;
+          inset: 0;
+          background-size: cover;
+          background-position: center 20%;
+          /* brightness .35 = visible but dark, not pitch black */
+          filter: blur(0px) brightness(.35) saturate(1.2);
+          transform: scale(1.05); /* slight scale prevents blur edge bleeding */
+        }
+
+        /* Two-layer gradient:
+           left-to-right: dark on left so poster/text are legible
+           top-to-bottom: fades to solid #0a0a0a at bottom so page flows in */
+        .md-hero-overlay {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(to right,
+              rgba(10,10,10,.88) 0%,
+              rgba(10,10,10,.55) 50%,
+              rgba(10,10,10,.25) 100%
+            ),
+            linear-gradient(to bottom,
+              transparent 0%,
+              transparent 55%,
+              rgba(10,10,10,.85) 80%,
+              #0a0a0a 100%
+            );
+        }
+
+        .md-hero-inner {
+          position: relative;
+          z-index: 2;
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 24px 16px 44px;
+          display: flex;
+          gap: 28px;
+          align-items: flex-end; /* align to bottom so poster sits on same baseline as text */
+        }
+        @media(min-width:600px){ .md-hero-inner { padding: 32px 24px 48px; gap: 32px; } }
+        @media(min-width:900px){ .md-hero-inner { padding: 44px 40px 56px; gap: 40px; align-items: flex-end; } }
+
+        /* Poster — taller, more cinematic */
+        .md-poster {
+          flex-shrink: 0;
+          width: clamp(130px, 20vw, 220px);
+          border-radius: 12px;
+          overflow: hidden;
+          /* Strong shadow so poster lifts off the background */
+          box-shadow:
+            0 8px 24px rgba(0,0,0,.6),
+            0 24px 64px rgba(0,0,0,.8),
+            0 0 0 1px rgba(255,255,255,.1);
+          background: #1a1a1a;
+          /* Slight upward nudge for cinematic feel */
+          transform: translateY(0);
+        }
+        .md-poster img { width: 100%; display: block; }
+        .md-poster-ph {
+          aspect-ratio: 2/3;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 3rem; color: rgba(255,255,255,.2);
+        }
+
+        /* Info column */
+        .md-info { flex:1; min-width:0; padding-top:4px; }
+        .md-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+        .md-tag {
+          font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+          padding:3px 9px; border-radius:20px;
+          background:rgba(201,151,58,.14); border:1px solid rgba(201,151,58,.35); color:#c9973a;
+        }
+        .md-tag-outline {
+          font-size:.62rem; font-weight:600;
+          padding:3px 9px; border-radius:20px;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); color:rgba(255,255,255,.7);
+        }
+        .md-title {
+          font-family:'Playfair Display',serif;
+          font-size:clamp(1.5rem,4vw,2.8rem);
+          font-weight:900; line-height:1.08; margin:0 0 10px;
+          color:#fff; text-shadow:0 2px 20px rgba(0,0,0,.5);
+        }
+        .md-score-row {
+          display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;
+        }
+        .md-rating { display:flex; align-items:center; gap:5px; }
+        .md-rating-num { color:#c9973a; font-size:1.1rem; font-weight:800; }
+        .md-rating-stars { color:#c9973a; font-size:.82rem; }
+        .md-rating-cnt { color:rgba(255,255,255,.4); font-size:.72rem; }
+        .md-verdict-badge {
+          font-size:.64rem; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+          padding:4px 12px; border-radius:4px;
+        }
+        .md-meta-row {
+          display:flex; flex-wrap:wrap; gap:6px 16px;
+          font-size:.78rem; color:rgba(255,255,255,.55);
+          margin-bottom:12px; align-items:center;
+        }
+        .md-meta-row span { display:flex; align-items:center; gap:4px; }
+        .md-synopsis {
+          font-size:.88rem; color:rgba(255,255,255,.68);
+          line-height:1.7; margin:0 0 18px;
+          max-width:620px;
+          display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
+        }
+        @media(min-width:768px){ .md-synopsis { -webkit-line-clamp:5; } }
+        .md-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+        .md-btn-play {
+          display:inline-flex; align-items:center; gap:7px;
+          background:#c9973a; color:#000; border:none;
+          padding:10px 20px; border-radius:8px;
+          font-size:.84rem; font-weight:800; cursor:pointer;
+          transition:opacity .18s;
+        }
+        .md-btn-play:hover { opacity:.88; }
+        .md-btn-outline {
+          display:inline-flex; align-items:center; gap:6px;
+          background:rgba(255,255,255,.09); color:#f1f1f1;
+          border:1px solid rgba(255,255,255,.2);
+          padding:10px 16px; border-radius:8px;
+          font-size:.82rem; font-weight:600; cursor:pointer;
+          transition:background .18s;
+        }
+        .md-btn-outline:hover { background:rgba(255,255,255,.15); }
+
+        /* Box office chips row */
+        .md-bo-row {
+          display:flex; gap:12px; flex-wrap:wrap;
+          padding:10px 14px;
+          background:rgba(255,255,255,.05);
+          border:1px solid rgba(255,255,255,.08);
+          border-radius:8px; width:fit-content;
+        }
+        .md-bo-item { }
+        .md-bo-label { font-size:.58rem; color:rgba(255,255,255,.38); text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:2px; }
+        .md-bo-val   { font-size:.84rem; font-weight:800; color:#c9973a; }
+
+        /* ── Sticky tabs ── */
+        .md-tabs-bar {
+          position:sticky; top:58px; z-index:20;
+          background:rgba(15,15,15,.97);
+          backdrop-filter:blur(12px);
+          border-bottom:1px solid rgba(255,255,255,.08);
+          overflow-x:auto; scrollbar-width:none;
+        }
+        .md-tabs-bar::-webkit-scrollbar { display:none; }
+        .md-tabs-inner {
+          display:flex; padding:0 16px;
+          min-width:max-content;
+        }
+        @media(min-width:600px){ .md-tabs-inner { padding:0 24px; } }
+        @media(min-width:900px){ .md-tabs-inner { padding:0 40px; } }
+        .md-tab {
+          padding:12px 14px;
+          background:none; border:none; cursor:pointer;
+          font-weight:700; font-size:.78rem;
+          color:rgba(255,255,255,.45);
+          border-bottom:2px solid transparent;
+          white-space:nowrap; transition:all .18s;
+          flex-shrink:0;
+        }
+        @media(min-width:480px){ .md-tab { padding:13px 18px; font-size:.8rem; } }
+        .md-tab.on { color:#c9973a; border-bottom-color:#c9973a; }
+        .md-tab:hover:not(.on) { color:#f1f1f1; }
+
+        /* ── Tab body ── */
+        .md-body {
+          max-width:1200px; margin:0 auto;
+          padding:24px 16px 60px;
+          background:#0f0f0f;
+        }
+        @media(min-width:600px){ .md-body { padding:28px 24px 60px; } }
+        @media(min-width:900px){ .md-body { padding:32px 40px 60px; } }
+
+        /* Section heading inside tabs */
+        .md-sec-label {
+          font-size:.66rem; font-weight:800; text-transform:uppercase;
+          letter-spacing:.1em; color:rgba(255,255,255,.38);
+          margin:0 0 12px;
+        }
+
+        /* Crew pill */
+        .md-crew-pill {
+          display:inline-flex; align-items:center; gap:8px;
+          background:#1a1a1a; border:1px solid rgba(255,255,255,.09);
+          border-radius:8px; padding:7px 12px; cursor:pointer;
+          transition:border-color .16s;
+        }
+        .md-crew-pill:hover { border-color:rgba(201,151,58,.45); }
+        .md-crew-av {
+          width:28px; height:28px; border-radius:50%; overflow:hidden;
+          background:#272727; display:flex; align-items:center; justify-content:center;
+          font-size:.8rem; flex-shrink:0;
+        }
+        .md-crew-av img { width:100%; height:100%; object-fit:cover; }
+        .md-crew-name { font-size:.78rem; font-weight:700; line-height:1.2; color:#f1f1f1; }
+        .md-crew-role { font-size:.6rem; color:#c9973a; font-weight:600; }
+
+        /* Actor circle */
+        .md-actor {
+          flex-shrink:0; width:72px; text-align:center; cursor:pointer;
+        }
+        .md-actor-av {
+          width:56px; height:56px; border-radius:50%; overflow:hidden;
+          background:#272727; margin:0 auto 5px;
+          border:2px solid rgba(255,255,255,.1);
+          display:flex; align-items:center; justify-content:center;
+          font-size:1.3rem; transition:border-color .16s;
+        }
+        @media(min-width:480px){ .md-actor-av { width:64px; height:64px; } }
+        .md-actor-av img { width:100%; height:100%; object-fit:cover; }
+        .md-actor-name { font-size:.66rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f1f1f1; }
+        .md-actor-role { font-size:.58rem; color:#c9973a; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+        /* Song card */
+        .md-song {
+          flex-shrink:0; width:130px; cursor:pointer;
+          border-radius:8px; overflow:hidden;
+          background:#1a1a1a; border:1px solid rgba(255,255,255,.08);
+          transition:border-color .16s;
+        }
+        .md-song:hover { border-color:#c9973a; }
+        .md-song-thumb {
+          width:100%; aspect-ratio:16/9; background:#272727;
+          position:relative; overflow:hidden;
+        }
+        .md-song-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+        .md-song-icon {
+          position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+          background:rgba(0,0,0,.25); font-size:1.2rem;
+        }
+        .md-song-info { padding:7px 8px; }
+        .md-song-title { font-size:.72rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f1f1f1; }
+        .md-song-singer { font-size:.62rem; color:#c9973a; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+        /* Cast full grid */
+        .md-cast-grid {
+          display:grid;
+          grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+          gap:10px;
+        }
+        @media(min-width:480px){ .md-cast-grid { grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:12px; } }
+        .md-cast-card {
+          background:#1a1a1a; border:1px solid rgba(255,255,255,.08);
+          border-radius:10px; overflow:hidden; cursor:pointer;
+          transition:border-color .16s;
+        }
+        .md-cast-card:hover { border-color:rgba(201,151,58,.4); }
+        .md-cast-img {
+          width:100%; aspect-ratio:3/4; background:#272727;
+          display:flex; align-items:center; justify-content:center;
+          font-size:2.5rem; overflow:hidden; position:relative;
+        }
+        .md-cast-img img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top; }
+        .md-cast-meta { padding:8px 10px; }
+        .md-cast-cname { font-size:.78rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f1f1f1; }
+        .md-cast-type  { font-size:.64rem; color:#c9973a; margin-top:2px; font-weight:600; }
+        .md-cast-role  { font-size:.62rem; color:rgba(255,255,255,.4); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+        /* Box office table */
+        .md-bo-table { width:100%; border-collapse:collapse; }
+        .md-bo-table td { padding:12px 16px; border-bottom:1px solid rgba(255,255,255,.06); font-size:.85rem; }
+        .md-bo-table td:first-child { color:rgba(255,255,255,.45); font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; font-weight:700; width:140px; }
+        .md-bo-table td:last-child { color:#f1f1f1; font-weight:600; }
+
+        /* Scroll rows */
+        .md-hscroll { display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; scrollbar-width:none; }
+        .md-hscroll::-webkit-scrollbar { display:none; }
+        @media(min-width:480px){ .md-hscroll { gap:12px; } }
+
+        /* Trailer embed */
+        .md-trailer { width:100%; max-width:720px; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
+        .md-trailer iframe { width:100%; height:100%; border:none; display:block; }
+
+        /* Divider */
+        .md-divider { border:none; border-top:1px solid rgba(255,255,255,.07); margin:24px 0; }
+
+        /* Production chip */
+        .md-prod-chip {
+          display:inline-flex; align-items:center; gap:6px;
+          background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12);
+          border-radius:20px; padding:5px 12px;
+          font-size:.73rem; font-weight:600; color:rgba(255,255,255,.7);
+          text-decoration:none; transition:border-color .16s;
+        }
+        .md-prod-chip:hover { border-color:rgba(201,151,58,.45); color:#c9973a; }
+
+        /* Empty */
+        .md-empty { text-align:center; padding:48px 20px; color:rgba(255,255,255,.3); }
+        .md-empty p { font-size:.84rem; margin:8px 0 0; }
+      `}</style>
+
+      {/* ══ HERO ══ */}
+      <div className="md-hero">
+        {/* Blurred backdrop — visible, atmospheric */}
         {bannerImg && (
-          <div style={{
-            position:"absolute", inset:0,
-            backgroundImage:`url(${bannerImg})`,
-            backgroundSize:"cover",
-            backgroundPosition:"center top",
-            filter:"blur(22px) brightness(0.25) saturate(1.4)",
-            transform:"scale(1.08)",
-          }} />
+          <div className="md-hero-bg" style={{ backgroundImage:`url(${bannerImg})` }} />
         )}
-        {/* Gradient overlays */}
-        <div style={{
-          position:"absolute", inset:0,
-          background:"linear-gradient(to right, rgba(0,0,0,0.95) 40%, rgba(0,0,0,0.4) 80%, rgba(0,0,0,0.15) 100%), linear-gradient(to top, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.5) 35%, transparent 65%)",
-        }} />
+        {/* Gradient overlay: left-dark + bottom-fade */}
+        <div className="md-hero-overlay" />
 
-        {/* ── Back link ── */}
-        <div style={{position:"relative",zIndex:3,padding:"16px 16px 0"}}>
-          <Link to="/movies" className="btn btn-ghost btn-sm" style={{opacity:0.7,fontSize:".8rem"}}>← All Films</Link>
-        </div>
-
-        {/* ── Hero content — responsive: stacked on mobile, side-by-side on tablet+ ── */}
-        <div style={{
-          position:"relative", zIndex:3,
-          display:"flex", gap:"clamp(16px,3vw,36px)", alignItems:"flex-start",
-          flexWrap:"wrap",
-          padding:"16px 16px 40px",
-        }}>
-          {/* Poster — full width on mobile, fixed width on tablet+ */}
-          <div style={{
-            flexShrink:0,
-            width:"clamp(120px,28vw,220px)",
-            borderRadius:10,
-            overflow:"hidden",
-            boxShadow:"0 16px 48px rgba(0,0,0,0.7)",
-            border:"1px solid rgba(255,255,255,0.1)",
-          }}>
+        <div className="md-hero-inner">
+          {/* ── Poster ── */}
+          <div className="md-poster">
             {movie.posterUrl
-              ? <img src={movie.posterUrl} alt={movie.title}
-                  style={{width:"100%",display:"block"}} loading="eager" decoding="async"
-                  onError={e=>e.target.style.display="none"} />
-              : <div style={{aspectRatio:"2/3",background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"3rem"}}>🎬</div>
-            }
+              ? <img src={movie.posterUrl} alt={movie.title} loading="eager" decoding="async"
+                  onError={e => e.target.style.display="none"} />
+              : <div className="md-poster-ph">🎬</div>}
           </div>
 
-          {/* Info — takes remaining space */}
-          <div style={{flex:1, minWidth:"min(240px,100%)"}}>
-            {/* Tags */}
-            <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
-              <span className="home-tag">{movie.category||"Feature Film"}</span>
-              {movie.language && <span className="home-tag-outline">{movie.language}</span>}
-              {movie.genre?.slice(0,3).map(g => <span key={g} className="home-tag-outline">{g}</span>)}
+          {/* ── Info ── */}
+          <div className="md-info">
+            {/* Back link */}
+            <Link to="/movies" style={{ fontSize:".74rem", color:"rgba(255,255,255,.38)", textDecoration:"none", display:"inline-block", marginBottom:18, letterSpacing:".01em" }}>
+              ← All Films
+            </Link>
+
+            {/* Genre / category tags */}
+            <div className="md-tags">
+              <span className="md-tag">{movie.category||"Feature Film"}</span>
+              {movie.language && <span className="md-tag-outline">{movie.language}</span>}
+              {movie.genre?.slice(0,3).map(g => <span key={g} className="md-tag-outline">{g}</span>)}
             </div>
 
             {/* Title */}
-            <h1 style={{
-              fontFamily:"'Playfair Display',serif",
-              fontSize:"clamp(1.4rem,4vw,3rem)",
-              fontWeight:900, lineHeight:1.1,
-              margin:"0 0 10px",
-              textShadow:"0 2px 16px rgba(0,0,0,0.6)",
-            }}>{movie.title}</h1>
+            <h1 className="md-title">{movie.title}</h1>
 
             {/* Rating + Verdict */}
-            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+            <div className="md-score-row">
               {avgRating && (
-                <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  <span style={{color:"var(--gold)",fontSize:"1.1rem",fontWeight:700}}>{avgRating}</span>
-                  <span style={{color:"var(--gold)",fontSize:"0.8rem"}}>{stars(avgRating)}</span>
-                  <span style={{color:"var(--muted)",fontSize:"0.74rem"}}>({movie.reviews.length})</span>
+                <div className="md-rating">
+                  <span className="md-rating-num">⭐ {avgRating}</span>
+                  <span className="md-rating-cnt">({movie.reviews.length} reviews)</span>
                 </div>
               )}
-              <span style={{
-                background:`${verdictColor}22`, border:`1px solid ${verdictColor}`,
-                color:verdictColor, fontSize:"0.68rem", fontWeight:700,
-                padding:"3px 10px", borderRadius:3, letterSpacing:"0.08em", textTransform:"uppercase",
+              <span className="md-verdict-badge" style={{
+                background:`${verdictColor}25`,
+                border:`1.5px solid ${verdictColor}`,
+                color: verdictColor,
               }}>{movie.verdict||"Upcoming"}</span>
             </div>
 
-            {/* Meta — compact wrapping chips */}
-            <div style={{display:"flex",flexWrap:"wrap",gap:"6px 12px",marginBottom:12,fontSize:"0.78rem",color:"rgba(255,255,255,.6)"}}>
-              {movie.director && <span>🎬 {movie.director}</span>}
+            {/* Meta row */}
+            <div className="md-meta-row">
+              {movie.director  && <span>🎬 {movie.director}</span>}
               {(movie.releaseDate||movie.releaseTBA) && <span>🗓 {movie.releaseTBA?"TBA":fmtDate(movie.releaseDate)}</span>}
               {movie.runtime   && <span>⏱ {movie.runtime}</span>}
-              {movie.boxOffice?.total && <span>📊 {movie.boxOffice.total}</span>}
-              {movie.imdbRating && <span><span style={{color:"#f5c518",fontWeight:700}}>IMDb</span> {movie.imdbRating}</span>}
+              {movie.budget    && <span>💰 {movie.budget}</span>}
+              {movie.imdbRating && <span><span style={{color:"#f5c518",fontWeight:700,fontSize:".7rem"}}>IMDb</span> {movie.imdbRating}</span>}
             </div>
 
-            {/* Production chips */}
-            {(movie.productionId||(movie.collaborators||[]).length>0) && (
-              <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
+            {/* Synopsis */}
+            {movie.synopsis && <p className="md-synopsis">{movie.synopsis}</p>}
+
+            {/* CTA buttons */}
+            <div className="md-actions">
+              {movie.media?.trailer?.ytId && (
+                <button className="md-btn-play" onClick={() => {
+                  setTab("overview");
+                  setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200);
+                }}>▶ Watch Trailer</button>
+              )}
+              <button className="md-btn-outline" onClick={() => setTab("cast")}>👥 Cast</button>
+              <button className="md-btn-outline" onClick={() => setTab("media")}>🎵 Songs</button>
+              {isOwner && (
+                <button className="btn btn-gold btn-sm" onClick={() => { setEditing(true); setTab("overview"); }}>✏ Edit</button>
+              )}
+            </div>
+
+            {/* Production houses */}
+            {(movie.productionId || (movie.collaborators||[]).length > 0) && (
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap", marginBottom:14 }}>
                 {movie.productionId && (
-                  <Link to={`/production/${movie.productionId._id||movie.productionId}`} className="prod-chip">
-                    {movie.productionId.logo && <SafeImg src={movie.productionId.logo} alt="" style={{width:16,height:16,borderRadius:3,objectFit:"cover"}} />}
-                    <span>{movie.productionId.name}</span>
+                  <Link to={`/production/${movie.productionId._id||movie.productionId}`} className="md-prod-chip">
+                    {movie.productionId.logo && <SafeImg src={movie.productionId.logo} alt="" style={{width:15,height:15,borderRadius:3,objectFit:"cover"}} />}
+                    {movie.productionId.name}
                   </Link>
                 )}
-                {(movie.collaborators||[]).map(c=>(
-                  <Link key={c._id||c} to={`/production/${c._id||c}`} className="prod-chip prod-chip-collab">
-                    {c.logo&&<SafeImg src={c.logo} alt="" style={{width:16,height:16,borderRadius:3,objectFit:"cover"}} />}
-                    <span>{c.name}</span>
+                {(movie.collaborators||[]).map(c => (
+                  <Link key={c._id||c} to={`/production/${c._id||c}`} className="md-prod-chip">
+                    {c.logo && <SafeImg src={c.logo} alt="" style={{width:15,height:15,borderRadius:3,objectFit:"cover"}} />}
+                    {c.name}
                   </Link>
                 ))}
               </div>
             )}
 
-            {/* Synopsis — clamped on mobile */}
-            {movie.synopsis && (
-              <p style={{
-                fontSize:"clamp(0.8rem,2vw,0.9rem)", color:"rgba(255,255,255,0.7)",
-                lineHeight:1.65, maxWidth:580, margin:"0 0 18px",
-                display:"-webkit-box", WebkitLineClamp:4, WebkitBoxOrient:"vertical", overflow:"hidden",
-              }}>{movie.synopsis}</p>
-            )}
-
-            {/* Action buttons — wrap on small screens */}
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {movie.media?.trailer?.ytId && (
-                <button className="btn-hero-play" style={{fontSize:"clamp(.76rem,2vw,.88rem)",padding:"9px 16px"}} onClick={() => {
-                  setTab("overview");
-                  setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200);
-                }}>▶ Trailer</button>
-              )}
-              <button className="btn-hero-info" style={{fontSize:"clamp(.74rem,2vw,.84rem)",padding:"9px 14px"}} onClick={() => setTab("cast")}>👥 Cast</button>
-              <button className="btn-hero-info" style={{fontSize:"clamp(.74rem,2vw,.84rem)",padding:"9px 14px"}} onClick={() => setTab("media")}>🎵 Songs</button>
-              {isOwner && (
-                <button className="btn btn-gold btn-sm" onClick={()=>{setEditing(true);setTab("overview");}}>✏ Edit</button>
-              )}
-            </div>
-
-            {/* Box office — inline on mobile (no sidebar) */}
-            {(movie.boxOffice?.opening||movie.boxOffice?.total) && (
-              <div style={{
-                display:"flex", gap:16, flexWrap:"wrap",
-                marginTop:16, padding:"12px 16px",
-                background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)",
-                borderRadius:8,
-              }}>
-                {movie.boxOffice.opening   && <div><div style={{fontSize:".6rem",color:"var(--muted)",marginBottom:2}}>Opening</div><div style={{fontWeight:700,color:"var(--gold)",fontSize:".82rem"}}>{movie.boxOffice.opening}</div></div>}
-                {movie.boxOffice.firstWeek && <div><div style={{fontSize:".6rem",color:"var(--muted)",marginBottom:2}}>First Week</div><div style={{fontWeight:700,color:"var(--gold)",fontSize:".82rem"}}>{movie.boxOffice.firstWeek}</div></div>}
-                {movie.boxOffice.total     && <div><div style={{fontSize:".6rem",color:"var(--muted)",marginBottom:2}}>Total</div><div style={{fontWeight:800,color:"var(--gold)",fontSize:".9rem"}}>{movie.boxOffice.total}</div></div>}
+            {/* Box office mini-strip */}
+            {(movie.boxOffice?.opening || movie.boxOffice?.firstWeek || movie.boxOffice?.total) && (
+              <div className="md-bo-row">
+                {movie.boxOffice.opening   && <div className="md-bo-item"><div className="md-bo-label">Opening</div><div className="md-bo-val">{movie.boxOffice.opening}</div></div>}
+                {movie.boxOffice.firstWeek && <div className="md-bo-item"><div className="md-bo-label">First Week</div><div className="md-bo-val">{movie.boxOffice.firstWeek}</div></div>}
+                {movie.boxOffice.total     && <div className="md-bo-item"><div className="md-bo-label">Total</div><div className="md-bo-val">{movie.boxOffice.total}</div></div>}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ══ TABS ══ */}
-      <div style={{
-        borderBottom:"1px solid var(--border)",
-        background:"rgba(15,15,15,0.97)",
-        backdropFilter:"blur(12px)",
-        position:"sticky", top:58, zIndex:10,
-        overflowX:"auto",
-      }}>
-        <div style={{display:"flex",borderBottom:"none",margin:0,padding:"0 12px",whiteSpace:"nowrap",scrollbarWidth:"none",minWidth:"max-content"}}>
-          {["overview","cast","media","boxoffice","news","reviews"].map(t=>(
-            <button key={t}
-              style={{
-                padding:"11px 14px",
-                background:"none", border:"none", cursor:"pointer",
-                fontWeight:700, fontSize:"clamp(.72rem,2vw,.8rem)",
-                color: tab===t ? "var(--gold)" : "var(--muted)",
-                borderBottom: tab===t ? "2px solid var(--gold)" : "2px solid transparent",
-                whiteSpace:"nowrap", transition:"all .18s", flexShrink:0,
-              }}
-              onClick={()=>{setTab(t);setEditing(false);setEditBO(false);}}>
-              {t==="boxoffice"?"Box Office":t.charAt(0).toUpperCase()+t.slice(1)}
-              {t==="reviews"&&movie.reviews?.length?` (${movie.reviews.length})`:""}
-              {t==="news"&&movie.news?.length?` (${movie.news.length})`:""}
+      {/* ══════════════════════════════════════════
+          STICKY TABS
+      ══════════════════════════════════════════ */}
+      <div className="md-tabs-bar">
+        <div className="md-tabs-inner">
+          {["overview","cast","media","boxoffice","news","reviews"].map(t => (
+            <button key={t} className={`md-tab${tab===t?" on":""}`}
+              onClick={() => { setTab(t); setEditing(false); setEditBO(false); }}>
+              {t==="boxoffice" ? "Box Office" : t.charAt(0).toUpperCase()+t.slice(1)}
+              {t==="reviews" && movie.reviews?.length ? ` (${movie.reviews.length})` : ""}
+              {t==="news"    && movie.news?.length    ? ` (${movie.news.length})`    : ""}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════
           TAB CONTENT
-      ══════════════════════════════════════════════════ */}
-      <div style={{background:"var(--bg)",minHeight:400}}>
+      ══════════════════════════════════════════ */}
+      <div className="md-body">
 
         {/* ── OVERVIEW ── */}
         {tab==="overview" && !editing && (
-          <div style={{padding:"20px 16px",maxWidth:980}}>
+          <div style={{ maxWidth:860 }}>
             {movie.synopsis
-              ? <p style={{color:"#b0a898",lineHeight:1.8,fontSize:"clamp(.85rem,2vw,.98rem)",marginBottom:28}}>{movie.synopsis}</p>
-              : <p style={{color:"var(--muted)"}}>No synopsis available.</p>}
+              ? <p style={{ color:"rgba(255,255,255,.7)", lineHeight:1.8, fontSize:"clamp(.86rem,2vw,.96rem)", marginBottom:28 }}>{movie.synopsis}</p>
+              : <p style={{ color:"rgba(255,255,255,.35)" }}>No synopsis available.</p>}
 
-            {/* ── Quick cast & crew strip ── */}
-            {(movie.cast||[]).length>0 && (
-              <div style={{marginBottom:32}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-                  <h3 style={{fontSize:"0.7rem",fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--muted)",margin:0}}>Cast & Crew</h3>
-                  <button className="btn btn-ghost btn-sm" style={{fontSize:"0.7rem"}} onClick={()=>setTab("cast")}>See all →</button>
-                </div>
-                {crew.length>0 && (
-                  <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
-                    {crew.slice(0,6).map((c,i)=>(
-                      <div key={c.castId||i} style={{display:"flex",alignItems:"center",gap:7,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:8,padding:"6px 10px",cursor:c.castId?"pointer":"default"}}
-                        onClick={()=>c.castId&&navigate(castPath({ _id: c.castId }))}>
-                        <div style={{width:28,height:28,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".8rem"}}>
-                          {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" onError={e=>e.target.style.display="none"}/>:"👤"}
-                        </div>
-                        <div>
-                          <div style={{fontWeight:700,fontSize:"0.78rem",lineHeight:1.2}}>{c.name}</div>
-                          <div style={{fontSize:"0.6rem",color:"var(--gold)",fontWeight:600}}>{c.type}{c.role?` · ${c.role}`:""}</div>
-                        </div>
+            {/* Crew pills */}
+            {crew.length > 0 && (
+              <div style={{ marginBottom:24 }}>
+                <p className="md-sec-label">Director & Crew</p>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {crew.slice(0,8).map((c,i) => (
+                    <div key={c.castId||i} className="md-crew-pill"
+                      onClick={() => c.castId && navigate(castPath({ _id:c.castId }))}>
+                      <div className="md-crew-av">
+                        {c.photo
+                          ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/>
+                          : "👤"}
                       </div>
-                    ))}
-                  </div>
-                )}
-                {actors.length>0 && (
-                  <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollbarWidth:"none"}}>
-                    {actors.slice(0,12).map((c,i)=>(
-                      <div key={c.castId||i} style={{flexShrink:0,width:76,cursor:c.castId?"pointer":"default",textAlign:"center"}}
-                        onClick={()=>c.castId&&navigate(castPath({ _id: c.castId }))}>
-                        <div style={{width:60,height:60,borderRadius:"50%",overflow:"hidden",background:"var(--bg3)",margin:"0 auto 5px",border:"2px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem"}}>
-                          {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" onError={e=>e.target.style.display="none"}/>:"👤"}
-                        </div>
-                        <div style={{fontSize:"0.68rem",fontWeight:600,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
-                        {c.role&&<div style={{fontSize:"0.58rem",color:"var(--gold)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.role}</div>}
-                      </div>
-                    ))}
-                    {actors.length>12&&(
-                      <div style={{flexShrink:0,width:76,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}} onClick={()=>setTab("cast")}>
-                        <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(201,151,58,0.1)",border:"2px dashed var(--gold)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:"1.2rem"}}>+{actors.length-12}</div>
-                        <div style={{fontSize:"0.66rem",color:"var(--gold)"}}>more</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Songs preview ── */}
-            {(movie.media?.songs||[]).length>0 && (
-              <div style={{marginBottom:32}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-                  <h3 style={{fontSize:"0.7rem",fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--muted)",margin:0}}>Songs ({movie.media.songs.length})</h3>
-                  <button className="btn btn-ghost btn-sm" style={{fontSize:"0.7rem"}} onClick={()=>setTab("media")}>See all →</button>
-                </div>
-                <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
-                  {movie.media.songs.slice(0,8).map((s,i)=>(
-                    <div key={i} style={{flexShrink:0,width:120,cursor:"pointer",borderRadius:7,overflow:"hidden",background:"var(--bg2)",border:"1px solid var(--border)",transition:"border-color 0.15s"}}
-                      onClick={()=>navigate(movie ? songPath(movie, i) : `/song/${id}/${i}`)}
-                      onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-                      <div style={{width:"100%",height:70,background:"var(--bg3)",position:"relative",overflow:"hidden"}}>
-                        {s.ytId&&<img src={`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`} alt={s.title} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" onError={e=>e.target.style.opacity="0.3"}/>}
-                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.22)",fontSize:"1.2rem"}}>♪</div>
-                      </div>
-                      <div style={{padding:"5px 7px"}}>
-                        <div style={{fontWeight:600,fontSize:"0.7rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</div>
-                        {s.singer&&<div style={{fontSize:"0.6rem",color:"var(--gold)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.singer}</div>}
+                      <div>
+                        <div className="md-crew-name">{c.name}</div>
+                        <div className="md-crew-role">{c.type}{c.role?` · ${c.role}`:""}</div>
                       </div>
                     </div>
                   ))}
@@ -729,20 +924,81 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               </div>
             )}
 
+            {/* Actor circles */}
+            {actors.length > 0 && (
+              <div style={{ marginBottom:28 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                  <p className="md-sec-label" style={{ margin:0 }}>Cast</p>
+                  <button className="btn btn-ghost btn-sm" style={{ fontSize:".7rem" }} onClick={() => setTab("cast")}>See all →</button>
+                </div>
+                <div className="md-hscroll">
+                  {actors.slice(0,14).map((c,i) => (
+                    <div key={c.castId||i} className="md-actor"
+                      onClick={() => c.castId && navigate(castPath({ _id:c.castId }))}
+                      onMouseEnter={e => e.currentTarget.querySelector(".md-actor-av").style.borderColor="#c9973a"}
+                      onMouseLeave={e => e.currentTarget.querySelector(".md-actor-av").style.borderColor="rgba(255,255,255,.1)"}>
+                      <div className="md-actor-av">
+                        {c.photo
+                          ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/>
+                          : "👤"}
+                      </div>
+                      <div className="md-actor-name">{c.name}</div>
+                      {c.role && <div className="md-actor-role">{c.role}</div>}
+                    </div>
+                  ))}
+                  {actors.length > 14 && (
+                    <div className="md-actor" onClick={() => setTab("cast")} style={{ cursor:"pointer" }}>
+                      <div className="md-actor-av" style={{ borderStyle:"dashed", borderColor:"#c9973a", background:"rgba(201,151,58,.08)", color:"#c9973a", fontSize:"1rem" }}>
+                        +{actors.length-14}
+                      </div>
+                      <div className="md-actor-name" style={{ color:"#c9973a" }}>more</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Songs preview */}
+            {(movie.media?.songs||[]).length > 0 && (
+              <div style={{ marginBottom:28 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                  <p className="md-sec-label" style={{ margin:0 }}>Songs · {movie.media.songs.length}</p>
+                  <button className="btn btn-ghost btn-sm" style={{ fontSize:".7rem" }} onClick={() => setTab("media")}>See all →</button>
+                </div>
+                <div className="md-hscroll">
+                  {movie.media.songs.slice(0,8).map((s,i) => (
+                    <div key={i} className="md-song"
+                      onClick={() => navigate(movie ? songPath(movie,i) : `/song/${id}/${i}`)}>
+                      <div className="md-song-thumb">
+                        {s.ytId && <img src={`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`} alt={s.title} loading="lazy" onError={e=>e.target.style.opacity=".2"}/>}
+                        <div className="md-song-icon">♪</div>
+                      </div>
+                      <div className="md-song-info">
+                        <div className="md-song-title">{s.title}</div>
+                        {s.singer && <div className="md-song-singer">{s.singer}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Trailer */}
             {movie.media?.trailer?.ytId && (
-              <>
-                <h3 className="section-sub-title" style={{marginBottom:12,fontSize:"clamp(.82rem,2vw,.94rem)"}}>Official Trailer</h3>
-                <div ref={trailerRef} className="trailer-embed" style={{maxWidth:680,marginBottom:28}}>
+              <div style={{ marginBottom:28 }}>
+                <p className="md-sec-label">Official Trailer</p>
+                <div ref={trailerRef} className="md-trailer">
                   <iframe src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen title="Trailer" />
                 </div>
-              </>
+              </div>
             )}
+
             {isOwner && (
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",paddingTop:14,borderTop:"1px solid var(--border)"}}>
-                <button className="btn btn-gold btn-sm" onClick={()=>setEditing(true)}>✏ Edit Details</button>
-                <button className="btn btn-outline btn-sm" onClick={()=>{setEditBO(true);setTab("boxoffice");}}>📊 Box Office</button>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", paddingTop:16, borderTop:"1px solid rgba(255,255,255,.07)" }}>
+                <button className="btn btn-gold btn-sm" onClick={() => setEditing(true)}>✏ Edit Details</button>
+                <button className="btn btn-outline btn-sm" onClick={() => { setEditBO(true); setTab("boxoffice"); }}>📊 Box Office</button>
               </div>
             )}
           </div>
@@ -750,11 +1006,11 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── OVERVIEW EDIT ── */}
         {tab==="overview" && editing && (
-          <div style={{padding:"32px 24px",maxWidth:900}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-              <h3 style={{fontSize:"1rem",textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--muted)"}}>Edit Movie Details</h3>
-              <div style={{display:"flex",gap:10}}>
-                <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(false)}>Cancel</button>
+          <div style={{ maxWidth:900 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+              <h3 style={{ fontSize:"1rem", textTransform:"uppercase", letterSpacing:"0.08em", color:"rgba(255,255,255,.45)" }}>Edit Movie Details</h3>
+              <div style={{ display:"flex", gap:10 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn btn-gold btn-sm" onClick={saveEdit} disabled={savingEdit}>{savingEdit?"Saving…":"Save Changes"}</button>
               </div>
             </div>
@@ -772,11 +1028,11 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               </div>
             </div>
             <div className="form-grid">
-              <div className="form-group"><label className="form-label">Budget</label><input className="form-input" value={editForm.budget||""} onChange={e=>setE("budget",e.target.value)} /></div>
-              <div className="form-group"><label className="form-label">Runtime</label><input className="form-input" value={editForm.runtime||""} onChange={e=>setE("runtime",e.target.value)} placeholder="e.g. 2h 15m" /></div>
+              <div className="form-group"><label className="form-label">Director</label><input className="form-input" value={editForm.director||""} onChange={e=>setE("director",e.target.value)} /></div>
+              <div className="form-group"><label className="form-label">Producer</label><input className="form-input" value={editForm.producer||""} onChange={e=>setE("producer",e.target.value)} /></div>
             </div>
             <div className="form-grid">
-              <div className="form-group"><label className="form-label">IMDb ID</label><input className="form-input" value={editForm.imdbId||""} onChange={e=>setE("imdbId",e.target.value)} placeholder="tt1234567" /></div>
+              <div className="form-group"><label className="form-label">Runtime</label><input className="form-input" value={editForm.runtime||""} onChange={e=>setE("runtime",e.target.value)} placeholder="e.g. 2h 15m" /></div>
               <div className="form-group"><label className="form-label">IMDb Rating</label><input className="form-input" value={editForm.imdbRating||""} onChange={e=>setE("imdbRating",e.target.value)} placeholder="7.5" /></div>
             </div>
             <div className="form-grid">
@@ -786,205 +1042,148 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             <div className="form-group"><label className="form-label">Genres</label>
               <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                 {GENRES.map(g=>(
-                  <button key={g} type="button" className="badge" onClick={()=>toggleGenre(g)}
-                    style={{cursor:"pointer",borderColor:(editForm.genre||[]).includes(g)?"var(--gold)":"var(--border)",color:(editForm.genre||[]).includes(g)?"var(--gold)":"var(--muted)"}}>
-                    {g}
-                  </button>
+                  <button key={g} type="button" className={`btn btn-sm ${(editForm.genre||[]).includes(g)?"btn-gold":"btn-outline"}`} onClick={()=>toggleGenre(g)}>{g}</button>
                 ))}
               </div>
             </div>
             <div className="form-group"><label className="form-label">Synopsis</label><textarea className="form-textarea" value={editForm.synopsis||""} onChange={e=>setE("synopsis",e.target.value)} style={{minHeight:100}} /></div>
+            <div className="form-group"><label className="form-label">Thumbnail URL</label><input className="form-input" value={editForm.thumbnailUrl||""} onChange={e=>setE("thumbnailUrl",e.target.value)} /></div>
           </div>
         )}
 
         {/* ── CAST ── */}
         {tab==="cast" && (
-          <div style={{padding:"32px 24px"}}>
+          <div>
             {isOwner && (
-              <div style={{display:"flex",justifyContent:"flex-end",marginBottom:28}}>
-                <button className="btn btn-gold btn-sm" onClick={()=>setAddCastModal(true)}>+ Add Cast / Crew</button>
+              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:20 }}>
+                <button className="btn btn-gold btn-sm" onClick={() => setAddCastModal(true)}>+ Add Cast</button>
               </div>
             )}
-            {!crew.length&&!actors.length ? (
-              <div style={{textAlign:"center",padding:"60px 0",color:"var(--muted)"}}>
-                <div style={{fontSize:"3rem",marginBottom:16}}>🎭</div>
-                <p style={{marginBottom:isOwner?16:0}}>No cast information yet.</p>
-                {isOwner&&<button className="btn btn-gold btn-sm" onClick={()=>setAddCastModal(true)}>+ Add Cast / Crew</button>}
+            {/* Crew section */}
+            {crew.length > 0 && (
+              <div style={{ marginBottom:28 }}>
+                <p className="md-sec-label">Director & Crew</p>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {crew.map((c,i) => (
+                    <div key={c.castId||i} className="md-crew-pill"
+                      onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId }))}>
+                      <div className="md-crew-av">
+                        {c.photo ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/> : "👤"}
+                      </div>
+                      <div>
+                        <div className="md-crew-name">{c.name}</div>
+                        <div className="md-crew-role">{c.type}{c.role?` · ${c.role}`:""}</div>
+                      </div>
+                      {isOwner && <button style={{marginLeft:8,background:"none",border:"none",color:"rgba(255,100,100,.6)",cursor:"pointer",fontSize:".75rem"}} onClick={e=>{e.stopPropagation();removeCast(c.castId);}}>✕</button>}
+                    </div>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <>
-                {/* ── KEY CREW ── */}
-                {crew.length>0 && (
-                  <div style={{marginBottom:40}}>
-                    <h3 style={{fontSize:"0.7rem",fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:16,paddingBottom:8,borderBottom:"1px solid var(--border)"}}>Crew</h3>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
-                      {crew.map((c,i)=>(
-                        <div key={c.castId||i}
-                          style={{display:"flex",alignItems:"center",gap:14,background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 16px",cursor:c.castId?"pointer":"default",transition:"border-color 0.15s"}}
-                          onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id: c.castId }))}
-                          onMouseEnter={e=>{ if(c.castId) e.currentTarget.style.borderColor="var(--gold)"; }}
-                          onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-                          <div style={{width:48,height:48,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:"var(--bg3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.3rem",border:"2px solid var(--border)"}}>
-                            {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy" decoding="async" onError={e=>e.target.style.display="none"}/>:"👤"}
-                          </div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontWeight:700,fontSize:"0.9rem",lineHeight:1.3}}>{c.name}</div>
-                            <div style={{fontSize:"0.68rem",color:"var(--gold)",fontWeight:600,marginTop:2}}>{c.type}</div>
-                            {c.role&&<div style={{fontSize:"0.65rem",color:"var(--muted)",marginTop:1}}>{c.role}</div>}
-                          </div>
-                          {isOwner&&<button style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer",fontSize:"0.8rem",padding:"2px 6px",opacity:0.6,flexShrink:0}}
-                            onClick={e=>{e.stopPropagation();removeCast(String(c.castId));}} title="Remove">✕</button>}
-                        </div>
-                      ))}
+            )}
+            {/* Actors grid */}
+            {actors.length > 0 && (
+              <div>
+                <p className="md-sec-label">Actors & Actresses</p>
+                <div className="md-cast-grid">
+                  {actors.map((c,i) => (
+                    <div key={c.castId||i} className="md-cast-card"
+                      onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId }))}>
+                      <div className="md-cast-img">
+                        {c.photo ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/> : "👤"}
+                        {isOwner && <button style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.6)",border:"none",color:"rgba(255,100,100,.8)",cursor:"pointer",borderRadius:4,fontSize:".72rem",padding:"2px 6px"}} onClick={e=>{e.stopPropagation();removeCast(c.castId);}}>✕</button>}
+                      </div>
+                      <div className="md-cast-meta">
+                        <div className="md-cast-cname">{c.name}</div>
+                        <div className="md-cast-type">{c.type}</div>
+                        {c.role && <div className="md-cast-role">{c.role}</div>}
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {/* ── CAST CARDS ── */}
-                {actors.length>0 && (
-                  <div>
-                    <h3 style={{fontSize:"0.7rem",fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase",color:"var(--muted)",marginBottom:16,paddingBottom:8,borderBottom:"1px solid var(--border)"}}>Cast</h3>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:16}}>
-                      {actors.map((c,i)=>(
-                        <div key={c.castId||i}
-                          style={{cursor:c.castId?"pointer":"default",textAlign:"center",position:"relative"}}
-                          onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id: c.castId }))}>
-                          {/* Remove button */}
-                          {isOwner&&<button style={{position:"absolute",top:4,right:4,zIndex:5,background:"rgba(0,0,0,0.7)",border:"none",color:"var(--red)",cursor:"pointer",width:22,height:22,borderRadius:"50%",fontSize:"0.75rem",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity 0.15s"}}
-                            onClick={e=>{e.stopPropagation();removeCast(String(c.castId));}}
-                            onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-                            ref={el=>{
-                              if(!el) return;
-                              const parent=el.closest('[data-cast-card]');
-                              if(parent){parent.addEventListener('mouseenter',()=>el.style.opacity='1');parent.addEventListener('mouseleave',()=>el.style.opacity='0');}
-                            }}>✕</button>}
-                          <div data-cast-card=""
-                            style={{borderRadius:10,overflow:"hidden",background:"var(--bg2)",border:"1px solid var(--border)",transition:"border-color 0.15s,transform 0.15s"}}
-                            onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.transform="translateY(-3px)";const btn=e.currentTarget.previousSibling;if(btn&&isOwner)btn.style.opacity="1";}}
-                            onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.transform="none";const btn=e.currentTarget.previousSibling;if(btn&&isOwner)btn.style.opacity="0";}}>
-                            <div style={{width:"100%",aspectRatio:"2/3",background:"var(--bg3)",overflow:"hidden",position:"relative"}}>
-                              {c.photo
-                                ?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"top"}} onError={e=>e.target.style.display="none"}/>
-                                :<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.5rem"}}>👤</div>}
-                              <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"20px 8px 8px",background:"linear-gradient(to top,rgba(0,0,0,0.8),transparent)"}}>
-                                <div style={{fontSize:"0.62rem",color:"var(--gold)",fontWeight:700}}>{c.type||"Actor"}</div>
-                              </div>
-                            </div>
-                            <div style={{padding:"8px 10px"}}>
-                              <div style={{fontWeight:700,fontSize:"0.78rem",lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</div>
-                              {c.role&&<div style={{fontSize:"0.65rem",color:"var(--muted)",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>as {c.role}</div>}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(movie.cast||[]).length === 0 && (
+              <div className="md-empty"><span style={{fontSize:"2.5rem"}}>👤</span><p>No cast added yet.</p></div>
             )}
           </div>
         )}
 
-        {/* ── MEDIA ── */}
+        {/* ── MEDIA (Songs + Trailer) ── */}
         {tab==="media" && (
-          <div style={{padding:"32px 24px"}}>
-            {/* Trailer */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <h3 className="section-sub-title" style={{margin:0}}>Trailer</h3>
-              {isOwner&&<button className="btn btn-outline btn-sm" onClick={()=>{setTrailerInput(movie.media?.trailer?.ytId||"");setEditTrailer(t=>!t);}}>{editTrailer?"Cancel":"✏ Edit"}</button>}
-            </div>
-            {editTrailer && (
-              <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16}}>
-                <input className="form-input" style={{flex:1}} value={trailerInput} onChange={e=>setTrailerInput(e.target.value)} placeholder="YouTube ID" />
-                <button className="btn btn-gold btn-sm" onClick={saveTrailer} disabled={savingTrailer}>{savingTrailer?"Saving…":"Save"}</button>
+          <div>
+            {isOwner && (
+              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:20, gap:10 }}>
+                <button className="btn btn-outline btn-sm" onClick={() => setEditTrailer(true)}>🎬 Edit Trailer</button>
+                <button className="btn btn-gold btn-sm" onClick={() => setAddSongModal(true)}>+ Add Song</button>
               </div>
             )}
-            {movie.media?.trailer?.ytId
-              ? <div className="trailer-embed" style={{maxWidth:720,marginBottom:40}}><iframe src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Trailer" /></div>
-              : <p style={{color:"var(--muted)",marginBottom:40}}>No trailer added yet.</p>}
-
-            {/* Songs */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-              <h3 className="section-sub-title" style={{margin:0}}>
-                Songs {movie.media?.songs?.length ? <span style={{color:"var(--gold)",fontSize:"0.85em"}}>({movie.media.songs.length})</span> : ""}
-              </h3>
-              {isOwner&&<button className="btn btn-outline btn-sm" onClick={()=>setAddSongModal(true)}>+ Add Song</button>}
-            </div>
-            {(movie.media?.songs||[]).length>0 ? (
-              <div style={{background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden"}}>
-                {movie.media.songs.map((s,i)=>(
-                  <div key={i}
-                    style={{display:"flex",alignItems:"center",gap:0,borderBottom:i<movie.media.songs.length-1?"1px solid rgba(255,255,255,0.05)":"none",cursor:"pointer",transition:"background 0.12s"}}
-                    onClick={()=>navigate(movie ? songPath(movie, i) : `/song/${id}/${i}`)}
-                    onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.04)"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    {/* Track number */}
-                    <div style={{width:44,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)",fontSize:"0.8rem",fontWeight:600}}>{i+1}</div>
-                    {/* Thumbnail */}
-                    <div style={{flexShrink:0,width:54,height:54,background:"var(--bg3)",position:"relative",overflow:"hidden"}}>
-                      {s.ytId
-                        ? <img src={`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`} alt={s.title} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.opacity="0.2"}/>
-                        : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.4rem",color:"var(--muted)"}}>♪</div>}
-                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0)",opacity:0,transition:"all 0.15s",fontSize:"1.2rem",color:"#fff"}}
-                        onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,0,0,0.5)";e.currentTarget.style.opacity="1";}}
-                        onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,0,0,0)";e.currentTarget.style.opacity="0";}}>▶</div>
-                    </div>
-                    {/* Info */}
-                    <div style={{flex:1,padding:"0 16px",minWidth:0}}>
-                      <div style={{fontWeight:600,fontSize:"0.88rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.title}</div>
-                      <div style={{fontSize:"0.72rem",color:"var(--gold)",marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                        {s.singer && <span>🎤 {s.singer}</span>}
-                        {s.musicDirector && <span style={{marginLeft:10,color:"var(--muted)"}}>🎼 {s.musicDirector}</span>}
-                      </div>
-                    </div>
-                    {/* Actions */}
-                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 16px",flexShrink:0}}>
-                      {s.ytId && <a href={`https://youtube.com/watch?v=${s.ytId}`} target="_blank" rel="noreferrer"
-                        style={{color:"var(--muted)",fontSize:"0.72rem",textDecoration:"none",padding:"4px 8px",border:"1px solid var(--border)",borderRadius:5,transition:"all 0.12s"}}
-                        onClick={e=>e.stopPropagation()}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.color="var(--gold)";}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--muted)";}}>YT ↗</a>}
-                      {isOwner && <button className="news-action-btn news-action-delete" style={{fontSize:"0.7rem",opacity:0.7}}
-                        onClick={e=>{e.stopPropagation();removeSong(i);}}>🗑</button>}
-                    </div>
+            {movie.media?.trailer?.ytId && (
+              <div style={{ marginBottom:36 }}>
+                <p className="md-sec-label">Official Trailer</p>
+                <div ref={trailerRef} className="md-trailer">
+                  <iframe src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen title="Trailer" />
+                </div>
+                {editTrailer && (
+                  <div style={{ display:"flex", gap:10, marginTop:12, flexWrap:"wrap" }}>
+                    <input className="form-input" value={trailerInput} onChange={e=>setTrailerInput(e.target.value)} placeholder="YouTube ID or URL" style={{ flex:1, minWidth:200 }} />
+                    <button className="btn btn-gold btn-sm" onClick={saveTrailer} disabled={savingTrailer}>{savingTrailer?"Saving…":"Save"}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditTrailer(false)}>Cancel</button>
                   </div>
-                ))}
+                )}
               </div>
-            ) : (
-              <div style={{textAlign:"center",padding:"48px 24px",color:"var(--muted)",background:"var(--bg2)",borderRadius:12,border:"1px dashed var(--border)"}}>
-                <div style={{fontSize:"2.5rem",marginBottom:12}}>🎵</div>
-                <p style={{marginBottom:isOwner?16:0}}>No songs added yet.</p>
-                {isOwner&&<button className="btn btn-gold btn-sm" onClick={()=>setAddSongModal(true)}>+ Add First Song</button>}
+            )}
+            {(movie.media?.songs||[]).length > 0 && (
+              <div>
+                <p className="md-sec-label">Songs · {movie.media.songs.length}</p>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {movie.media.songs.map((s,i) => (
+                    <div key={i} style={{ display:"flex", gap:12, alignItems:"center", padding:"10px 12px", background:"#1a1a1a", border:"1px solid rgba(255,255,255,.07)", borderRadius:8, cursor:"pointer", transition:"border-color .16s" }}
+                      onClick={() => navigate(movie ? songPath(movie,i) : `/song/${id}/${i}`)}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(201,151,58,.4)"}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,.07)"}>
+                      <div style={{ flexShrink:0, width:60, height:40, borderRadius:5, overflow:"hidden", background:"#272727", position:"relative" }}>
+                        {s.ytId && <img src={`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`} alt={s.title} style={{ width:"100%",height:"100%",objectFit:"cover" }} loading="lazy" onError={e=>e.target.style.opacity=".2"}/>}
+                        <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.25)",fontSize:".9rem" }}>♪</div>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:600, fontSize:".82rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color:"#f1f1f1" }}>{s.title}</div>
+                        {s.singer && <div style={{ fontSize:".7rem", color:"#c9973a", marginTop:2 }}>{s.singer}</div>}
+                        {s.musicDirector && <div style={{ fontSize:".66rem", color:"rgba(255,255,255,.35)", marginTop:1 }}>🎼 {s.musicDirector}</div>}
+                      </div>
+                      {s.ytId && <a href={`https://youtube.com/watch?v=${s.ytId}`} target="_blank" rel="noreferrer" style={{ fontSize:".68rem",color:"#c9973a",fontWeight:700,opacity:.7,padding:"4px 8px",flexShrink:0 }} onClick={e=>e.stopPropagation()}>YT↗</a>}
+                      {isOwner && <button style={{ background:"none",border:"none",color:"rgba(255,100,100,.6)",cursor:"pointer",fontSize:".75rem",padding:"4px 8px",flexShrink:0 }} onClick={e=>{e.stopPropagation();removeSong(i);}}>✕</button>}
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
+            {!movie.media?.trailer?.ytId && !movie.media?.songs?.length && (
+              <div className="md-empty"><span style={{fontSize:"2.5rem"}}>🎵</span><p>No media added yet.</p></div>
             )}
           </div>
         )}
 
         {/* ── BOX OFFICE ── */}
         {tab==="boxoffice" && !editBO && (
-          <div style={{padding:"32px 24px",maxWidth:700}}>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:32}}>
-              {[["Opening Weekend",movie.boxOffice?.opening],["First Week",movie.boxOffice?.firstWeek],["Total Collection",movie.boxOffice?.total]].map(([label,val])=>(
-                <div key={label} className="boxoffice-card">
-                  <div className="boxoffice-label">{label}</div>
-                  <div className="boxoffice-value">{val||"TBA"}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{textAlign:"center"}}>
-              <span className={`movie-card-verdict ${verdictClass(movie.verdict)}`} style={{display:"inline-block",padding:"6px 20px",fontSize:"0.85rem",fontWeight:700,borderRadius:4}}>
-                Verdict: {movie.verdict||"Upcoming"}
-              </span>
-            </div>
-            {isOwner && <div style={{marginTop:24,textAlign:"center"}}><button className="btn btn-outline btn-sm" onClick={()=>setEditBO(true)}>✏ Update Box Office</button></div>}
+          <div style={{ maxWidth:600 }}>
+            <table className="md-bo-table">
+              <tbody>
+                {[["Opening Weekend", movie.boxOffice?.opening],["First Week", movie.boxOffice?.firstWeek],["Total Collection", movie.boxOffice?.total],["Budget", movie.budget],["Verdict", movie.verdict]].map(([k,v])=>v?(
+                  <tr key={k}><td>{k}</td><td>{v}</td></tr>
+                ):null)}
+              </tbody>
+            </table>
+            {isOwner && <div style={{ marginTop:24 }}><button className="btn btn-outline btn-sm" onClick={() => setEditBO(true)}>✏ Update Box Office</button></div>}
           </div>
         )}
         {tab==="boxoffice" && editBO && (
-          <div style={{padding:"32px 24px",maxWidth:700}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-              <h3 style={{fontSize:"1rem",textTransform:"uppercase",letterSpacing:"0.08em",color:"var(--muted)"}}>Update Box Office</h3>
-              <div style={{display:"flex",gap:10}}>
-                <button className="btn btn-ghost btn-sm" onClick={()=>setEditBO(false)}>Cancel</button>
+          <div style={{ maxWidth:700 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+              <h3 style={{ fontSize:"1rem", textTransform:"uppercase", letterSpacing:"0.08em", color:"rgba(255,255,255,.45)" }}>Update Box Office</h3>
+              <div style={{ display:"flex", gap:10 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditBO(false)}>Cancel</button>
                 <button className="btn btn-gold btn-sm" onClick={saveBO} disabled={savingBO}>{savingBO?"Saving…":"Save"}</button>
               </div>
             </div>
@@ -1001,17 +1200,20 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── NEWS ── */}
         {tab==="news" && (
-          <div style={{padding:"32px 24px"}}>
-            {canNews && <div style={{display:"flex",justifyContent:"flex-end",marginBottom:20}}><button className="btn btn-gold btn-sm" onClick={()=>{setEditingNews(null);setNewsModal(true);}}>+ Add News</button></div>}
+          <div>
+            {canNews && <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:20 }}><button className="btn btn-gold btn-sm" onClick={() => { setEditingNews(null); setNewsModal(true); }}>+ Add News</button></div>}
             {movie.news?.length ? (
               <div className="news-grid">
-                {[...movie.news].reverse().map(n=>(
+                {[...movie.news].reverse().map(n => (
                   <div key={n._id} className="news-card">
                     <SafeNewsImg src={n.imageUrl} alt={n.title} />
                     <div className="news-card-body">
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
                         <div className="news-card-category">{n.category||"Update"}</div>
-                        {canNews && <div style={{display:"flex",gap:6}}><button className="news-action-btn" onClick={()=>{setEditingNews(n);setNewsModal(true);}}>✏</button><button className="news-action-btn news-action-delete" onClick={()=>handleDeleteNews(n._id)}>🗑</button></div>}
+                        {canNews && <div style={{ display:"flex", gap:6 }}>
+                          <button className="news-action-btn" onClick={() => { setEditingNews(n); setNewsModal(true); }}>✏</button>
+                          <button className="news-action-btn news-action-delete" onClick={() => handleDeleteNews(n._id)}>🗑</button>
+                        </div>}
                       </div>
                       <div className="news-card-title">{n.title}</div>
                       <div className="news-card-content">{n.content}</div>
@@ -1021,22 +1223,26 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 ))}
               </div>
             ) : (
-              <div className="empty-state" style={{paddingTop:40}}><p style={{color:"var(--muted)"}}>No news yet.</p>{canNews&&<button className="btn btn-gold btn-sm" style={{marginTop:16}} onClick={()=>setNewsModal(true)}>+ Add First News</button>}</div>
+              <div className="md-empty">
+                <span style={{fontSize:"2.5rem"}}>📰</span>
+                <p>No news yet.</p>
+                {canNews && <button className="btn btn-gold btn-sm" style={{ marginTop:12 }} onClick={() => setNewsModal(true)}>+ Add First News</button>}
+              </div>
             )}
           </div>
         )}
 
         {/* ── REVIEWS ── */}
         {tab==="reviews" && (
-          <div style={{padding:"32px 24px",maxWidth:800}}>
-            <div className="review-form" style={{marginBottom:40}}>
-              <h3 style={{marginBottom:16,fontSize:"1rem"}}>Write a Review</h3>
+          <div style={{ maxWidth:800 }}>
+            <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,.08)", borderRadius:10, padding:"20px", marginBottom:32 }}>
+              <h3 style={{ marginBottom:16, fontSize:".94rem", fontWeight:700 }}>Write a Review</h3>
               <form onSubmit={submitReview}>
-                <div className="form-grid" style={{marginBottom:12}}>
-                  <div className="form-group" style={{marginBottom:0}}><label className="form-label">Your Name</label><input className="form-input" required value={rvUser} onChange={e=>setRvUser(e.target.value)} /></div>
-                  <div className="form-group" style={{marginBottom:0}}><label className="form-label">Rating</label>
+                <div className="form-grid" style={{ marginBottom:12 }}>
+                  <div className="form-group" style={{ marginBottom:0 }}><label className="form-label">Your Name</label><input className="form-input" required value={rvUser} onChange={e=>setRvUser(e.target.value)} /></div>
+                  <div className="form-group" style={{ marginBottom:0 }}><label className="form-label">Rating</label>
                     <select className="form-select" value={rvRating} onChange={e=>setRvRating(Number(e.target.value))}>
-                      {[5,4,3,2,1].map(n=><option key={n} value={n}>{n} — {["","Poor","Below Average","Average","Good","Excellent"][n]}</option>)}
+                      {[5,4,3,2,1].map(n=><option key={n} value={n}>{n} ★ — {["","Poor","Below Average","Average","Good","Excellent"][n]}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1046,54 +1252,51 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             </div>
             {movie.reviews?.length ? (
               <div className="review-list">
-                {[...movie.reviews].reverse().map((r,i)=>(
+                {[...movie.reviews].reverse().map((r,i) => (
                   <div key={i} className="review-item">
                     <div className="review-header">
                       <span className="review-user">{r.user}</span>
-                      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                         <span className="review-stars">{stars(r.rating)}</span>
-                        {r.date&&<span className="review-date">{r.date}</span>}
+                        {r.date && <span className="review-date">{r.date}</span>}
                       </div>
                     </div>
                     <p className="review-text">{r.text}</p>
                   </div>
                 ))}
               </div>
-            ) : <p style={{color:"var(--muted)",marginTop:24}}>No reviews yet. Be the first!</p>}
+            ) : <p style={{ color:"rgba(255,255,255,.35)", marginTop:20 }}>No reviews yet. Be the first!</p>}
           </div>
         )}
       </div>
 
-      {/* ══ RELATED SECTIONS (deferred — allMovies loads after idle) ══ */}
-      <div className="home-sections" style={{paddingTop:24,background:"var(--bg)"}}>
-        {actors.length>0 && (
+      {/* ══ RELATED SECTIONS ══ */}
+      <div className="home-sections" style={{ paddingTop:16, background:"var(--bg)" }}>
+        {actors.length > 0 && (
           <HomeRow title="🎭 Full Cast">
-            {[...crew,...actors].map((c,i)=>(
+            {[...crew,...actors].map((c,i) => (
               <MiniCastCard key={c.castId||i} person={c}
-                onClick={()=>c.castId&&navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id: c.castId }))} />
+                onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId }))} />
             ))}
           </HomeRow>
         )}
-        {sameDirector.length>0 && (
+        {sameDirector.length > 0 && (
           <HomeRow title={`🎬 More by ${movie.director}`}>
-            {sameDirector.map(m=>(
-              <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))} />
-            ))}
+            {sameDirector.map(m => <MiniMovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
           </HomeRow>
         )}
-        {relatedMovies.length>0 && (
+        {relatedMovies.length > 0 && (
           <HomeRow title="🎥 Similar Films" tag="Related">
-            {relatedMovies.map(m=>(
-              <MiniMovieCard key={m._id} movie={m} onClick={()=>navigate(moviePath(m))} />
-            ))}
+            {relatedMovies.map(m => <MiniMovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
           </HomeRow>
         )}
       </div>
 
       {/* ── Modals ── */}
-      {newsModal&&<NewsModal movieId={id} existing={editingNews} onSave={handleNewsSaved} onClose={()=>{setNewsModal(false);setEditingNews(null);}} />}
-      {addCastModal&&<AddCastModal movieId={id} onAdded={m=>{setMovie(prev=>({...prev,cast:m.cast}));}} onClose={()=>setAddCastModal(false)} />}
-      {addSongModal&&<AddSongModal movieId={id} onAdded={m=>{setMovie(prev=>({...prev,media:m.media}));}} onClose={()=>setAddSongModal(false)} />}
+      {newsModal    && <NewsModal movieId={id} existing={editingNews} onSave={handleNewsSaved} onClose={()=>{setNewsModal(false);setEditingNews(null);}} />}
+      {addCastModal && <AddCastModal movieId={id} onAdded={m=>{setMovie(prev=>({...prev,cast:m.cast}));}} onClose={()=>setAddCastModal(false)} />}
+      {addSongModal && <AddSongModal movieId={id} onAdded={m=>{setMovie(prev=>({...prev,media:m.media}));}} onClose={()=>setAddSongModal(false)} />}
     </div>
   );
+
 }
