@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ollipedia-frontend.onrender.com/sitemap.xml
+
+# Block admin routes from indexing
+Disallow: /admin
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /dashboard/

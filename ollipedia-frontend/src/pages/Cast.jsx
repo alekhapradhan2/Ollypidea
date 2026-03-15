@@ -1,3 +1,4 @@
+import SEO, { staticSEO } from "../components/SEO";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -122,6 +123,7 @@ export default function Cast() {
 
   return (
     <div className="home-root" style={{paddingTop:60}}>
+      <SEO {...staticSEO.cast} />
       <style>{CSS}</style>
 
       <div style={{padding:"32px 24px 0",background:"linear-gradient(to bottom,rgba(201,151,58,.06),transparent)",borderBottom:"1px solid var(--border)"}}>

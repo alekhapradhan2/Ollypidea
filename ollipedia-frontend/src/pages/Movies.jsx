@@ -1,3 +1,4 @@
+import SEO, { staticSEO } from "../components/SEO";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -147,6 +148,7 @@ export default function Movies() {
 
   return (
     <div style={{minHeight:"100vh",background:"var(--bg)",paddingTop:60}}>
+      <SEO {...staticSEO.movies} />
       <style>{CSS}</style>
 
       <div style={{padding:"36px 20px 0",borderBottom:"1px solid var(--border)",background:"linear-gradient(to bottom,rgba(201,151,58,.05),transparent)"}}>

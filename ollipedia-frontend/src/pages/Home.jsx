@@ -1,3 +1,4 @@
+import SEO, { homeSEO } from "../components/SEO";
 import React, {
   useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense
 } from "react";
@@ -406,6 +407,7 @@ export default function Home({ production }) {
 
   return (
     <div className="home-root">
+      <SEO {...homeSEO()} />
       <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}`}</style>
 
       {/* ══ HERO ══ */}

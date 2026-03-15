@@ -1,3 +1,4 @@
+import SEO, { newsItemSEO } from "../components/SEO";
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { API } from "../api/api";
@@ -5,7 +6,7 @@ import { API } from "../api/api";
 function SafeImg({ src, alt, style, className }) {
   const [broken, setBroken] = React.useState(false);
   if (!src || broken) return null;
-  return <img src={src} alt={alt} style={style} className={className} onError={() => setBroken(true)} />;
+  return <img src={src} alt={alt} style={style} className={className} loading="lazy" decoding="async" onError={() => setBroken(true)} />;
 }
 
 const verdictClass = (v) => {
@@ -33,7 +34,7 @@ function NewsCard({ n, onClick }) {
     <div className="news-card news-card-clickable" onClick={() => onClick(n._id)}>
       <div className="news-card-img-fixed">
         {n.imageUrl && !broken
-          ? <img src={n.imageUrl} alt={n.title} onError={() => setBroken(true)} />
+          ? <img src={n.imageUrl} alt={n.title} loading="lazy" decoding="async" onError={() => setBroken(true)} />
           : <div className="news-card-img-placeholder">📰</div>
         }
         <div className="news-card-cat-badge" style={{ background: CAT_COLORS[n.category] || "var(--gold)" }}>
@@ -91,11 +92,13 @@ export default function NewsDetail() {
   );
 
   const { related = [], movie } = data;
+  const seoProps = newsItemSEO(data);
   const catColor = CAT_COLORS[data.category] || "var(--gold)";
   const dateStr  = new Date(data.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
 
   return (
     <div className="page">
+      <SEO {...seoProps} />
       <button className="btn btn-ghost btn-sm" style={{ marginBottom: 24 }} onClick={() => navigate("/news")}>
         ← All News
       </button>

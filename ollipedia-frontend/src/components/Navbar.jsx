@@ -8,6 +8,9 @@ function SafeImg({ src, alt, className }) {
   return <img src={src} alt={alt} className={className} onError={() => setBroken(true)} />;
 }
 
+// Module-level search cache — fetched once per session, never re-fetched
+const _searchCache = { movies: null, cast: null, songs: null };
+
 // ── Global Search ────────────────────────────────────────────────
 function NavSearch() {
   const navigate = useNavigate();
@@ -31,15 +34,23 @@ function NavSearch() {
     timer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const [movies, cast] = await Promise.all([API.getMovies(), API.getCast()]);
+        // Cache data at module level — only fetches once per session
+        if (!_searchCache.movies) {
+          const [movies, cast] = await Promise.all([API.getMovies(), API.getCast()]);
+          _searchCache.movies = movies;
+          _searchCache.cast   = cast;
+          // Pre-build song list once
+          _searchCache.songs = [];
+          movies.forEach(m => (m.media?.songs||[]).forEach(s => {
+            _searchCache.songs.push({ ...s, movieTitle: m.title, movieId: m._id });
+          }));
+        }
         const q = query.toLowerCase();
-        const matchMovies = movies.filter(m => m.title?.toLowerCase().includes(q)).slice(0,5);
-        const matchCast   = cast.filter(c => c.name?.toLowerCase().includes(q)).slice(0,4);
-        const songs = [];
-        movies.forEach(m => (m.media?.songs||[]).forEach(s => {
-          if (s.title?.toLowerCase().includes(q)) songs.push({ ...s, movieTitle: m.title, movieId: m._id });
-        }));
-        setResults({ movies: matchMovies, cast: matchCast, songs: songs.slice(0,4) });
+        setResults({
+          movies: _searchCache.movies.filter(m => m.title?.toLowerCase().includes(q)).slice(0,5),
+          cast:   _searchCache.cast.filter(c => c.name?.toLowerCase().includes(q)).slice(0,4),
+          songs:  _searchCache.songs.filter(s => s.title?.toLowerCase().includes(q)).slice(0,4),
+        });
       } catch { setResults({ movies:[], cast:[], songs:[] }); }
       finally { setLoading(false); }
     }, 300);

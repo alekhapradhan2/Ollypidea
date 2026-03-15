@@ -1,3 +1,4 @@
+import SEO, { staticSEO } from "../components/SEO";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -13,7 +14,7 @@ const extractYtId = (input) => {
 };
 const ytThumb = (id) => {
   const v = extractYtId(id);
-  return v ? `https://img.youtube.com/vi/${v}/hqdefault.jpg` : null;
+  return v ? `https://img.youtube.com/vi/${v}/mqdefault.jpg` : null;
 };
 const now = new Date();
 const withinDays = (d, past, future) => {
@@ -22,13 +23,29 @@ const withinDays = (d, past, future) => {
   return diff >= -past && diff <= future;
 };
 
+
+// ── Shared IntersectionObserver (one IO for all images) ──────────
+const _imgIo = typeof window !== "undefined" ? (() => {
+  const cbs = new WeakMap();
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if(e.isIntersecting){ cbs.get(e.target)?.(); cbs.delete(e.target); io.unobserve(e.target); } });
+  }, { rootMargin:"500px" });
+  io._cbs = cbs; return io;
+})() : null;
+const obsImg = (el,cb) => { if(!_imgIo||!el) return; _imgIo._cbs.set(el,cb); _imgIo.observe(el); return ()=>{ _imgIo.unobserve(el); _imgIo._cbs.delete(el); }; };
 // ── Song card (vertical, YouTube-style) ──────────────────────────────────────
 function SongCard({ song, onClick }) {
   const thumb = song.thumbnailUrl || ytThumb(song.ytId) || song.moviePoster || "";
   return (
     <div className="as-card" onClick={onClick}>
       <div className="as-card-thumb">
-        <img src={thumb} alt={song.title} onError={e => e.target.style.opacity = "0.15"} />
+        <img
+          ref={el => el && obsImg(el, ()=>{ el.src=thumb; })}
+          alt={song.title}
+          decoding="async"
+          loading="lazy"
+          style={{width:"100%",height:"100%",objectFit:"cover"}}
+          onError={e => e.target.style.opacity = "0.15"} />
         <div className="as-card-play">▶</div>
         {!song.ytId && <div className="as-card-novideo">No video</div>}
       </div>
@@ -184,6 +201,7 @@ export default function AllSongs() {
 
   return (
     <div className="as-root">
+      <SEO {...staticSEO.songs} />
 
       {/* ── Header ── */}
       <div className="as-header">

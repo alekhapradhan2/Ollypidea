@@ -1,3 +1,4 @@
+import SEO, { staticSEO } from "../components/SEO";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -14,7 +15,7 @@ function NewsCard({ n, onClick }) {
     <div className="news-card news-card-clickable" onClick={() => onClick(n._id)}>
       <div className="news-card-img-fixed">
         {n.imageUrl && !broken
-          ? <img src={n.imageUrl} alt={n.title} onError={() => setBroken(true)} />
+          ? <img src={n.imageUrl} alt={n.title} loading="lazy" decoding="async" onError={() => setBroken(true)} />
           : <div className="news-card-img-placeholder">📰</div>
         }
         <div className="news-card-cat-badge" style={{ background: CAT_COLORS[n.category] || "var(--gold)" }}>
@@ -64,6 +65,7 @@ export default function News() {
 
   return (
     <div className="page">
+      <SEO {...staticSEO.news} />
       <div className="page-header">
         <h1>Film News</h1>
         <p>Latest updates from Ollywood</p>
