@@ -130,7 +130,7 @@ export default function AboutUs() {
           <h2>📬 Get in Touch</h2>
           <p>Have questions, suggestions, or just want to say hello?</p>
           <ul>
-            <li>Email: <a href="mailto:alekhpradhan18@gmail.com" style={{color:"var(--gold)"}}>alekhpradhan18@gmamil.com</a></li>
+            <li>Email: <a href="mailto:alekhpradhan18@gmail.com" style={{color:"var(--gold)"}}>alekhpradhan18@gmail.com</a></li>
             <li>Visit our <a href="/contact" style={{color:"var(--gold)"}}>Contact page</a> to send us a message directly.</li>
           </ul>
         </div>
