@@ -1630,6 +1630,199 @@ function Pagination({ page, total, perPage, onChange }) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// ENQUIRIES PANEL — proper component so hooks work correctly
+// ════════════════════════════════════════════════════════════════
+function EnquiriesPanel({ enquiries, setEnquiries, onToast, setConfirm }) {
+  const [enqFilter, setEnqFilter] = useState("all");
+  const [enqSearch, setEnqSearch] = useState("");
+  const [expanded,  setExpanded]  = useState({});
+
+  const toggleExpand = id => setExpanded(p => ({ ...p, [id]: !p[id] }));
+
+  const SUBJECTS = Array.from(new Set(enquiries.map(e => e.subject).filter(Boolean)));
+
+  const filtered = enquiries.filter(e => {
+    if (enqFilter === "unread"          && e.read)              return false;
+    if (enqFilter === "read"            && !e.read)             return false;
+    if (enqFilter.startsWith("subj:")   && e.subject !== enqFilter.slice(5)) return false;
+    if (enqSearch.trim()) {
+      const q = enqSearch.toLowerCase();
+      return e.name?.toLowerCase().includes(q)    ||
+             e.email?.toLowerCase().includes(q)   ||
+             e.message?.toLowerCase().includes(q) ||
+             e.subject?.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const unreadCount = enquiries.filter(e => !e.read).length;
+
+  return (
+    <div style={{ padding:"28px" }}>
+      {/* ── Header ── */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20, flexWrap:"wrap" }}>
+        <h2 style={{ margin:0, fontSize:"1.35rem", fontWeight:800 }}>Enquiries</h2>
+        <span style={{ fontSize:"0.7rem", color:"var(--muted)", background:"var(--bg3)", padding:"2px 9px", borderRadius:12, fontWeight:600 }}>
+          {enquiries.length} total
+        </span>
+        {unreadCount > 0 && (
+          <span style={{ fontSize:"0.7rem", background:"#e05555", color:"#fff", padding:"2px 9px", borderRadius:12, fontWeight:800 }}>
+            {unreadCount} unread
+          </span>
+        )}
+        {unreadCount > 0 && (
+          <button style={{ marginLeft:"auto", padding:"6px 14px", fontSize:"0.74rem", background:"rgba(201,151,58,.1)", color:"var(--gold)", border:"1px solid rgba(201,151,58,.3)", borderRadius:6, cursor:"pointer", fontWeight:600 }}
+            onClick={async () => {
+              try {
+                await Promise.all(enquiries.filter(e=>!e.read).map(e => API.adminMarkEnquiryRead(e._id)));
+                setEnquiries(p => p.map(e => ({ ...e, read:true })));
+                onToast?.("All marked as read.");
+              } catch(e) { onToast?.(e.message,"error"); }
+            }}>
+            ✓ Mark all read
+          </button>
+        )}
+      </div>
+
+      {/* ── Filter bar ── */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:18, padding:"12px 16px", background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:10 }}>
+        {/* Status chips */}
+        {[["all","All"],["unread","Unread"],["read","Read"]].map(([val,label]) => (
+          <button key={val} onClick={() => setEnqFilter(val)} style={{
+            padding:"5px 14px", fontSize:"0.74rem", fontWeight:600,
+            borderRadius:20, cursor:"pointer", border:"none",
+            background: enqFilter===val ? "var(--gold)" : "var(--bg3)",
+            color:      enqFilter===val ? "#000"        : "var(--muted)",
+          }}>
+            {label}{val==="unread" && unreadCount > 0 ? ` (${unreadCount})` : ""}
+          </button>
+        ))}
+
+        <div style={{ width:1, height:20, background:"var(--border)", flexShrink:0, margin:"0 4px" }} />
+
+        {/* Subject filter */}
+        {SUBJECTS.length > 0 && (
+          <select
+            value={enqFilter.startsWith("subj:") ? enqFilter.slice(5) : ""}
+            onChange={e => setEnqFilter(e.target.value ? `subj:${e.target.value}` : "all")}
+            style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, padding:"5px 10px", color:"var(--text)", fontSize:"0.74rem", cursor:"pointer", outline:"none" }}>
+            <option value="">All Subjects</option>
+            {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+
+        {/* Search */}
+        <div style={{ position:"relative", marginLeft:"auto" }}>
+          <span style={{ position:"absolute", left:9, top:"50%", transform:"translateY(-50%)", fontSize:"0.78rem", color:"var(--muted)", pointerEvents:"none" }}>🔍</span>
+          <input
+            style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, padding:"6px 28px", color:"var(--text)", fontSize:"0.78rem", outline:"none", width:200 }}
+            placeholder="Search name, message…"
+            value={enqSearch}
+            onChange={e => setEnqSearch(e.target.value)}
+          />
+          {enqSearch && (
+            <button onClick={() => setEnqSearch("")} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"var(--muted)", cursor:"pointer", fontSize:"0.78rem" }}>✕</button>
+          )}
+        </div>
+        <span style={{ fontSize:"0.7rem", color:"var(--muted)" }}>{filtered.length} result{filtered.length!==1?"s":""}</span>
+      </div>
+
+      {/* ── List ── */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"60px 20px", color:"var(--muted)" }}>
+          <div style={{ fontSize:"2.5rem", marginBottom:12 }}>✉️</div>
+          <p>{enquiries.length === 0 ? "No enquiries yet." : "No results match your filter."}</p>
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {filtered.map(enq => {
+            const isOpen = !!expanded[enq._id];
+            return (
+              <div key={enq._id} style={{
+                background: enq.read ? "var(--bg2)" : "rgba(201,151,58,.05)",
+                border: `1px solid ${enq.read ? "var(--border)" : "rgba(201,151,58,.28)"}`,
+                borderRadius:10, overflow:"hidden", transition:"border-color 0.2s",
+              }}>
+                {/* Collapsed header — always visible, click to toggle */}
+                <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 16px", cursor:"pointer", flexWrap:"wrap" }}
+                  onClick={() => {
+                    toggleExpand(enq._id);
+                    if (!enq.read) {
+                      API.adminMarkEnquiryRead(enq._id).catch(()=>{});
+                      setEnquiries(p => p.map(e => e._id===enq._id ? {...e, read:true} : e));
+                    }
+                  }}>
+                  {!enq.read && <div style={{ width:7, height:7, borderRadius:"50%", background:"#e05555", flexShrink:0 }} />}
+                  <span style={{ fontWeight:700, fontSize:"0.88rem" }}>{enq.name}</span>
+                  <a href={`mailto:${enq.email}`} style={{ fontSize:"0.75rem", color:"var(--gold)", textDecoration:"none" }}
+                    onClick={e => e.stopPropagation()}>{enq.email}</a>
+                  <span style={{ fontSize:"0.65rem", background:"rgba(201,151,58,.1)", color:"var(--gold)", padding:"1px 8px", borderRadius:10, border:"1px solid rgba(201,151,58,.2)", flexShrink:0 }}>
+                    {enq.subject}
+                  </span>
+                  <span style={{ marginLeft:"auto", fontSize:"0.67rem", color:"var(--muted)", flexShrink:0 }}>
+                    {new Date(enq.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}
+                    {" · "}
+                    {new Date(enq.createdAt).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}
+                  </span>
+                  <span style={{ fontSize:"0.68rem", color:"var(--muted)", marginLeft:6, display:"inline-block", transition:"transform .2s", transform: isOpen ? "rotate(180deg)" : "none" }}>▼</span>
+                </div>
+
+                {/* Preview line when collapsed */}
+                {!isOpen && (
+                  <div style={{ padding:"0 16px 12px", fontSize:"0.78rem", color:"rgba(255,255,255,.4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {enq.message}
+                  </div>
+                )}
+
+                {/* Full message when expanded */}
+                {isOpen && (
+                  <div style={{ padding:"0 16px 16px" }}>
+                    <div style={{ padding:"14px", background:"var(--bg3)", borderRadius:8, marginBottom:12 }}>
+                      <p style={{ margin:0, fontSize:"0.85rem", color:"rgba(255,255,255,.82)", lineHeight:1.75, whiteSpace:"pre-wrap" }}>{enq.message}</p>
+                    </div>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                      <a href={`mailto:${enq.email}?subject=Re: ${encodeURIComponent(enq.subject)}`}
+                        style={{ padding:"7px 18px", fontSize:"0.78rem", fontWeight:700, background:"var(--gold)", color:"#000", borderRadius:6, textDecoration:"none" }}>
+                        ✉️ Reply
+                      </a>
+                      {!enq.read && (
+                        <button style={{ padding:"7px 14px", fontSize:"0.78rem", background:"rgba(201,151,58,.1)", color:"var(--gold)", border:"1px solid rgba(201,151,58,.3)", borderRadius:6, cursor:"pointer" }}
+                          onClick={async e => {
+                            e.stopPropagation();
+                            try {
+                              await API.adminMarkEnquiryRead(enq._id);
+                              setEnquiries(p => p.map(x => x._id===enq._id ? {...x, read:true} : x));
+                            } catch(err) { onToast?.(err.message,"error"); }
+                          }}>✓ Mark Read</button>
+                      )}
+                      <button style={{ marginLeft:"auto", padding:"7px 14px", fontSize:"0.78rem", background:"rgba(220,50,50,.08)", color:"var(--red)", border:"1px solid rgba(220,50,50,.2)", borderRadius:6, cursor:"pointer" }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          setConfirm({
+                            message: `Delete enquiry from "${enq.name}"?`,
+                            onConfirm: async () => {
+                              setConfirm(null);
+                              try {
+                                await API.adminDeleteEnquiry(enq._id);
+                                setEnquiries(p => p.filter(x => x._id !== enq._id));
+                                onToast?.("Enquiry deleted.");
+                              } catch(err) { onToast?.(err.message,"error"); }
+                            }
+                          });
+                        }}>🗑 Delete</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
 // MAIN ADMIN PORTAL
 // ════════════════════════════════════════════════════════════════
 export default function AdminPortal({ admin, onLogout, onToast }) {
@@ -1639,6 +1832,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const [cast,        setCast]        = useState([]);
   const [prods,       setProds]       = useState([]);
   const [news,        setNews]        = useState([]);
+  const [enquiries,   setEnquiries]   = useState([]);
   const [stats,       setStats]       = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
@@ -1669,10 +1863,12 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [m, c, p, n, s] = await Promise.all([
-        API.getMovies(), API.getCast(), API.getProductions(), API.adminGetAllNews(), API.adminStats()
+      const [m, c, p, n, s, enq] = await Promise.all([
+        API.getMovies(), API.getCast(), API.getProductions(),
+        API.adminGetAllNews(), API.adminStats(),
+        API.adminGetEnquiries().catch(() => []),
       ]);
-      setMovies(m); setCast(c); setProds(p); setNews(n); setStats(s);
+      setMovies(m); setCast(c); setProds(p); setNews(n); setStats(s); setEnquiries(enq);
     } catch (e) { onToast?.(e.message, "error"); }
     finally { setLoading(false); }
   };
@@ -1888,8 +2084,11 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["cast","🎭","Cast & Crew"],
             ["productions","🎥","Productions"],
             ["news","📰","News"],
+            ["enquiries","✉️","Enquiries"],
             ["settings","⚙️","Settings"],
-          ].map(([key,icon,label]) => (
+          ].map(([key,icon,label]) => {
+            const unread = key === "enquiries" ? enquiries.filter(e => !e.read).length : 0;
+            return (
             <button key={key} onClick={() => handleTabChange(key)} style={{
               display:"flex", alignItems:"center", gap:12, padding:"12px 20px",
               border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:"0.85rem",
@@ -1906,8 +2105,15 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {key==="cast"        && cast.length>0        && <span style={{ marginLeft:"auto", fontSize:"0.7rem", background:"var(--bg3)", padding:"1px 7px", borderRadius:10 }}>{cast.length}</span>}
               {key==="productions" && prods.length>0       && <span style={{ marginLeft:"auto", fontSize:"0.7rem", background:"var(--bg3)", padding:"1px 7px", borderRadius:10 }}>{prods.length}</span>}
               {key==="news"        && news.length>0        && <span style={{ marginLeft:"auto", fontSize:"0.7rem", background:"var(--bg3)", padding:"1px 7px", borderRadius:10 }}>{news.length}</span>}
+              {/* Red badge for unread enquiries */}
+              {key==="enquiries" && unread > 0 && (
+                <span style={{ marginLeft:"auto", fontSize:"0.68rem", background:"#e05555", color:"#fff", padding:"1px 7px", borderRadius:10, fontWeight:800 }}>{unread}</span>
+              )}
+              {key==="enquiries" && unread === 0 && enquiries.length > 0 && (
+                <span style={{ marginLeft:"auto", fontSize:"0.7rem", background:"var(--bg3)", padding:"1px 7px", borderRadius:10 }}>{enquiries.length}</span>
+              )}
             </button>
-          ))}
+          );})}
         </aside>
 
         {/* Main content */}
@@ -1919,15 +2125,26 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 <div style={{padding:"28px 28px 40px"}}>
                   <h2 style={{ marginBottom:24, fontSize:"1.5rem" }}>Dashboard</h2>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:16, marginBottom:32 }}>
-                    {[["🎬","Movies",stats?.movies||movies.length,"movies"],["🎭","Cast & Crew",stats?.cast||cast.length,"cast"],["🎥","Productions",stats?.productions||prods.length,"productions"],["📰","News Articles",stats?.news||news.length,"news"]].map(([icon,label,count,key]) => (
-                      <div key={key} onClick={() => handleTabChange(key)} style={{ background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:10, padding:"20px 22px", cursor:"pointer", transition:"border-color 0.15s" }}
+                    {[
+                      ["🎬","Movies",stats?.movies||movies.length,"movies"],
+                      ["🎭","Cast & Crew",stats?.cast||cast.length,"cast"],
+                      ["🎥","Productions",stats?.productions||prods.length,"productions"],
+                      ["📰","News Articles",stats?.news||news.length,"news"],
+                      ["✉️","Enquiries",enquiries.length,"enquiries"],
+                    ].map(([icon,label,count,key]) => {
+                      const unread = key==="enquiries" ? enquiries.filter(e=>!e.read).length : 0;
+                      return (
+                      <div key={key} onClick={() => handleTabChange(key)} style={{ background:"var(--bg2)", border:`1px solid ${unread>0?"rgba(224,85,85,.5)":"var(--border)"}`, borderRadius:10, padding:"20px 22px", cursor:"pointer", transition:"border-color 0.15s", position:"relative" }}
                         onMouseEnter={e=>e.currentTarget.style.borderColor="var(--gold)"}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=unread>0?"rgba(224,85,85,.5)":"var(--border)"}>
+                        {unread > 0 && (
+                          <div style={{ position:"absolute", top:10, right:10, background:"#e05555", color:"#fff", fontSize:"0.65rem", fontWeight:800, padding:"1px 7px", borderRadius:10 }}>{unread} new</div>
+                        )}
                         <div style={{ fontSize:"1.8rem", marginBottom:8 }}>{icon}</div>
                         <div style={{ fontSize:"2rem", fontWeight:900, color:"var(--gold)" }}>{count}</div>
                         <div style={{ fontSize:"0.8rem", color:"var(--muted)", marginTop:2 }}>{label}</div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                   {stats?.recentMovies?.length > 0 && (
                     <div>
@@ -2434,6 +2651,16 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   </div>
                 );
               })()}
+
+              {/* ── ENQUIRIES ── */}
+              {tab==="enquiries" && (
+                <EnquiriesPanel
+                  enquiries={enquiries}
+                  setEnquiries={setEnquiries}
+                  onToast={onToast}
+                  setConfirm={setConfirm}
+                />
+              )}
 
               {/* ── SETTINGS ── */}
               {tab==="settings" && <div style={{padding:28}}><AdminSettings admin={admin} onToast={onToast} /></div>}

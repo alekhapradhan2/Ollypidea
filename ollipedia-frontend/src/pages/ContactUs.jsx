@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API } from "../api/api";
 
 const CSS = `
 .contact-root {
@@ -128,15 +129,23 @@ export default function ContactUs() {
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
 
+  const [error, setError] = useState("");
+
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async () => {
     if (!form.name || !form.email || !form.message) return;
     setSending(true);
-    // Replace with your actual form submission endpoint / EmailJS / Formspree
-    await new Promise(r => setTimeout(r, 1000));
-    setSent(true);
-    setSending(false);
+    setError("");
+    try {
+      await API.submitContact(form);
+      setSent(true);
+      setForm({ name:"", email:"", subject:"General Inquiry", message:"" });
+    } catch (e) {
+      setError(typeof e?.message === "string" ? e.message : "Failed to send. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -178,9 +187,16 @@ export default function ContactUs() {
             </div>
 
             {!sent ? (
-              <button className="cf-submit" onClick={handleSubmit} disabled={sending || !form.name || !form.email || !form.message}>
-                {sending ? "Sending…" : "Send Message"}
-              </button>
+              <>
+                {error && (
+                  <div style={{ background:"rgba(220,50,50,.1)", border:"1px solid rgba(220,50,50,.3)", borderRadius:8, padding:"10px 14px", color:"#e87a7a", fontSize:".82rem", marginBottom:10 }}>
+                    ⚠️ {error}
+                  </div>
+                )}
+                <button className="cf-submit" onClick={handleSubmit} disabled={sending || !form.name || !form.email || !form.message}>
+                  {sending ? "Sending…" : "Send Message"}
+                </button>
+              </>
             ) : (
               <div className="success-box">✅ Message sent! We'll get back to you within 24–48 hours.</div>
             )}

@@ -127,6 +127,13 @@ export const API = {
 
   // ── Admin stats
   adminStats: () => get("/admin/stats", _adminToken),
+
+  // ── Contact / Enquiries
+  submitContact:        (body) => post("/contact", body),
+  adminGetEnquiries:    ()     => get("/admin/enquiries", _adminToken),
+  adminUnreadCount:     ()     => get("/admin/enquiries/unread-count", _adminToken),
+  adminMarkEnquiryRead: (id)   => req("PATCH", `/admin/enquiries/${id}/read`, undefined, _adminToken),
+  adminDeleteEnquiry:   (id)   => del(`/admin/enquiries/${id}`, _adminToken),
 };
 
 // ─────────────────────────────────────────────────────────────────

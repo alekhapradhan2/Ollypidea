@@ -214,6 +214,16 @@ const AdminUserSchema = new mongoose.Schema({
 }, { timestamps: true });
 const AdminUser = mongoose.model("AdminUser", AdminUserSchema);
 
+// ── Contact / Enquiry ─────────────────────────────────────────────
+const ContactSchema = new mongoose.Schema({
+  name:    { type: String, required: true, trim: true },
+  email:   { type: String, required: true, lowercase: true, trim: true },
+  subject: { type: String, default: "General Inquiry" },
+  message: { type: String, required: true },
+  read:    { type: Boolean, default: false },
+}, { timestamps: true });
+const Contact = mongoose.model("Contact", ContactSchema);
+
 // ════════════════════════════════════════════════════════════════
 // CAST RESOLUTION HELPER
 // ════════════════════════════════════════════════════════════════
@@ -1247,6 +1257,61 @@ app.delete("/api/admin/news/:id", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ════════════════════════════════════════════════════════════════
+// CONTACT / ENQUIRY ROUTES
+// ════════════════════════════════════════════════════════════════
+
+// Public — anyone can submit the contact form
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body;
+    if (!name?.trim() || !email?.trim() || !message?.trim())
+      return res.status(400).json({ error: "Name, email and message are required." });
+    const item = await Contact.create({
+      name:    name.trim(),
+      email:   email.trim().toLowerCase(),
+      subject: subject || "General Inquiry",
+      message: message.trim(),
+    });
+    res.json({ success: true, _id: item._id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin — get all enquiries newest first
+app.get("/api/admin/enquiries", adminAuth, async (req, res) => {
+  try {
+    const items = await Contact.find().sort({ createdAt: -1 }).lean();
+    res.json(items);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin — unread count (must be before /:id route to avoid conflict)
+app.get("/api/admin/enquiries/unread-count", adminAuth, async (req, res) => {
+  try {
+    const count = await Contact.countDocuments({ read: false });
+    res.json({ count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin — mark as read
+app.patch("/api/admin/enquiries/:id/read", adminAuth, async (req, res) => {
+  try {
+    const item = await Contact.findByIdAndUpdate(
+      req.params.id, { read: true }, { new: true }
+    );
+    if (!item) return res.status(404).json({ error: "Not found" });
+    res.json(item);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin — delete enquiry
+app.delete("/api/admin/enquiries/:id", adminAuth, async (req, res) => {
+  try {
+    await Contact.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build

@@ -1,10 +1,57 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { API } from "../api/api";
-import { moviePath, castPath } from "../utils/slugs";
+import { moviePath, castPath, songPath } from "../utils/slugs";
 
 // ── Module-level search cache ─────────────────────────────────────
 const _cache = { movies: null, cast: null, songs: null };
+
+// ── Fuzzy match — handles typos, partial matches, different spellings
+// e.g. "charikandha" matches "Chharikandha", "badbadhu" matches "Bara Badhu"
+function fuzzyMatch(text, query) {
+  if (!text || !query) return false;
+  const t = text.toLowerCase().replace(/\s+/g, "");
+  const q = query.toLowerCase().replace(/\s+/g, "");
+
+  // 1. Direct includes (fastest)
+  if (text.toLowerCase().includes(query.toLowerCase())) return true;
+
+  // 2. Collapsed includes (removes spaces: "bara badhu" → "barabadhu")
+  if (t.includes(q)) return true;
+
+  // 3. Every query word must appear somewhere in text
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length > 1 && words.every(w => text.toLowerCase().includes(w))) return true;
+
+  // 4. Subsequence check — all chars of query appear in order in text
+  // e.g. "chrikndha" matches "Chharikandha"
+  let ti = 0, qi = 0;
+  const tl = t, ql = q;
+  while (ti < tl.length && qi < ql.length) {
+    if (tl[ti] === ql[qi]) qi++;
+    ti++;
+  }
+  if (qi === ql.length && ql.length >= 3) return true;
+
+  // 5. Transliteration tolerance — double consonants
+  // "chharikandha" ↔ "charikandha", "bbadhu" ↔ "badhu"
+  const dedup = s => s.replace(/(.)\1+/g, "$1"); // collapse repeated chars
+  if (dedup(t).includes(dedup(q)) && q.length >= 3) return true;
+
+  return false;
+}
+
+// ── Score result — higher = more relevant, for sorting ───────────
+function matchScore(text, query) {
+  if (!text) return 0;
+  const t = text.toLowerCase();
+  const q = query.toLowerCase();
+  if (t === q)                    return 100; // exact
+  if (t.startsWith(q))            return 90;  // starts with
+  if (t.includes(q))              return 80;  // contains
+  if (t.replace(/\s/g,"").includes(q.replace(/\s/g,""))) return 70; // no-space contains
+  return 50; // fuzzy
+}
 
 // ── Global Search ─────────────────────────────────────────────────
 function NavSearch({ onClose }) {
@@ -34,15 +81,31 @@ function NavSearch({ onClose }) {
           _cache.movies = movies;
           _cache.cast   = cast;
           _cache.songs  = [];
-          movies.forEach(m => (m.media?.songs||[]).forEach(s => {
-            _cache.songs.push({ ...s, movieTitle:m.title, movieId:String(m._id) });
+          // Store songIndex and full movie object for navigation
+          movies.forEach(m => (m.media?.songs||[]).forEach((s, idx) => {
+            _cache.songs.push({
+              ...s,
+              songIndex:  idx,
+              movieTitle: m.title,
+              movieId:    String(m._id),
+              _movie:     m,           // full movie object for songPath()
+            });
           }));
         }
-        const q = query.toLowerCase();
+        const q = query.trim();
+
+        // Filter + sort by relevance score
+        const sortByScore = (arr, getText) =>
+          arr
+            .filter(x => fuzzyMatch(getText(x), q))
+            .map(x => ({ x, score: matchScore(getText(x), q) }))
+            .sort((a, b) => b.score - a.score)
+            .map(({ x }) => x);
+
         setResults({
-          movies: _cache.movies.filter(m => m.title?.toLowerCase().includes(q)).slice(0,5),
-          cast:   _cache.cast.filter(c => c.name?.toLowerCase().includes(q)).slice(0,4),
-          songs:  _cache.songs.filter(s => s.title?.toLowerCase().includes(q)).slice(0,4),
+          movies: sortByScore(_cache.movies, m => m.title || "").slice(0, 5),
+          cast:   sortByScore(_cache.cast,   c => c.name  || "").slice(0, 4),
+          songs:  sortByScore(_cache.songs,  s => s.title || "").slice(0, 5),
         });
       } catch { setResults({ movies:[], cast:[], songs:[] }); }
       finally  { setLoading(false); }
@@ -71,6 +134,7 @@ function NavSearch({ onClose }) {
         <div className="ns-drop">
           {loading && <div className="ns-msg">Searching…</div>}
           {!loading && total === 0 && <div className="ns-msg">No results for "{query}"</div>}
+
           {results.movies.length > 0 && (
             <div className="ns-group">
               <div className="ns-glabel">🎬 Movies</div>
@@ -85,6 +149,7 @@ function NavSearch({ onClose }) {
               ))}
             </div>
           )}
+
           {results.cast.length > 0 && (
             <div className="ns-group">
               <div className="ns-glabel">👤 Cast & Crew</div>
@@ -99,19 +164,29 @@ function NavSearch({ onClose }) {
               ))}
             </div>
           )}
+
           {results.songs.length > 0 && (
             <div className="ns-group">
               <div className="ns-glabel">🎵 Songs</div>
-              {results.songs.map((s, i) => (
-                <div key={i} className="ns-item"
-                  onClick={() => { s.ytId && window.open(`https://youtube.com/watch?v=${s.ytId}`, "_blank"); setOpen(false); setQuery(""); }}>
-                  {s.thumbnailUrl && <img src={s.thumbnailUrl} alt={s.title} className="ns-thumb" />}
-                  <div className="ns-info">
-                    <span className="ns-ititle">{s.title}</span>
-                    <span className="ns-isub">{s.singer && `${s.singer} · `}{s.movieTitle}</span>
+              {results.songs.map((s, i) => {
+                // Navigate to song detail page instead of YouTube
+                const path = s._movie
+                  ? songPath(s._movie, s.songIndex)
+                  : `/song/${s.movieId}/${s.songIndex}`;
+                const thumb = s.thumbnailUrl ||
+                  (s.ytId ? `https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg` : null);
+                return (
+                  <div key={i} className="ns-item" onClick={() => go(path)}>
+                    {thumb && <img src={thumb} alt={s.title} className="ns-thumb" />}
+                    <div className="ns-info">
+                      <span className="ns-ititle">{s.title}</span>
+                      <span className="ns-isub">
+                        {s.singer && `🎤 ${s.singer} · `}{s.movieTitle}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
