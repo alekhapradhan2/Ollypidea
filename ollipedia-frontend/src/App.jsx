@@ -1,5 +1,5 @@
 import React, { useState, useCallback, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { HashRouter, useLocation, Routes, Route } from "react-router-dom";
 import { setToken } from "./api/api";
 
 import Navbar    from "./components/Navbar";
@@ -8,6 +8,9 @@ import { Toast } from "./components/UI";
 
 // ── Critical path — loaded eagerly (above the fold) ───────────────
 import Home from "./pages/Home";
+
+// Stable component references — prevents remount on every navigation
+const MemoHome = React.memo(Home);
 
 // ── All other pages — code-split, loaded on demand ────────────────
 // Each lazy() creates a separate JS chunk that only downloads when
@@ -72,7 +75,7 @@ function AppInner({ admin, setAdmin }) {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* ── Public ── */}
-          <Route path="/"       element={<Home />} />
+          <Route path="/"       element={<MemoHome />} />
           <Route path="/movies" element={<Movies />} />
           <Route path="/cast"   element={<Cast />} />
           <Route path="/news"   element={<News />} />
@@ -109,8 +112,8 @@ export default function App() {
     try { const s = localStorage.getItem("op_admin"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AppInner admin={admin} setAdmin={setAdmin} />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
