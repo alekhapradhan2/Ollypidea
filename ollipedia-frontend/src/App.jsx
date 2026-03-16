@@ -1,5 +1,5 @@
 import React, { useState, useCallback, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { HashRouter } from "react-router-dom";
 import { setToken } from "./api/api";
 
 import Navbar    from "./components/Navbar";
