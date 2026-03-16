@@ -1,7 +1,7 @@
 import SEO, { homeSEO } from "../components/SEO";
 import { moviePath } from "../utils/slugs";
 import React, {
-  useEffect, useState, useRef, useMemo,
+  useEffect, useState, useRef, useMemo, useCallback,
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -120,6 +120,11 @@ const cardCss = `
   .ncard:hover .ncard-img img{transform:scale(1.06);}
   .ncard-img{height:130px;overflow:hidden;background:var(--bg3);}
   .ncard-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s;}
+  .recent-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;padding:0 0 4px;overflow:visible;}
+  .recent-grid .hcard{width:100%;min-width:0;flex-shrink:unset;}
+  .recent-grid .hcard-img{width:100%;}
+  @media(max-width:900px){.recent-grid{grid-template-columns:repeat(4,1fr);}}
+  @media(max-width:560px){.recent-grid{grid-template-columns:repeat(3,1fr);}}
 `;
 
 // ─── Movie Card ───────────────────────────────────────────────────
@@ -134,8 +139,10 @@ const MovieCard = React.memo(function MovieCard({ movie, onClick }) {
           ? <LImg src={img} alt={movie.title} style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"top",display:"block"}} />
           : <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2.5rem"}}>🎬</div>}
         <div className="hcard-grad" />
-        <div style={{position:"absolute",top:8,left:8,background:`${c}20`,border:`1px solid ${c}88`,color:c,
-          fontSize:".57rem",fontWeight:800,padding:"2px 6px",borderRadius:3,letterSpacing:".07em",textTransform:"uppercase"}}>{v}</div>
+        <div style={{position:"absolute",top:7,left:7,background:`${c}cc`,color:"#000",
+          fontSize:".6rem",fontWeight:900,padding:"3px 7px",borderRadius:4,letterSpacing:".06em",
+          textTransform:"uppercase",whiteSpace:"nowrap",maxWidth:"calc(100% - 14px)",
+          overflow:"hidden",textOverflow:"ellipsis",boxShadow:"0 1px 4px rgba(0,0,0,.4)"}}>{v}</div>
         {movie.genre?.[0] && <div style={{position:"absolute",bottom:8,left:8,fontSize:".58rem",color:"rgba(255,255,255,.65)",fontWeight:600}}>{movie.genre[0]}</div>}
         <div className="hcard-play">
           <div style={{width:40,height:40,borderRadius:"50%",background:"rgba(201,151,58,.9)",display:"flex",alignItems:"center",justifyContent:"center",paddingLeft:3}}>▶</div>
@@ -143,7 +150,8 @@ const MovieCard = React.memo(function MovieCard({ movie, onClick }) {
       </div>
       <div style={{padding:"9px 2px 0"}}>
         <p className="hcard-title">{movie.title}</p>
-        <p style={{margin:"3px 0 0",fontSize:".67rem",color:"var(--muted)"}}>{movie.releaseDate?.slice(0,4)||"TBA"}</p>
+        <p style={{margin:"3px 0 0",fontSize:".67rem",color:"var(--muted)"}}>{movie.releaseDate ? fmtDate(movie.releaseDate) : "TBA"}</p>
+        {movie.director && <p style={{margin:"2px 0 0",fontSize:".63rem",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",opacity:.75}}>🎥 {movie.director}</p>}
       </div>
     </div>
   );
@@ -217,46 +225,40 @@ function CardSkeleton({ ratio = "2/3", width = 150 }) {
   );
 }
 
-// ─── Row ──────────────────────────────────────────────────────────
-// Props:
-//   loading     — show skeleton cards (data fetch in-flight)
-//   sentinelRef — ref from useLazySection; Row attaches it to the
-//                 section element so the IO fires before scroll arrival
-//   hide        — completely unmount this row (empty data, not loading)
-function Row({ title, badge, badgeColor = "#c9973a", viewAll, children,
-               gap = 14, cardRatio, cardWidth,
-               loading = false, sentinelRef = null, hide = false }) {
+// ─── Row — renders skeletons until scrolled into view ─────────────
+// Each row gets its own IntersectionObserver so off-screen rows
+// never render cards at all — huge DOM / memory saving.
+// loading={true}  → always show skeletons (data fetch in progress)
+// loading={false} → normal: skeletons until scrolled into view, then real cards
+function Row({ title, badge, badgeColor = "#c9973a", viewAll, children, gap = 14, cardRatio, cardWidth, loading = false }) {
   const navigate = useNavigate();
   const rowRef   = useRef(null);
-  const ownRef   = useRef(null);
+  const sentRef  = useRef(null);
+  const [visible, setVisible] = useState(false);
 
-  // For above-fold rows that don't use useLazySection, we still want
-  // to skip rendering card children until the row is in view.
-  const [ownVisible, setOwnVisible] = useState(!!sentinelRef);
   useEffect(() => {
-    if (sentinelRef) return; // external hook manages visibility
-    const el = ownRef.current;
+    const el = sentRef.current;
     if (!el) return;
     const io = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) { setOwnVisible(true); io.disconnect(); }
+      if (e.isIntersecting) { setVisible(true); io.disconnect(); }
     }, { rootMargin: "250px" });
     io.observe(el);
     return () => io.disconnect();
-  }, [sentinelRef]);
+  }, []);
 
   const slide = n => rowRef.current?.scrollBy({ left: n, behavior: "smooth" });
   const count = React.Children.count(children);
 
-  if (hide) return null;
-
-  const showSkeletons = loading || (!sentinelRef && !ownVisible);
+  // Show skeletons when: (a) still fetching data, or (b) not scrolled into view yet
+  const showSkeletons = loading || !visible;
 
   return (
-    <section className="home-section" ref={sentinelRef || ownRef}>
+    <section className="home-section" ref={sentRef}>
       <div className="home-section-header">
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {/* Skeleton title while loading, real title once ready */}
           {loading
-            ? <div style={{ width:160, height:18, borderRadius:4, background:"var(--bg3)", animation:"homepulse 1.5s ease-in-out infinite" }} />
+            ? <div style={{ width: 160, height: 18, borderRadius: 4, background: "var(--bg3)", animation: "homepulse 1.5s ease-in-out infinite" }} />
             : <h2 className="home-section-title">{title}</h2>
           }
           {!loading && badge && (
@@ -549,129 +551,188 @@ function HeroSlide({ movie, active, dots, strip }) {
   );
 }
 
-// ─── Hero skeleton ────────────────────────────────────────────────
+// Rich skeleton that mirrors the real hero layout so users immediately
+// understand the page structure rather than seeing a blank pulsing bar.
 function HeroSkeleton() {
-  return <div className="hh-skel" />;
+  return (
+    <div className="hh-skel" style={{ position: "relative", overflow: "hidden" }}>
+      {/* Fake content anchored to bottom-left like the real hero */}
+      <div style={{
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        padding: "clamp(16px,3vw,32px) clamp(16px,4vw,52px) clamp(52px,8vw,78px)",
+        maxWidth: 680,
+      }}>
+        {/* Tags row */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {[60, 80, 55].map((w, i) => (
+            <div key={i} style={{ width: w, height: 18, borderRadius: 20, background: "rgba(255,255,255,.08)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: `${i * 0.1}s` }} />
+          ))}
+        </div>
+        {/* Title */}
+        <div style={{ width: "clamp(200px,50vw,420px)", height: "clamp(28px,6vw,48px)", borderRadius: 6, background: "rgba(255,255,255,.1)", animation: "homepulse 1.5s ease-in-out infinite", marginBottom: 12 }} />
+        {/* Meta row */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+          {[100, 130].map((w, i) => (
+            <div key={i} style={{ width: w, height: 14, borderRadius: 4, background: "rgba(255,255,255,.07)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: `${0.15 + i * 0.1}s` }} />
+          ))}
+        </div>
+        {/* Synopsis lines */}
+        {[90, 75].map((pct, i) => (
+          <div key={i} style={{ width: `${pct}%`, maxWidth: 520, height: 13, borderRadius: 4, background: "rgba(255,255,255,.06)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: `${0.25 + i * 0.07}s`, marginBottom: 6 }} />
+        ))}
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <div style={{ width: 140, height: 40, borderRadius: 8, background: "rgba(201,151,58,.25)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: "0.35s" }} />
+          <div style={{ width: 100, height: 40, borderRadius: 8, background: "rgba(255,255,255,.07)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: "0.42s" }} />
+        </div>
+      </div>
+      {/* Dots row */}
+      <div style={{ position: "absolute", bottom: 16, left: "clamp(16px,4vw,52px)", display: "flex", gap: 6 }}>
+        {[1, 0, 0, 0].map((active, i) => (
+          <div key={i} style={{ width: active ? 24 : 7, height: 7, borderRadius: active ? 4 : "50%", background: "rgba(255,255,255,.18)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: `${i * 0.08}s` }} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  SHARED MOVIES PROMISE
-//  API.getMovies() fires at most ONCE per CACHE_TTL window.
-//  Every section fetcher awaits this same promise and filters
-//  client-side — no duplicate network calls.
+//  MODULE-LEVEL CACHE — survives navigation, cleared on hard refresh
+//  This is the key fix: data is fetched ONCE and reused on every
+//  back-navigation. No spinner, no skeleton, instant restore.
 // ═══════════════════════════════════════════════════════════════════
-const CACHE_TTL = 5 * 60 * 1000;
-let _moviesPromise = null;
-let _moviesTs      = 0;
-
-function getMoviesOnce() {
-  const now = Date.now();
-  if (_moviesPromise && (now - _moviesTs) < CACHE_TTL) return _moviesPromise;
-  _moviesTs      = now;
-  _moviesPromise = API.getMovies().catch(() => []);
-  return _moviesPromise;
-}
-
-// Per-section result cache — avoids re-filtering on back-navigation
-const _sectionCache = {};
-function getCached(key) {
-  const hit = _sectionCache[key];
-  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.data;
-  return null;
-}
-function setCached(key, data) {
-  _sectionCache[key] = { data, ts: Date.now() };
-}
-
-// ─── useLazySection ──────────────────────────────────────────────
-// Attaches an IntersectionObserver to `ref`. When the element enters
-// the viewport (rootMargin: 300px ahead), calls `fetcher()` once and
-// stores the result in state. A module-level cache key prevents
-// redundant network calls on back-navigation.
-//
-// Returns { ref, data, loading }
-// • data    — null until fetched, then the resolved value
-// • loading — true while the fetch is in-flight
-// ─────────────────────────────────────────────────────────────────
-// useLazySection(cacheKey, fetcher, immediate)
-// • immediate=true  → fires fetcher on mount (above-fold / hero)
-// • immediate=false → fires when ref scrolls within 300 px (default)
-function useLazySection(cacheKey, fetcher, immediate = false) {
-  const ref        = useRef(null);
-  const fetchedRef = useRef(false);
-  const cached     = getCached(cacheKey);
-  const [data,    setData]    = useState(cached);
-  const [loading, setLoading] = useState(() => immediate && cached === null);
-
-  useEffect(() => {
-    if (getCached(cacheKey) !== null) {
-      fetchedRef.current = true;
-      setData(getCached(cacheKey));
-      return;
-    }
-    const run = () => {
-      if (fetchedRef.current) return;
-      fetchedRef.current = true;
-      setLoading(true);
-      fetcher()
-        .then(result => { setCached(cacheKey, result); setData(result); })
-        .catch(() => setData([]))
-        .finally(() => setLoading(false));
-    };
-    if (immediate) { run(); return; }
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) { io.disconnect(); run(); }
-    }, { rootMargin: "300px" });
-    io.observe(el);
-    return () => io.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey]);
-
-  return { ref, data, loading };
-}
-
-// ─── Sort helper (module-level, no hook needed) ───────────────────
-const srtByDate = arr => [...arr].sort((a, b) => {
-  if (!a.releaseDate && !b.releaseDate) return 0;
-  if (!a.releaseDate) return 1;
-  if (!b.releaseDate) return -1;
-  return new Date(b.releaseDate) - new Date(a.releaseDate);
-});
+const _cache = {
+  movies: null,   // null = not fetched yet, [] = fetched but empty
+  news:   null,
+  ts:     0,      // timestamp of last fetch (for optional TTL)
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — re-fetch if stale
 
 // ═══════════════════════════════════════════════════════════════════
-//  MAIN HOME — scroll-triggered lazy loading
-//
-//  • ONE network call: API.getMovies() fires on mount (shared promise).
-//  • Each section's useLazySection awaits that same promise and
-//    filters client-side — zero duplicate requests.
-//  • Sections the user never scrolls to are never filtered/rendered.
-//  • Back-navigation is instant: _sectionCache holds filtered results.
+//  MAIN HOME — 3-phase progressive loading
+//  Phase 1: hero + first rows  → from cache (instant) or API fetch
+//  Phase 2: news               → deferred via requestIdleCallback
+//  Phase 3: all other rows     → IntersectionObserver (scroll-lazy)
 // ═══════════════════════════════════════════════════════════════════
 export default function Home({ production }) {
-  const navigate  = useNavigate();
-  const [heroIdx, setHeroIdx] = useState(0);
-  const timerRef  = useRef(null);
-  const MAX = 18;
+  const navigate = useNavigate();
 
-  // ── ABOVE-FOLD: hero + thisWeek + thisMonth + inTheatres ─────────
-  // Kicks off getMoviesOnce() immediately on mount. All other sections
-  // await the same in-flight promise, so no extra network call happens.
-  const aboveFold = useLazySection("aboveFold", () =>
-    getMoviesOnce().then(all => all.filter(m => {
-      const h = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
-      if (!h) return false;
-      if (!m.verdict || m.verdict === "Upcoming") return true;
-      if (m.releaseDate && withinDays(m.releaseDate, 60, 14)) return true;
-      return isThisMonth(m.releaseDate) || isLastMonth(m.releaseDate);
-    })),
-    true  // immediate — fires on mount, no scroll needed
-  );
+  // ── State — initialise from cache so back-navigation is instant ──
+  const [movies,      setMovies]      = useState(() => _cache.movies || []);
+  const [moviesReady, setMoviesReady] = useState(() => _cache.movies !== null);
+  const [news,        setNews]        = useState(() => _cache.news   || []);
+  const [heroIdx,     setHeroIdx]     = useState(0);
+  const timerRef = useRef(null);
 
-  const aboveMovies = aboveFold.data || [];
+  // ── Phase 1: movies ───────────────────────────────────────────
+  // If cache is warm → skip fetch entirely (instant re-render on back)
+  // If cache is stale or empty → fetch, update cache, update state
+  useEffect(() => {
+    const now = Date.now();
+    // Cache hit — already have data, nothing to do
+    if (_cache.movies !== null && (now - _cache.ts) < CACHE_TTL) return;
 
-  const heroMovies = useMemo(() => aboveMovies
+    // Cache miss or stale — fetch
+    API.getMovies()
+      .then(m => {
+        _cache.movies = m;
+        _cache.ts     = Date.now();
+        setMovies(m);
+        setMoviesReady(true);
+      })
+      .catch(() => setMoviesReady(true));
+  }, []);
+
+  // ── Phase 2: news (deferred, non-critical) ─────────────────────
+  useEffect(() => {
+    if (!moviesReady) return;
+    // Cache hit
+    if (_cache.news !== null) { setNews(_cache.news); return; }
+
+    const load = () => API.getNews()
+      .then(n => {
+        const slice = n.slice(0, 12);
+        _cache.news = slice;
+        setNews(slice);
+      })
+      .catch(() => {});
+
+    const id = typeof requestIdleCallback !== "undefined"
+      ? requestIdleCallback(load, { timeout: 2000 })
+      : setTimeout(load, 200);
+    return () => (typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id) : clearTimeout(id));
+  }, [moviesReady]);
+
+  // ── Sort helper (stable, memoised once) ───────────────────────
+  const srt = useCallback(arr => [...arr].sort((a, b) => {
+    if (!a.releaseDate && !b.releaseDate) return 0;
+    if (!a.releaseDate) return 1;
+    if (!b.releaseDate) return -1;
+    return new Date(b.releaseDate) - new Date(a.releaseDate);
+  }), []);
+
+  // ── Derived lists — each capped to avoid huge DOM ─────────────
+  const MAX = 18; // max cards per row (was 20, small saving)
+
+  const allMovies   = useMemo(() => srt(movies), [movies, srt]);
+
+  // High-priority rows (shown near top of page)
+  const thisWeek    = useMemo(() => srt(movies.filter(m => isThisWeek(m.releaseDate) && !m.releaseTBA)).slice(0, MAX), [movies, srt]);
+  const thisMonth   = useMemo(() => srt(movies.filter(m => isThisMonth(m.releaseDate))).slice(0, MAX), [movies, srt]);
+  const inTheatres  = useMemo(() => srt(movies.filter(m => m.releaseDate && withinDays(m.releaseDate, 35, 35))).slice(0, MAX), [movies, srt]);
+
+  // Lower-priority rows (will be lazy-rendered by Row's own IO)
+  const lastWeek    = useMemo(() => srt(movies.filter(m => isLastWeek(m.releaseDate) && !isThisWeek(m.releaseDate))).slice(0, MAX), [movies, srt]);
+  const lastMonth   = useMemo(() => srt(movies.filter(m => isLastMonth(m.releaseDate))).slice(0, MAX), [movies, srt]);
+  const withTrailer = useMemo(() => {
+  return allMovies
+    .filter(m => m.media?.trailer?.ytId)
+    .sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate)) // newest first
+    .slice(0, 12);
+}, [allMovies]);
+  const highRated   = useMemo(() => movies
+    .filter(m => m.reviews?.length >= 1 && m.releaseDate && new Date(m.releaseDate) >= RECENT_CUTOFF)
+    .map(m => ({ ...m, avg: m.reviews.reduce((s, r) => s + (r.rating || 0), 0) / m.reviews.length }))
+    .filter(m => m.avg >= 3.5)
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, MAX),
+  [movies]);
+  const upcoming    = useMemo(() => srt(movies.filter(m => !m.verdict || m.verdict === "Upcoming")).slice(0, MAX), [movies, srt]);
+
+  // All Films row — capped at 30 (link to /movies for the rest)
+  const allFilmsRow = useMemo(() => allMovies.slice(0, 30), [allMovies]);
+
+  // Recent Movies — 16 most recently released movies (past first, TBA/upcoming last)
+  const recentMovies = useMemo(() => {
+    const now = new Date();
+    const released = [...movies]
+      .filter(m => m.releaseDate && new Date(m.releaseDate) <= now)
+      .sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate));
+    const notReleased = [...movies]
+      .filter(m => !m.releaseDate || new Date(m.releaseDate) > now)
+      .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0));
+    return [...released, ...notReleased].slice(0, 12);
+  }, [movies]);
+
+  // Trending songs — built lazily from allMovies
+  const trendingSongs = useMemo(() => {
+    const songs = [];
+    allMovies
+      .filter(m => (!m.verdict || m.verdict === "Upcoming") || withinDays(m.releaseDate, 90, 60))
+      .forEach(m => (m.media?.songs || []).forEach((s, idx) => {
+        if (s.ytId) songs.push({ ...s, songIndex: idx, movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl });
+      }));
+    if (songs.length < 6) {
+      allMovies.forEach(m => (m.media?.songs || []).forEach((s, idx) => {
+        if (s.ytId && !songs.find(t => t.movieId === m._id && t.songIndex === idx))
+          songs.push({ ...s, songIndex: idx, movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl });
+      }));
+    }
+    return songs.slice(0, 12);
+  }, [allMovies]);
+
+  // ── Hero ───────────────────────────────────────────────────────
+  const heroMovies = useMemo(() => movies
     .filter(m => {
       const h = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
       if (!h) return false;
@@ -681,11 +742,7 @@ export default function Home({ production }) {
     })
     .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
     .slice(0, 8),
-  [aboveMovies]);
-
-  const thisWeek   = useMemo(() => srtByDate(aboveMovies.filter(m => isThisWeek(m.releaseDate) && !m.releaseTBA)).slice(0, MAX), [aboveMovies]);
-  const thisMonth  = useMemo(() => srtByDate(aboveMovies.filter(m => isThisMonth(m.releaseDate))).slice(0, MAX),                  [aboveMovies]);
-  const inTheatres = useMemo(() => srtByDate(aboveMovies.filter(m => m.releaseDate && withinDays(m.releaseDate, 10, 10))).slice(0, MAX), [aboveMovies]);
+  [movies]);
 
   // Hero auto-advance
   useEffect(() => {
@@ -696,123 +753,64 @@ export default function Home({ production }) {
 
   const goHero = i => { setHeroIdx(i); clearInterval(timerRef.current); };
 
-  // ── BELOW-FOLD: each section fetches only when scrolled near ─────
-  // getMoviesOnce() returns the cached promise — no new network call.
-
-  const trailers = useLazySection("trailers", () =>
-    getMoviesOnce().then(all =>
-      all.filter(m => m.media?.trailer?.ytId).slice(0, 12)
-    )
-  );
-
-  const lastWeekSec = useLazySection("lastWeek", () =>
-    getMoviesOnce().then(all =>
-      srtByDate(all.filter(m => isLastWeek(m.releaseDate) && !isThisWeek(m.releaseDate))).slice(0, MAX)
-    )
-  );
-
-  const lastMonthSec = useLazySection("lastMonth", () =>
-    getMoviesOnce().then(all =>
-      srtByDate(all.filter(m => isLastMonth(m.releaseDate))).slice(0, MAX)
-    )
-  );
-
-  const newsSec = useLazySection("news", () =>
-    API.getNews().then(n => n.slice(0, 12)).catch(() => [])
-  );
-
-  const songsSec = useLazySection("songs", () =>
-    getMoviesOnce().then(allMovies => {
-      const songs = [];
-      allMovies
-        .filter(m => (!m.verdict || m.verdict === "Upcoming") || withinDays(m.releaseDate, 90, 60))
-        .forEach(m => (m.media?.songs || []).forEach((s, idx) => {
-          if (s.ytId) songs.push({ ...s, songIndex: idx, movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl });
-        }));
-      if (songs.length < 6) {
-        allMovies.forEach(m => (m.media?.songs || []).forEach((s, idx) => {
-          if (s.ytId && !songs.find(t => t.movieId === m._id && t.songIndex === idx))
-            songs.push({ ...s, songIndex: idx, movieTitle: m.title, movieId: m._id, posterUrl: m.posterUrl });
-        }));
-      }
-      return songs.slice(0, 12);
-    })
-  );
-
-  const topRatedSec = useLazySection("topRated", () =>
-    getMoviesOnce().then(all =>
-      all
-        .filter(m => m.reviews?.length >= 1 && m.releaseDate && new Date(m.releaseDate) >= RECENT_CUTOFF)
-        .map(m => ({ ...m, avg: m.reviews.reduce((s, r) => s + (r.rating || 0), 0) / m.reviews.length }))
-        .filter(m => m.avg >= 3.5)
-        .sort((a, b) => b.avg - a.avg)
-        .slice(0, MAX)
-    )
-  );
-
-  const upcomingSec = useLazySection("upcoming", () =>
-    getMoviesOnce().then(all =>
-      srtByDate(all.filter(m => !m.verdict || m.verdict === "Upcoming")).slice(0, MAX)
-    )
-  );
-
-  const allFilmsSec = useLazySection("allFilms", () =>
-    getMoviesOnce().then(all => srtByDate(all).slice(0, 30))
-  );
-
-  // ── Render ────────────────────────────────────────────────────
+  // ── Always render the full page shell; skeletons fill each
+  //    section until moviesReady flips true. This means users
+  //    immediately see the complete page structure instead of a
+  //    single pulsing banner, making the loading state obvious.
   return (
     <div className="home-root">
       <SEO {...homeSEO()} />
       <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}${heroCss}`}</style>
 
       {/* ══ HERO ══ */}
-      {aboveFold.loading
+      {!moviesReady
         ? <HeroSkeleton />
         : heroMovies.length > 0 && (
-          <div className="hh-wrap">
-            {heroMovies.map((m, i) => {
-              const isAdjacentOrActive =
-                i === heroIdx ||
-                i === (heroIdx + 1) % heroMovies.length ||
-                i === (heroIdx - 1 + heroMovies.length) % heroMovies.length;
+        <div className="hh-wrap">
+          {heroMovies.map((m, i) => {
+            const isAdjacentOrActive =
+              i === heroIdx ||
+              i === (heroIdx + 1) % heroMovies.length ||
+              i === (heroIdx - 1 + heroMovies.length) % heroMovies.length;
 
-              const dotsEl = (
-                <div className="hh-dots">
-                  {heroMovies.map((_, di) => (
-                    <button key={di}
-                      className={`hh-dot${di === heroIdx ? " active" : ""}`}
-                      onClick={() => goHero(di)} />
-                  ))}
-                </div>
-              );
+            // Build dots and strip — only passed to the active slide so they
+            // sit inside hh-inner and are correctly positioned
+            const dotsEl = (
+              <div className="hh-dots">
+                {heroMovies.map((_, di) => (
+                  <button key={di}
+                    className={`hh-dot${di === heroIdx ? " active" : ""}`}
+                    onClick={() => goHero(di)} />
+                ))}
+              </div>
+            );
 
-              const stripEl = (
-                <div className="hh-strip">
-                  {heroMovies.map((sm, si) => {
-                    const simg = heroImage(sm);
-                    return (
-                      <div key={sm._id}
-                        className={`hh-strip-item${si === heroIdx ? " active" : ""}`}
-                        onClick={() => goHero(si)}>
-                        {simg
-                          ? <img src={simg} alt={sm.title} loading="lazy" decoding="async"
-                              onError={e => e.target.style.display="none"} />
-                          : <div style={{ width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".9rem" }}>🎬</div>}
-                        {sm.media?.trailer?.ytId && <div className="hh-strip-play">▶</div>}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
+            const stripEl = (
+              <div className="hh-strip">
+                {heroMovies.map((sm, si) => {
+                  const simg = heroImage(sm);
+                  return (
+                    <div key={sm._id}
+                      className={`hh-strip-item${si === heroIdx ? " active" : ""}`}
+                      onClick={() => goHero(si)}>
+                      {simg
+                        ? <img src={simg} alt={sm.title} loading="lazy" decoding="async"
+                            onError={e => e.target.style.display="none"} />
+                        : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:".9rem" }}>🎬</div>}
+                      {sm.media?.trailer?.ytId && <div className="hh-strip-play">▶</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
 
-              return isAdjacentOrActive
-                ? <HeroSlide key={m._id} movie={m} active={i === heroIdx} dots={dotsEl} strip={stripEl} />
-                : <div key={m._id} className="hh-slide" />;
-            })}
-          </div>
-        )
-      }
+            return isAdjacentOrActive
+              ? <HeroSlide key={m._id} movie={m} active={i === heroIdx}
+                  dots={dotsEl} strip={stripEl} />
+              : <div key={m._id} className="hh-slide" />;
+          })}
+        </div>
+      )}
 
       {production && (
         <div className="home-cta-bar">
@@ -821,91 +819,78 @@ export default function Home({ production }) {
         </div>
       )}
 
+      {/* ══ SECTIONS ══ */}
       <div className="home-sections">
 
-        {/* Above-fold rows — from the same aboveFold fetch */}
-        {(aboveFold.loading || thisWeek.length > 0) && (
-          <Row title="🔥 Releasing This Week" badge="New" badgeColor="#e59595" loading={aboveFold.loading}>
-            {thisWeek.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
+        {/* ── Recent Movies Row ── */}
+        <Row title="🎬 Recent Movies" badge="Latest" viewAll="/movies" loading={!moviesReady}>
+          {recentMovies.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
+        </Row>
+                {upcoming.length > 0 && (
+          <Row title="🚀 Upcoming" viewAll="/movies">
+            {upcoming.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
           </Row>
         )}
-        {(aboveFold.loading || thisMonth.length > 0) && (
-          <Row title="🗓 This Month" badge="New" loading={aboveFold.loading}>
-            {thisMonth.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
-          </Row>
-        )}
-        {(aboveFold.loading || inTheatres.length > 0) && (
-          <Row title="🎭 Now in Theatres" badge="Live" badgeColor="#95e5b8" loading={aboveFold.loading}>
+
+        {/* Always show these rows while loading OR when data fills them */}
+                {(!moviesReady || inTheatres.length > 0) && (
+          <Row title="🎭 Now in Theatres" badge="Live" badgeColor="#95e5b8" loading={!moviesReady}>
             {inTheatres.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
           </Row>
         )}
+        {(!moviesReady || thisMonth.length > 0) && (
+          <Row title="🗓 This Month" badge="New" loading={!moviesReady}>
+            {thisMonth.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
+          </Row>
+        )}
 
-        {/* Below-fold rows — each lazy-fetches when scrolled near */}
-        <Row title="🎬 Latest Trailers" gap={16} cardRatio="16/9" cardWidth={265}
-             sentinelRef={trailers.ref} loading={trailers.loading}>
-          {(trailers.data || []).map(m =>
-            <TrailerCard key={m._id} movie={m}
-              onClick={() => navigate(`/movie/${m._id}`, { state:{ scrollTo:"trailer" } })} />
-          )}
-        </Row>
 
-        <Row title="📅 Last Week" sentinelRef={lastWeekSec.ref} loading={lastWeekSec.loading}
-             hide={!lastWeekSec.loading && !(lastWeekSec.data?.length)}>
-          {(lastWeekSec.data || []).map(m =>
-            <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />
-          )}
-        </Row>
 
-        <Row title="📆 Last Month" sentinelRef={lastMonthSec.ref} loading={lastMonthSec.loading}
-             hide={!lastMonthSec.loading && !(lastMonthSec.data?.length)}>
-          {(lastMonthSec.data || []).map(m =>
-            <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />
-          )}
-        </Row>
 
-        <Row title="📰 Latest News" viewAll="/news" gap={14} cardRatio="136/250" cardWidth={250}
-             sentinelRef={newsSec.ref} loading={newsSec.loading}>
-          {(newsSec.data || []).map(n =>
-            <NewsCard key={n._id} n={n} onClick={() => navigate(`/news/${n._id}`)} />
-          )}
-        </Row>
 
-        <Row title="🎵 Trending Songs" viewAll="/songs" gap={14} cardRatio="1/1" cardWidth={150}
-             sentinelRef={songsSec.ref} loading={songsSec.loading}>
-          {(songsSec.data || []).map((s, i) =>
-            <SongCard key={i} s={s}
-              onClick={() => navigate(
-                s._movieSlug
-                  ? s._movieSlug.replace("/movie/", "/song/") + "/" + s.songIndex
-                  : `/song/${s.movieId}/${s.songIndex}`
-              )} />
-          )}
-        </Row>
 
-        <Row title="⭐ Top Rated" badge="Critic Pick" badgeColor="#e8c87a"
-             sentinelRef={topRatedSec.ref} loading={topRatedSec.loading}
-             hide={!topRatedSec.loading && !(topRatedSec.data?.length)}>
-          {(topRatedSec.data || []).map(m =>
-            <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />
-          )}
-        </Row>
+                {withTrailer.length > 0 && (
+          <Row title="🎬 Latest Trailers" gap={16} cardRatio="16/9" cardWidth={265}>
+            {withTrailer.map(m => <TrailerCard key={m._id} movie={m} onClick={() => navigate(`/movie/${m._id}`, { state: { scrollTo: "trailer" } })} />)}
+          </Row>
+        )}
 
-        <Row title="🚀 Upcoming" viewAll="/movies"
-             sentinelRef={upcomingSec.ref} loading={upcomingSec.loading}
-             hide={!upcomingSec.loading && !(upcomingSec.data?.length)}>
-          {(upcomingSec.data || []).map(m =>
-            <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />
-          )}
-        </Row>
+        {/* News: only rendered once Phase-2 fetch completes */}
+        {news.length > 0 && (
+          <Row title="📰 Latest News" viewAll="/news" gap={14} cardRatio="136/250" cardWidth={250}>
+            {news.map(n => <NewsCard key={n._id} n={n} onClick={() => navigate(`/news/${n._id}`)} />)}
+          </Row>
+        )}
 
-        <Row title="🎬 All Films" viewAll="/movies"
-             sentinelRef={allFilmsSec.ref} loading={allFilmsSec.loading}>
-          {(allFilmsSec.data || []).map(m =>
-            <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />
-          )}
-        </Row>
+        {trendingSongs.length > 0 && (
+          <Row title="🎵 Trending Songs" viewAll="/songs" gap={14} cardRatio="1/1" cardWidth={150}>
+            {trendingSongs.map((s, i) => (
+              <SongCard
+                key={i}
+                s={s}
+                onClick={() => navigate(
+                  s._movieSlug
+                    ? s._movieSlug.replace("/movie/", "/song/") + "/" + s.songIndex
+                    : `/song/${s.movieId}/${s.songIndex}`
+                )}
+              />
+            ))}
+          </Row>
+        )}
 
-        {!aboveFold.loading && aboveMovies.length === 0 && (
+        {highRated.length > 0 && (
+          <Row title="⭐ Top Rated" badge="Critic Pick" badgeColor="#e8c87a">
+            {highRated.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
+          </Row>
+        )}
+
+
+
+        {/* <Row title="🎬 All Films" viewAll="/movies">
+          {allFilmsRow.map(m => <MovieCard key={m._id} movie={m} onClick={() => navigate(moviePath(m))} />)}
+        </Row> */}
+
+        {movies.length === 0 && (
           <div className="home-empty">
             <div style={{ fontSize: "4rem", marginBottom: 16 }}>🎬</div>
             <h2>No movies yet</h2>
