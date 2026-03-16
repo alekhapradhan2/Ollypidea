@@ -36,5 +36,5 @@ services:
         sync: false          # ← set to https://ollipedia-backend.onrender.com/api
     routes:
       - type: rewrite
-        source: /*
+        source: /* 
         destination: /index.html
