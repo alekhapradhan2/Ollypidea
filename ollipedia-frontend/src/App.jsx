@@ -1,10 +1,19 @@
-import React, { useState, useCallback, Suspense, lazy } from "react";
-import { HashRouter, useLocation, Routes, Route } from "react-router-dom";
+import React, { useState, useCallback, Suspense, lazy, useEffect } from "react";
+import { BrowserRouter, useLocation, Routes, Route } from "react-router-dom";
 import { setToken } from "./api/api";
 
 import Navbar    from "./components/Navbar";
 import Footer    from "./components/Footer";
 import { Toast } from "./components/UI";
+
+// ── Scroll to top on every route change ──────────────────────────
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
+  return null;
+}
 
 // ── Critical path — loaded eagerly (above the fold) ───────────────
 import Home from "./pages/Home";
@@ -70,6 +79,7 @@ function AppInner({ admin, setAdmin }) {
 
   return (
     <>
+      <ScrollToTop />
       {!isAdminPortal && <Navbar admin={admin} onAdminLogout={handleAdminLogout} />}
 
       <Suspense fallback={<PageLoader />}>
@@ -112,8 +122,8 @@ export default function App() {
     try { const s = localStorage.getItem("op_admin"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   return (
-    <HashRouter>
+    <BrowserRouter>
       <AppInner admin={admin} setAdmin={setAdmin} />
-    </HashRouter>
+    </BrowserRouter>
   );
 }

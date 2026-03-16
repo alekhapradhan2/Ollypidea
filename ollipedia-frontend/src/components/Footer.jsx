@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const FOOTER_CSS = `
 .site-footer {
@@ -131,7 +131,6 @@ const FOOTER_CSS = `
 `;
 
 export default function Footer() {
-  const navigate = useNavigate();
   const year = new Date().getFullYear();
 
   return (
@@ -163,11 +162,11 @@ export default function Footer() {
             <div>
               <p className="footer-col-title">Explore</p>
               <ul className="footer-links">
-                <li><button onClick={() => navigate("/")}>🏠 Home</button></li>
-                <li><button onClick={() => navigate("/movies")}>🎬 Movies</button></li>
-                <li><button onClick={() => navigate("/cast")}>👥 Cast & Crew</button></li>
-                <li><button onClick={() => navigate("/songs")}>🎵 Songs</button></li>
-                <li><button onClick={() => navigate("/news")}>📰 News</button></li>
+                <li><Link to="/">🏠 Home</Link></li>
+                <li><Link to="/movies">🎬 Movies</Link></li>
+                <li><Link to="/cast">👥 Cast & Crew</Link></li>
+                <li><Link to="/songs">🎵 Songs</Link></li>
+                <li><Link to="/news">📰 News</Link></li>
               </ul>
             </div>
 
@@ -175,10 +174,9 @@ export default function Footer() {
             <div>
               <p className="footer-col-title">Company</p>
               <ul className="footer-links">
-                <li><a href="/about">About Us</a></li>
-                <li><a href="/contact">Contact Us</a></li>
-                {/* <li><a href="/advertise">Advertise</a></li> */}
-                <li><a href="/sitemap.xml">Sitemap</a></li>
+                <li><Link to="/about">About Us</Link></li>
+                <li><Link to="/contact">Contact Us</Link></li>
+                <li><a href="/sitemap.xml" target="_blank" rel="noopener noreferrer">Sitemap</a></li>
               </ul>
             </div>
 
@@ -186,10 +184,7 @@ export default function Footer() {
             <div>
               <p className="footer-col-title">Legal</p>
               <ul className="footer-links">
-                <li><a href="/privacy-policy">Privacy Policy</a></li>
-                {/* <li><a href="/terms-of-service">Terms of Service</a></li>
-                <li><a href="/disclaimer">Disclaimer</a></li>
-                <li><a href="/cookie-policy">Cookie Policy</a></li> */}
+                <li><Link to="/privacy-policy">Privacy Policy</Link></li>
               </ul>
             </div>
           </div>
@@ -201,9 +196,8 @@ export default function Footer() {
               © {year} <strong style={{ color: "var(--gold)" }}>Ollypedia</strong>. All rights reserved.
             </span>
             <div className="footer-bottom-links">
-              <a href="/privacy-policy">Privacy Policy</a>
-              {/* <a href="/terms-of-service">Terms</a> */}
-              <a href="/contact">Contact</a>
+              <Link to="/privacy-policy">Privacy Policy</Link>
+              <Link to="/contact">Contact</Link>
             </div>
           </div>
 
