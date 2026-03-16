@@ -540,34 +540,66 @@ function HeroSkeleton() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  MODULE-LEVEL CACHE — survives navigation, cleared on hard refresh
+//  This is the key fix: data is fetched ONCE and reused on every
+//  back-navigation. No spinner, no skeleton, instant restore.
+// ═══════════════════════════════════════════════════════════════════
+const _cache = {
+  movies: null,   // null = not fetched yet, [] = fetched but empty
+  news:   null,
+  ts:     0,      // timestamp of last fetch (for optional TTL)
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — re-fetch if stale
+
+// ═══════════════════════════════════════════════════════════════════
 //  MAIN HOME — 3-phase progressive loading
-//  Phase 1: movies API  → render hero + above-fold rows immediately
-//  Phase 2: news API    → injected after idle callback
-//  Phase 3: all other rows → virtualised, only rendered when in view
+//  Phase 1: hero + first rows  → from cache (instant) or API fetch
+//  Phase 2: news               → deferred via requestIdleCallback
+//  Phase 3: all other rows     → IntersectionObserver (scroll-lazy)
 // ═══════════════════════════════════════════════════════════════════
 export default function Home({ production }) {
   const navigate = useNavigate();
 
-  // ── State ──────────────────────────────────────────────────────
-  const [movies,      setMovies]      = useState([]);
-  const [moviesReady, setMoviesReady] = useState(false);
-  const [news,        setNews]        = useState([]);
+  // ── State — initialise from cache so back-navigation is instant ──
+  const [movies,      setMovies]      = useState(() => _cache.movies || []);
+  const [moviesReady, setMoviesReady] = useState(() => _cache.movies !== null);
+  const [news,        setNews]        = useState(() => _cache.news   || []);
   const [heroIdx,     setHeroIdx]     = useState(0);
   const timerRef = useRef(null);
 
-  // ── Phase 1: movies (critical path) ───────────────────────────
+  // ── Phase 1: movies ───────────────────────────────────────────
+  // If cache is warm → skip fetch entirely (instant re-render on back)
+  // If cache is stale or empty → fetch, update cache, update state
   useEffect(() => {
+    const now = Date.now();
+    // Cache hit — already have data, nothing to do
+    if (_cache.movies !== null && (now - _cache.ts) < CACHE_TTL) return;
+
+    // Cache miss or stale — fetch
     API.getMovies()
-      .then(m => { setMovies(m); setMoviesReady(true); })
+      .then(m => {
+        _cache.movies = m;
+        _cache.ts     = Date.now();
+        setMovies(m);
+        setMoviesReady(true);
+      })
       .catch(() => setMoviesReady(true));
   }, []);
 
   // ── Phase 2: news (deferred, non-critical) ─────────────────────
-  // Uses requestIdleCallback so the main thread isn't blocked while
-  // the hero and first rows are painting.
   useEffect(() => {
     if (!moviesReady) return;
-    const load = () => API.getNews().then(n => setNews(n.slice(0, 12))).catch(() => {});
+    // Cache hit
+    if (_cache.news !== null) { setNews(_cache.news); return; }
+
+    const load = () => API.getNews()
+      .then(n => {
+        const slice = n.slice(0, 12);
+        _cache.news = slice;
+        setNews(slice);
+      })
+      .catch(() => {});
+
     const id = typeof requestIdleCallback !== "undefined"
       ? requestIdleCallback(load, { timeout: 2000 })
       : setTimeout(load, 200);
@@ -647,8 +679,8 @@ export default function Home({ production }) {
 
   const goHero = i => { setHeroIdx(i); clearInterval(timerRef.current); };
 
-  // ── Show skeleton until Phase 1 completes ─────────────────────
-  if (!moviesReady) return (
+  // ── Show skeleton only on very first load (no cache yet) ─────
+  if (!moviesReady && _cache.movies === null) return (
     <>
       <style>{`@keyframes homepulse{0%,100%{opacity:1}50%{opacity:.35}}${cardCss}${heroCss}`}</style>
       <HeroSkeleton />
