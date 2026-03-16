@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors     = require("cors");
 const bcrypt   = require("bcryptjs");
 const jwt      = require("jsonwebtoken");
+const path     = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -1246,6 +1247,22 @@ app.delete("/api/admin/news/:id", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Serve Vite frontend build (Render.com deployment) ──────────────
+// "dist" is Vite's default output folder — make sure your build
+// command is: cd frontend && npm run build  (or wherever your React app lives)
+const distPath = path.join(__dirname, "dist");
+app.use(express.static(distPath));
+
+// SPA fallback — any route that isn't /api/* gets index.html
+// so React Router can handle /movie/abc, /song/xyz etc. on refresh
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "API endpoint not found" });
+  }
+  res.sendFile(path.join(distPath, "index.html"));
+});
+// ────────────────────────────────────────────────────────────────────
 
 app.listen(process.env.PORT || 4000, () =>
   console.log(`🚀 Server running on port ${process.env.PORT || 4000}`)

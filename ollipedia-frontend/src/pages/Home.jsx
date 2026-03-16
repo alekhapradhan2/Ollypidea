@@ -279,7 +279,7 @@ const heroCss = `
   overflow: hidden;
 }
 
-/* ── Each slide ── */
+/* ── Each slide — all absolutely stacked, same size as wrapper ── */
 .hh-slide {
   position: absolute;
   inset: 0;
@@ -289,23 +289,21 @@ const heroCss = `
   transition: opacity .7s ease;
   pointer-events: none;
 }
-/* Active slide becomes the document-flow element that sizes the wrapper */
+/* Active slide is relative — drives the wrapper's height */
 .hh-slide.active {
   position: relative;
   opacity: 1;
   pointer-events: auto;
 }
 
-/* ── Inner — sets the height responsively ── */
+/* ── Inner — sets the height responsively, contains ALL overlays ── */
 .hh-inner {
   position: relative;
-  /* clamp: 300px min on tiny phones → 56vw on tablets → 580px max on desktop */
   min-height: clamp(300px, 56vw, 580px);
+  overflow: hidden;
 }
 
-/* ── Two-layer gradient overlay ──
-   Layer 1 (bottom→top): strong dark at bottom so text is always readable
-   Layer 2 (right→left): dark on left to separate content from the image   */
+/* ── Gradient overlay ── */
 .hh-overlay {
   position: absolute;
   inset: 0;
@@ -323,20 +321,20 @@ const heroCss = `
     );
 }
 
-/* ── Text content — anchored to bottom-left ── */
+/* ── Text content — bottom-left, above overlay ── */
 .hh-content {
   position: absolute;
-  inset: 0;
+  bottom: 0; left: 0; right: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 16px 16px 48px;
-  z-index: 2;
-  max-width: 720px;
+  padding: 16px 16px 52px;
+  z-index: 3;
+  max-width: 680px;
 }
-@media(min-width:480px)  { .hh-content { padding: 20px 24px 56px; } }
-@media(min-width:768px)  { .hh-content { padding: 28px 36px 68px; } }
-@media(min-width:1100px) { .hh-content { padding: 32px 52px 76px; } }
+@media(min-width:480px)  { .hh-content { padding: 20px 24px 58px; } }
+@media(min-width:768px)  { .hh-content { padding: 28px 36px 70px; } }
+@media(min-width:1100px) { .hh-content { padding: 32px 52px 78px; } }
 
 /* Tags row */
 .hh-tags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:9px; }
@@ -419,15 +417,15 @@ const heroCss = `
 }
 .hh-btn-info:hover { background: rgba(255,255,255,.18); }
 
-/* ── Dots ── */
+/* ── Dots — inside hh-inner, bottom-left ── */
 .hh-dots {
   position: absolute;
-  bottom: 14px; left: 16px;
-  display: flex; gap: 6px; z-index: 5;
+  bottom: 16px; left: 16px;
+  display: flex; gap: 6px; z-index: 4;
 }
-@media(min-width:480px) { .hh-dots { bottom: 18px; left: 24px; } }
-@media(min-width:768px) { .hh-dots { left: 36px; bottom: 22px; } }
-@media(min-width:1100px){ .hh-dots { left: 52px; } }
+@media(min-width:480px)  { .hh-dots { bottom: 18px; left: 24px; } }
+@media(min-width:768px)  { .hh-dots { bottom: 22px; left: 36px; } }
+@media(min-width:1100px) { .hh-dots { left: 52px; } }
 .hh-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: rgba(255,255,255,.3); border: none;
@@ -435,12 +433,12 @@ const heroCss = `
 }
 .hh-dot.active { width: 24px; border-radius: 4px; background: #c9973a; }
 
-/* ── Thumbnail strip — desktop only ── */
+/* ── Thumbnail strip — inside hh-inner, bottom-right, desktop only ── */
 .hh-strip {
   position: absolute;
   bottom: 14px; right: 16px;
   display: none;
-  gap: 5px; z-index: 5;
+  gap: 5px; z-index: 4;
 }
 @media(min-width:900px) { .hh-strip { display: flex; bottom: 18px; right: 24px; } }
 .hh-strip-item {
@@ -468,8 +466,8 @@ const heroCss = `
 }
 `;
 
-// ─── Hero Slide ───────────────────────────────────────────────────
-function HeroSlide({ movie, active }) {
+// ─── Hero Slide — dots and strip live inside so they're within hh-inner ──
+function HeroSlide({ movie, active, dots, strip }) {
   const navigate = useNavigate();
   const img = heroImage(movie);
   const vc  = VS[movie.verdict] || "#7aaae8";
@@ -481,6 +479,7 @@ function HeroSlide({ movie, active }) {
     >
       <div className="hh-inner">
         <div className="hh-overlay" />
+
         <div className="hh-content">
           {/* Category / genre / language tags */}
           <div className="hh-tags">
@@ -524,6 +523,12 @@ function HeroSlide({ movie, active }) {
             </button>
           </div>
         </div>
+
+        {/* Dots — rendered only on active slide, positioned inside hh-inner */}
+        {active && dots}
+
+        {/* Thumbnail strip — rendered only on active slide */}
+        {active && strip}
       </div>
     </div>
   );
@@ -664,36 +669,43 @@ export default function Home({ production }) {
               i === heroIdx ||
               i === (heroIdx + 1) % heroMovies.length ||
               i === (heroIdx - 1 + heroMovies.length) % heroMovies.length;
+
+            // Build dots and strip — only passed to the active slide so they
+            // sit inside hh-inner and are correctly positioned
+            const dotsEl = (
+              <div className="hh-dots">
+                {heroMovies.map((_, di) => (
+                  <button key={di}
+                    className={`hh-dot${di === heroIdx ? " active" : ""}`}
+                    onClick={() => goHero(di)} />
+                ))}
+              </div>
+            );
+
+            const stripEl = (
+              <div className="hh-strip">
+                {heroMovies.map((sm, si) => {
+                  const simg = heroImage(sm);
+                  return (
+                    <div key={sm._id}
+                      className={`hh-strip-item${si === heroIdx ? " active" : ""}`}
+                      onClick={() => goHero(si)}>
+                      {simg
+                        ? <img src={simg} alt={sm.title} loading="lazy" decoding="async"
+                            onError={e => e.target.style.display="none"} />
+                        : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:".9rem" }}>🎬</div>}
+                      {sm.media?.trailer?.ytId && <div className="hh-strip-play">▶</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+
             return isAdjacentOrActive
-              ? <HeroSlide key={m._id} movie={m} active={i === heroIdx} />
+              ? <HeroSlide key={m._id} movie={m} active={i === heroIdx}
+                  dots={dotsEl} strip={stripEl} />
               : <div key={m._id} className="hh-slide" />;
           })}
-
-          {/* Dots */}
-          <div className="hh-dots">
-            {heroMovies.map((_, i) => (
-              <button key={i} className={`hh-dot${i === heroIdx ? " active" : ""}`}
-                onClick={() => goHero(i)} />
-            ))}
-          </div>
-
-          {/* Thumbnail strip — desktop only, hidden via CSS on mobile */}
-          <div className="hh-strip">
-            {heroMovies.map((m, i) => {
-              const img = heroImage(m);
-              return (
-                <div key={m._id}
-                  className={`hh-strip-item${i === heroIdx ? " active" : ""}`}
-                  onClick={() => goHero(i)}>
-                  {img
-                    ? <img src={img} alt={m.title} loading="lazy" decoding="async"
-                        onError={e => e.target.style.display="none"} />
-                    : <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:".9rem" }}>🎬</div>}
-                  {m.media?.trailer?.ytId && <div className="hh-strip-play">▶</div>}
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 
