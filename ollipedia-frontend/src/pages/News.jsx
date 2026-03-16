@@ -2,6 +2,7 @@ import SEO, { staticSEO } from "../components/SEO";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
+import { Cache } from "../api/cache";
 
 const CATS = ["All", "Update", "Release", "Trailer", "Song", "Award", "Interview", "Other"];
 const CAT_COLORS = {
@@ -47,13 +48,14 @@ function NewsCard({ n, onClick }) {
 
 export default function News() {
   const navigate = useNavigate();
-  const [news,    setNews]    = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [news,    setNews]    = useState(() => Cache.peek("news") || []);
+  const [loading, setLoading] = useState(() => Cache.peek("news") === null);
   const [filter,  setFilter]  = useState("All");
   const [search,  setSearch]  = useState("");
 
   useEffect(() => {
-    API.getNews().then(setNews).catch(console.error).finally(() => setLoading(false));
+    if (Cache.peek("news") !== null) return;
+    Cache.getNews().then(setNews).catch(console.error).finally(() => setLoading(false));
   }, []);
 
   const filtered = news.filter(n => {

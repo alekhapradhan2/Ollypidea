@@ -3,6 +3,7 @@ import { moviePath } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
+import { Cache } from "../api/cache";
 
 const GENRES   = ["Action","Drama","Romance","Comedy","Thriller","Family","Historical","Musical","Biographical","Devotional","Horror"];
 const VERDICTS = ["Upcoming","Blockbuster","Super Hit","Hit","Average","Flop","Disaster"];
@@ -310,8 +311,9 @@ function YearSection({ year, movies, onMovie, isExpanded, onExpand, onCollapse }
 // ─── MAIN ─────────────────────────────────────────────────────────
 export default function Movies() {
   const navigate = useNavigate();
-  const [movies,  setMovies]  = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Initialise from cache → instant render on back-navigation
+  const [movies,  setMovies]  = useState(() => Cache.peek("movies") || []);
+  const [loading, setLoading] = useState(() => Cache.peek("movies") === null);
 
   // Filters
   const [search,   setSearch]   = useState("");
@@ -333,7 +335,8 @@ export default function Movies() {
   const isFiltering = !!(search.trim() || fYear || fGenre || fVerdict);
 
   useEffect(() => {
-    API.getMovies()
+    if (Cache.peek("movies") !== null) return; // already cached
+    Cache.getMovies()
       .then(d => setMovies([...d].sort((a, b) => (b.releaseDate||"0").localeCompare(a.releaseDate||"0"))))
       .catch(console.error)
       .finally(() => setLoading(false));

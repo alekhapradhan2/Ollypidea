@@ -3,6 +3,7 @@ import { moviePath } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
+import { Cache } from "../api/cache";
 
 // ── Helpers ───────────────────────────────────────────────────────
 const extractYtId = i => { if(!i)return null; const s=String(i).trim(); const m=s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/); return m?m[1]:(/^[A-Za-z0-9_-]{11}$/.test(s)?s:null); };
@@ -598,8 +599,8 @@ function Section({ icon, title, songs, total, onSongClick, onViewAll }) {
 // ─────────────────────────────────────────────────────────────────
 export default function AllSongs() {
   const navigate = useNavigate();
-  const [movies,  setMovies]  = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [movies,  setMovies]  = useState(() => Cache.peek("movies") || []);
+  const [loading, setLoading] = useState(() => Cache.peek("movies") === null);
 
   // Filters
   const [search,  setSearch]  = useState("");
@@ -614,7 +615,8 @@ export default function AllSongs() {
   const isFiltering = !!(search.trim() || fYear);
 
   useEffect(() => {
-    API.getMovies().catch(() => []).then(m => { setMovies(m); setLoading(false); });
+    if (Cache.peek("movies") !== null) return;
+    Cache.getMovies().catch(() => []).then(m => { setMovies(m); setLoading(false); });
   }, []);
 
   useEffect(() => { setPage(1); }, [search, fYear, tab]);

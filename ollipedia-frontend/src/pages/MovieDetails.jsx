@@ -4,6 +4,7 @@ import { Helmet } from "react-helmet-async";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { API, getToken } from "../api/api";
+import { Cache } from "../api/cache";
 
 // ── Helpers ───────────────────────────────────────────────
 function SafeImg({ src, alt, style }) {
@@ -267,11 +268,12 @@ export default function MovieDetails({ production, onToast, portalMode }) {
   const location     = useLocation();
   const trailerRef   = useRef(null);
 
-  const [movie,    setMovie]   = useState(null);
-  const [allMovies, setAllMovies] = useState([]);
-  const [tab,      setTab]     = useState("overview");
-  const [loading,  setLoading] = useState(true);
-  const [error,    setError]   = useState(null);
+  const [movie,    setMovie]    = useState(null);
+  // Pre-fill from cache so related sections appear instantly on fast connections
+  const [allMovies, setAllMovies] = useState(() => Cache.peek("movies") || []);
+  const [tab,      setTab]      = useState("overview");
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
 
   const isOwner  = !!(getToken()&&production&&movie&&String(movie.productionId?._id||movie.productionId)===String(production._id));
   const isCollab = !!(getToken()&&production&&movie&&(movie.collaborators||[]).some(c=>String(c._id||c)===String(production._id)));
@@ -297,7 +299,6 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    // Load movie first for fast render, then fetch all movies in background
     API.getMovie(id)
       .then(m => {
         setMovie(m);
@@ -305,10 +306,10 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         setBoForm({...(m.boxOffice||{}), verdict: m.verdict});
         setTrailerInput(m.media?.trailer?.ytId||"");
         setLoading(false);
-        // Defer allMovies — only needed for related sections at bottom of page
+        // Defer allMovies via cache — instant if already loaded from another page
         const tid = typeof requestIdleCallback !== "undefined"
-          ? requestIdleCallback(() => API.getMovies().catch(()=>[]).then(all => setAllMovies(all)))
-          : setTimeout(() => API.getMovies().catch(()=>[]).then(all => setAllMovies(all)), 300);
+          ? requestIdleCallback(() => Cache.getMovies().catch(()=>[]).then(all => setAllMovies(all)))
+          : setTimeout(() => Cache.getMovies().catch(()=>[]).then(all => setAllMovies(all)), 300);
         return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(tid) : clearTimeout(tid);
       })
       .catch(e => { setError(typeof e==="string"?e:"Failed to load"); setLoading(false); });

@@ -4,6 +4,7 @@ import { Helmet } from "react-helmet-async";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { API } from "../api/api";
+import { Cache } from "../api/cache";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -232,15 +233,15 @@ export default function CastProfile({ portalMode }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    // Load person first — show hero immediately
     API.getCastMember(id)
       .then(p => {
         setPerson(p);
         setLoading(false);
-        // Defer news load — non-critical, load after person renders
+        // Defer news — use cache so no re-fetch if already loaded
+        const load = () => Cache.getNews().catch(()=>[]).then(n => setAllNews(n));
         const id2 = typeof requestIdleCallback !== "undefined"
-          ? requestIdleCallback(() => API.getNews().catch(()=>[]).then(n => setAllNews(n)))
-          : setTimeout(() => API.getNews().catch(()=>[]).then(n => setAllNews(n)), 150);
+          ? requestIdleCallback(load)
+          : setTimeout(load, 150);
         return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id2) : clearTimeout(id2);
       })
       .catch(e => { setError(e?.message || "Not found"); setLoading(false); });

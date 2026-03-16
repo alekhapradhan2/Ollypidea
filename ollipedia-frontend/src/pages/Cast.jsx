@@ -3,6 +3,7 @@ import { castPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
+import { Cache } from "../api/cache";
 
 const CSS = `
 @keyframes cpulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -121,14 +122,18 @@ function CastRow({title,people,tag}){
 
 export default function Cast(){
   const navigate=useNavigate();
-  const [cast,setCast]=useState([]);
-  const [loading,setLoading]=useState(true);
+  const [cast,setCast]=useState(()=>{
+    const c = Cache.peek("cast");
+    return c ? [...c].sort((a,b)=>(b.movies?.length||0)-(a.movies?.length||0)) : [];
+  });
+  const [loading,setLoading]=useState(()=>Cache.peek("cast")===null);
   const [search,setSearch]=useState("");
   const [view,setView]=useState("trending");
   const [typeFilter,setTypeFilter]=useState("All");
 
   useEffect(()=>{
-    API.getCast()
+    if (Cache.peek("cast") !== null) return;
+    Cache.getCast()
       .then(data=>setCast([...data].sort((a,b)=>(b.movies?.length||0)-(a.movies?.length||0))))
       .catch(console.error)
       .finally(()=>setLoading(false));

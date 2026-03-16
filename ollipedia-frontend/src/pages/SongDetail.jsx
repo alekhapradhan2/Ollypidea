@@ -3,6 +3,7 @@ import { extractId, moviePath, songPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { API } from "../api/api";
+import { Cache } from "../api/cache";
 
 const extractYtId = (input) => {
   if (!input) return null;
@@ -233,7 +234,8 @@ export default function SongDetail() {
   const urlMovieId = extractId(_rawMovieSlug);
   const navigate = useNavigate();
 
-  const [allMovies,  setAllMovies]  = useState([]);
+  // Pre-populate from cache so related songs show instantly
+  const [allMovies,  setAllMovies]  = useState(() => Cache.peek("movies") || []);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState(null);
   const [currentMovieId,  setCurrentMovieId]  = useState(urlMovieId);
@@ -242,13 +244,20 @@ export default function SongDetail() {
   const movie = allMovies.find(m=>String(m._id)===currentMovieId)||null;
 
   useEffect(()=>{
+    // If we already have this movie in cache, skip individual fetch
+    const cached = Cache.peek("movies");
+    if (cached) {
+      const found = cached.find(m => String(m._id) === urlMovieId);
+      if (found) { setLoading(false); return; }
+    }
     API.getMovie(urlMovieId)
       .then(m=>{
         setAllMovies(prev=>[m,...prev.filter(x=>String(x._id)!==String(m._id))]);
         setLoading(false);
+        // Deferred: load all movies via cache for related songs
         const tid=typeof requestIdleCallback!=="undefined"
-          ?requestIdleCallback(()=>API.getMovies().catch(()=>[]).then(all=>setAllMovies(all)))
-          :setTimeout(()=>API.getMovies().catch(()=>[]).then(all=>setAllMovies(all)),200);
+          ?requestIdleCallback(()=>Cache.getMovies().catch(()=>[]).then(all=>setAllMovies(all)))
+          :setTimeout(()=>Cache.getMovies().catch(()=>[]).then(all=>setAllMovies(all)),200);
         return()=>typeof requestIdleCallback!=="undefined"?cancelIdleCallback(tid):clearTimeout(tid);
       })
       .catch(e=>{ setError(typeof e==="string"?e:"Failed to load"); setLoading(false); });
