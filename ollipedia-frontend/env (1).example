@@ -1,0 +1,18 @@
+# ── Ollypedia Backend — Environment Variables ─────────────────────
+# Copy this to .env for local dev, or set these in AWS directly
+
+# MongoDB Atlas connection string
+MONGO_URI=mongodb+srv://USERNAME:PASSWORD@cluster.mongodb.net/ollypedia?retryWrites=true&w=majority
+
+# JWT secret — use a long random string, never commit the real value
+JWT_SECRET=replace_with_a_long_random_secret_string_min_32_chars
+
+# Your frontend domain — CRITICAL for CORS
+# Set this to your actual frontend URL with NO trailing slash
+FRONTEND_URL=https://ollypedia.in
+
+# Port — AWS Elastic Beanstalk uses 8080 by default, EC2 use 4000
+PORT=8080
+
+# Optional — admin secret for first admin registration
+ADMIN_SECRET=your_admin_secret

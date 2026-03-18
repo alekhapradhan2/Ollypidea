@@ -697,7 +697,22 @@ export default function Home({ production }) {
     .sort((a, b) => b.avg - a.avg)
     .slice(0, MAX),
   [movies]);
-  const upcoming    = useMemo(() => srt(movies.filter(m => !m.verdict || m.verdict === "Upcoming")).slice(0, MAX), [movies, srt]);
+  const upcoming = useMemo(() => {
+    const now = new Date();
+    return movies
+      .filter(m => !m.verdict || m.verdict === "Upcoming")
+      .sort((a, b) => {
+        const aDate = a.releaseDate ? new Date(a.releaseDate) : null;
+        const bDate = b.releaseDate ? new Date(b.releaseDate) : null;
+        // TBA (no date) always goes to the end
+        if (!aDate && !bDate) return 0;
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        // Soonest upcoming first (ascending)
+        return aDate - bDate;
+      })
+      .slice(0, MAX);
+  }, [movies]);
 
   // All Films row — capped at 30 (link to /movies for the rest)
   const allFilmsRow = useMemo(() => allMovies.slice(0, 30), [allMovies]);
@@ -732,17 +747,37 @@ export default function Home({ production }) {
   }, [allMovies]);
 
   // ── Hero ───────────────────────────────────────────────────────
-  const heroMovies = useMemo(() => movies
-    .filter(m => {
-      const h = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
-      if (!h) return false;
-      if (!m.verdict || m.verdict === "Upcoming") return true;
-      if (m.releaseDate && withinDays(m.releaseDate, 60, 0)) return true;
-      return isThisMonth(m.releaseDate) || isLastMonth(m.releaseDate);
-    })
-    .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
-    .slice(0, 8),
-  [movies]);
+  const heroMovies = useMemo(() => {
+    const now = new Date();
+    return movies
+      .filter(m => {
+        const h = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
+        if (!h) return false;
+        if (!m.verdict || m.verdict === "Upcoming") return true;
+        if (m.releaseDate && withinDays(m.releaseDate, 60, 0)) return true;
+        return isThisMonth(m.releaseDate) || isLastMonth(m.releaseDate);
+      })
+      .sort((a, b) => {
+        const aUp = !a.verdict || a.verdict === "Upcoming";
+        const bUp = !b.verdict || b.verdict === "Upcoming";
+        const aDate = a.releaseDate ? new Date(a.releaseDate) : null;
+        const bDate = b.releaseDate ? new Date(b.releaseDate) : null;
+
+        // Both upcoming → soonest first, TBA at end
+        if (aUp && bUp) {
+          if (!aDate && !bDate) return 0;
+          if (!aDate) return 1;
+          if (!bDate) return -1;
+          return aDate - bDate;
+        }
+        // Upcoming before released
+        if (aUp && !bUp) return -1;
+        if (!aUp && bUp) return 1;
+        // Both released → most recent first
+        return (bDate || 0) - (aDate || 0);
+      })
+      .slice(0, 8);
+  }, [movies]);
 
   // Hero auto-advance
   useEffect(() => {

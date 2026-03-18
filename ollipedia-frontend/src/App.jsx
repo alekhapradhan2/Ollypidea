@@ -1,19 +1,10 @@
 import React, { useState, useCallback, Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, useLocation, Routes, Route } from "react-router-dom";
-import { setToken } from "./api/api";
+import { setToken, setAdminToken, getAdminToken } from "./api/api";
 
 import Navbar    from "./components/Navbar";
 import Footer    from "./components/Footer";
 import { Toast } from "./components/UI";
-
-// ── Scroll to top on every route change ──────────────────────────
-function ScrollToTop() {
-  const { pathname } = useLocation();
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [pathname]);
-  return null;
-}
 
 // ── Critical path — loaded eagerly (above the fold) ───────────────
 import Home from "./pages/Home";
@@ -67,14 +58,20 @@ function AppInner({ admin, setAdmin }) {
 
   const handleAdminAuth = (adminObj, token) => {
     setAdmin(adminObj);
-    setToken(token);
-    try { localStorage.setItem("op_admin", JSON.stringify(adminObj)); } catch {}
+    setAdminToken(token);   // ← was setToken() — wrong! admin needs setAdminToken
+    try {
+      localStorage.setItem("op_admin", JSON.stringify(adminObj));
+      localStorage.setItem("admin_token", token);   // persist so page refresh works
+    } catch {}
   };
 
   const handleAdminLogout = () => {
     setAdmin(null);
-    setToken(null);
-    try { localStorage.removeItem("op_admin"); localStorage.removeItem("op_admin_token"); } catch {}
+    setAdminToken(null);
+    try {
+      localStorage.removeItem("op_admin");
+      localStorage.removeItem("admin_token");
+    } catch {}
   };
 
   return (
@@ -117,9 +114,22 @@ function AppInner({ admin, setAdmin }) {
   );
 }
 
+// ── Scroll to top on every route change ──────────────────────────
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top:0, left:0, behavior:"instant" }); }, [pathname]);
+  return null;
+}
+
 export default function App() {
   const [admin, setAdmin] = useState(() => {
-    try { const s = localStorage.getItem("op_admin"); return s ? JSON.parse(s) : null; } catch { return null; }
+    try {
+      const s = localStorage.getItem("op_admin");
+      const t = localStorage.getItem("admin_token");
+      // Restore token into api.js module so admin API calls work after refresh
+      if (t) setAdminToken(t);
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
   });
   return (
     <BrowserRouter>

@@ -1,11 +1,26 @@
 /**
  * ═══════════════════════════════════════════════════════════════════
- *  scrape_news.js  —  Ollipedia News / Article Scraper  v2
+ *  scrape_news.js  —  Ollipedia News / Article Scraper  v3
  *
  *  SOURCES (no API key required):
- *    1. Google News RSS — searched PER MOVIE TITLE (guaranteed match)
+ *    1. Google News RSS — per movie, relevance-validated (see changes below)
  *    2. Wikipedia       — per-movie article sections
  *    3. General Ollywood RSS feeds (strict matching + general news)
+ *
+ *  What changed in v3:
+ *    • Source 1 query now includes release year + "Odia movie":
+ *        "Title" Odia movie 2024 news
+ *      This prevents Bollywood / Telugu results for movies with
+ *      common-sounding titles.
+ *    • isRelevant() validates every Google News result — articles that
+ *      don't mention the movie title are dropped before saving, which
+ *      eliminates the unrelated content that v2 was storing blindly.
+ *    • Movies are processed newest-first (by MongoDB _id creation time)
+ *      and uncovered movies (0 existing news articles) are prioritised
+ *      over already well-covered ones, so fresh additions get scraped
+ *      before the --limit cuts off.
+ *    • General RSS feed now requires ≥ 80 chars of real content for
+ *      general Odia articles — drops one-liner stubs.
  *
  *  Usage:
  *    node scrape_news.js                       # all sources, all movies
@@ -171,18 +186,82 @@ function parseRss(xml) {
 
 // ════════════════════════════════════════════════════════════════
 // SOURCE 1 — GOOGLE NEWS RSS per movie title
-// Articles are ALREADY bound to the movie — no matching needed.
+//
+// Improvements vs v2:
+//   1. Query includes release year + "Odia movie" for precision
+//   2. isRelevant() validates every article before saving — articles
+//      that don't mention the movie title are dropped immediately
 // ════════════════════════════════════════════════════════════════
+
+/**
+ * isRelevant(article, movie)
+ *
+ * Returns true only when the article is clearly about this specific movie.
+ * Rules (ANY one must pass):
+ *   1. Article title contains the full movie title (exact phrase)
+ *   2. Article content contains the full movie title
+ *   3. A significant word from the title (≥6 chars) appears in title/content
+ *      AND an Odia/Ollywood keyword also appears  (soft fallback for
+ *      abbreviated headlines like "Daman crosses 3 crore")
+ *
+ * Short titles (< 5 chars) require Rule 1 or 2 — Rule 3 is disabled
+ * to prevent false positives from very common words.
+ */
+function isRelevant(article, movie) {
+  const movieTitle = (movie.title || "").trim();
+  if (!movieTitle || movieTitle.length < 3) return false;
+
+  const hayTitle   = (article.title   || "").toLowerCase();
+  const hayContent = (article.content || "").toLowerCase();
+  const needle     = movieTitle.toLowerCase();
+
+  // Rule 1 — exact phrase in headline
+  if (hayTitle.includes(needle)) return true;
+
+  // Rule 2 — exact phrase in content / description
+  if (hayContent.includes(needle)) return true;
+
+  // Rule 3 — significant word + Odia context (long titles only)
+  if (movieTitle.length >= 5) {
+    const words      = needle.split(/\s+/).filter(w => w.length >= 6);
+    const hasWord    = words.some(w => hayTitle.includes(w) || hayContent.includes(w));
+    const hasContext = /odia|ollywood|odisha|odishan/i.test(
+      (article.title || "") + " " + (article.content || "")
+    );
+    if (hasWord && hasContext) return true;
+  }
+
+  return false;
+}
+
+/**
+ * buildGoogleQuery(movie)
+ *
+ * Builds a precise, year-aware search query:
+ *   "Title" Odia movie 2024 news
+ *
+ * - Quoted title → Google exact-phrase match
+ * - "Odia movie" → anchors to Ollywood, filters out Bollywood/Telugu results
+ * - Year suffix  → scopes to the movie's release window
+ * - "news"       → biases towards news articles vs fan wikis / IMDb
+ */
+function buildGoogleQuery(movie) {
+  const title = (movie.title || "").trim();
+  const year  = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : null;
+  const yearSuffix = year ? ` ${year}` : "";
+  return `"${title}" Odia movie${yearSuffix} news`;
+}
+
 async function scrapeGoogleNewsPerMovie(movies) {
-  console.log("\n[Source 1] Google News RSS — per movie title");
+  console.log("\n[Source 1] Google News RSS — per movie title (relevance-filtered)");
   const articles = [];
 
   for (let i = 0; i < movies.length; i++) {
     const movie = movies[i];
-    const query = '"' + movie.title + '" Odia film OR Ollywood';
+    const query = buildGoogleQuery(movie);
     const url   = "https://news.google.com/rss/search?q=" + encodeURIComponent(query) + "&hl=en-IN&gl=IN&ceid=IN:en";
 
-    process.stdout.write("  [" + String(i+1).padStart(3) + "/" + movies.length + "] " + movie.title.slice(0,40).padEnd(40) + " ");
+    process.stdout.write("  [" + String(i+1).padStart(3) + "/" + movies.length + "] " + movie.title.slice(0,36).padEnd(36) + " ");
 
     try {
       const res = await fetchSafe(url, {
@@ -192,9 +271,12 @@ async function scrapeGoogleNewsPerMovie(movies) {
 
       const xml   = await res.text();
       const items = parseRss(xml);
-      let added   = 0;
+      let added = 0, dropped = 0;
 
       for (const item of items) {
+        // ── RELEVANCE GATE — drop articles not about this movie ──
+        if (!isRelevant(item, movie)) { dropped++; continue; }
+
         articles.push({
           title:      item.title,
           content:    item.content || item.title,
@@ -207,7 +289,7 @@ async function scrapeGoogleNewsPerMovie(movies) {
         });
         added++;
       }
-      console.log("OK  " + added + " articles");
+      console.log("OK  " + added + " kept / " + dropped + " dropped");
     } catch (e) {
       console.log("ERR " + e.message.slice(0, 50));
     }
@@ -340,7 +422,15 @@ const GENERAL_FEEDS = [
 async function scrapeGeneralFeeds(movies) {
   console.log("\n[Source 3] General Ollywood RSS Feeds");
   const articles = [];
-  const isOdia   = function(t, c) { return /odia|ollywood|odisha/i.test((t||"") + " " + (c||"")); };
+
+  // isOdia: requires an Odia/Ollywood keyword AND a minimum content length
+  // so that bare one-liner stubs don't pollute the general news feed.
+  const isOdia = function(t, c) {
+    const text = (t || "") + " " + (c || "");
+    if (!/odia|ollywood|odisha|odishan/i.test(text)) return false;
+    // Require at least 80 chars of actual content (not just a headline)
+    return (c || "").trim().length >= 80;
+  };
 
   for (const feed of GENERAL_FEEDS) {
     console.log("  Feed: " + feed.name);
@@ -356,9 +446,12 @@ async function scrapeGeneralFeeds(movies) {
 
       for (const item of items) {
         if (!item.title) continue;
+
+        // First try to link to a specific movie via strictMatch
         const movie = strictMatch(item.title, item.content, movies);
 
         if (movie) {
+          // Movie-linked: keep regardless of content length
           articles.push({
             title:      item.title,
             content:    item.content || item.title,
@@ -371,6 +464,7 @@ async function scrapeGeneralFeeds(movies) {
           });
           linked++;
         } else if (isOdia(item.title, item.content)) {
+          // General Odia/Ollywood news — must have real content (≥80 chars)
           articles.push({
             title:      item.title,
             content:    item.content || item.title,
@@ -473,7 +567,21 @@ async function main() {
     await mongoose.disconnect();
     process.exit(1);
   }
-  console.log(movies.length + " movies loaded\n");
+
+  // ── Priority ordering: newly added + uncovered movies first ────
+  // Primary:   movies with 0 existing news articles scrape first
+  // Secondary: within same tier, newest MongoDB _id (= most recently
+  //            added to the DB) comes first — ObjectId is time-stamped
+  movies.sort(function(a, b) {
+    const newsA = (a.news || []).length;
+    const newsB = (b.news || []).length;
+    if (newsA === 0 && newsB > 0) return -1; // uncovered first
+    if (newsB === 0 && newsA > 0) return  1;
+    // Same coverage tier → newest _id first
+    return b._id.toString() > a._id.toString() ? 1 : -1;
+  });
+
+  console.log(movies.length + " movies loaded (order: newest/uncovered first)\n");
 
   if (MOVIE_FILTER) {
     movies = movies.filter(function(m) {
