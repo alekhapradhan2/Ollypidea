@@ -362,7 +362,7 @@ export default function Navbar({ admin, onAdminLogout }) {
         <NavSearch onClose={() => setOpen(false)} />
 
         {/* Admin actions */}
-        <div className="nb-actions">
+        {/* <div className="nb-actions">
           {admin ? (
             <>
               <Link to="/admin" style={{ display:"flex", alignItems:"center", gap:5, textDecoration:"none" }}>
@@ -377,7 +377,7 @@ export default function Navbar({ admin, onAdminLogout }) {
             <Link to="/admin/login" className="btn btn-ghost btn-sm"
               style={{ color:"rgba(255,255,255,.42)", fontSize:".71rem" }}>Admin</Link>
           )}
-        </div>
+        </div> */}
 
         {/* Hamburger (mobile) */}
         <button className={`nb-ham${open ? " open" : ""}`} aria-label="Menu"
