@@ -929,7 +929,7 @@ export default function Home({ production }) {
           <div className="home-empty">
             <div style={{ fontSize: "4rem", marginBottom: 16 }}>🎬</div>
             <h2>No movies yet</h2>
-            <p style={{ color: "var(--muted)" }}>Be the first to add a film to Ollipedia</p>
+            <p style={{ color: "var(--muted)" }}>Be the first to add a film to Ollypedia</p>
             {production && (
               <button className="btn btn-gold" onClick={() => navigate("/dashboard/add-movie")}>+ Add Movie</button>
             )}
