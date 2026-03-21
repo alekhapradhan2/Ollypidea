@@ -1,139 +1,121 @@
-import React, { useState, useCallback, Suspense, lazy, useEffect } from "react";
-import { BrowserRouter, useLocation, Routes, Route } from "react-router-dom";
-import { setToken, setAdminToken, getAdminToken } from "./api/api";
+import React, { useState, useCallback } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { setToken, setCastToken, setAdminToken } from "./api/api";
 
-import Navbar    from "./components/Navbar";
-import Footer    from "./components/Footer";
-import { Toast } from "./components/UI";
+import Navbar             from "./components/Navbar";
+import LoginModal         from "./components/LoginModal";
+import { Toast }          from "./components/UI";
 
-// ── Critical path — loaded eagerly (above the fold) ───────────────
-import Home from "./pages/Home";
+import Home               from "./pages/Home";
+import Movies             from "./pages/Movies";
+import MovieDetails       from "./pages/MovieDetails";
+import Cast               from "./pages/Cast";
+import CastProfile        from "./pages/CastProfile";
+import News               from "./pages/News";
+import NewsDetail         from "./pages/NewsDetail";
+import Register           from "./pages/Register";
+import ProductionProfile  from "./pages/ProductionProfile";
+import SongDetail         from "./pages/SongDetail";
 
-// Stable component references — prevents remount on every navigation
-const MemoHome = React.memo(Home);
+import Dashboard          from "./pages/Dashboard";
+import AddMovie           from "./pages/AddMovie";
+import CastRegister       from "./pages/CastRegister";
+import CastPortal         from "./pages/CastPortal";
+import PortalMovieDetails from "./pages/PortalMovieDetails";
+import PortalCastProfile  from "./pages/PortalCastProfile";
 
-// ── All other pages — code-split, loaded on demand ────────────────
-// Each lazy() creates a separate JS chunk that only downloads when
-// the user navigates to that route — dramatically reduces initial bundle.
-const Movies           = lazy(() => import("./pages/Movies"));
-const MovieDetails     = lazy(() => import("./pages/MovieDetails"));
-const Cast             = lazy(() => import("./pages/Cast"));
-const CastProfile      = lazy(() => import("./pages/CastProfile"));
-const News             = lazy(() => import("./pages/News"));
-const NewsDetail       = lazy(() => import("./pages/NewsDetail"));
-const SongDetail       = lazy(() => import("./pages/SongDetail"));
-const AllSongs         = lazy(() => import("./pages/AllSongs"));
-const ProductionProfile= lazy(() => import("./pages/ProductionProfile"));
-const AdminLogin       = lazy(() => import("./pages/AdminLogin"));
-const AdminPortal      = lazy(() => import("./pages/AdminPortal"));
-// Legal / info pages (tiny, also lazy)
-const PrivacyPolicy    = lazy(() => import("./pages/PrivacyPolicy"));
-const AboutUs          = lazy(() => import("./pages/AboutUs"));
-const ContactUs        = lazy(() => import("./pages/ContactUs"));
+import AdminPortal        from "./pages/AdminPortal";
+import AdminLogin         from "./pages/AdminLogin";
 
-// ── Minimal fallback shown during chunk load ──────────────────────
-function PageLoader() {
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      minHeight: "60vh", color: "var(--muted)", flexDirection: "column", gap: 12,
-    }}>
-      <div style={{ fontSize: "1.8rem" }}>🎬</div>
-      <p style={{ fontSize: ".82rem" }}>Loading…</p>
-    </div>
-  );
-}
-
-function AppInner({ admin, setAdmin }) {
+function AppInner({ production, setProduction, castMember, setCastMember, admin, setAdmin }) {
   const location = useLocation();
-  const [toast, setToast] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [toast,     setToast]     = useState(null);
+
+  const isProdPortal  = location.pathname.startsWith("/dashboard") || location.pathname.startsWith("/portal");
+  const isCastPortal  = location.pathname.startsWith("/cast-portal");
   const isAdminPortal = location.pathname.startsWith("/admin");
-  // Don't show public Footer inside admin portal
-  const showFooter = !isAdminPortal;
+  const isAnyPortal   = isProdPortal || isCastPortal || isAdminPortal;
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  const handleAdminAuth = (adminObj, token) => {
-    setAdmin(adminObj);
-    setAdminToken(token);   // ← was setToken() — wrong! admin needs setAdminToken
-    try {
-      localStorage.setItem("op_admin", JSON.stringify(adminObj));
-      localStorage.setItem("admin_token", token);   // persist so page refresh works
-    } catch {}
-  };
+  const handleProdAuth    = (prod, token) => { setProduction(prod); setToken(token); try { localStorage.setItem("op_prod", JSON.stringify(prod)); } catch {} };
+  const handleProdLogout  = ()            => { setProduction(null); setToken(null);  try { localStorage.removeItem("op_prod"); } catch {} };
+  const handleCastAuth    = (m, token)    => { setCastMember(m);    setCastToken(token); try { localStorage.setItem("cm_member", JSON.stringify(m)); } catch {} };
+  const handleCastLogout  = ()            => { setCastMember(null); setCastToken(null);  try { localStorage.removeItem("cm_member"); localStorage.removeItem("cm_token"); } catch {} };
+  const handleAdminAuth   = (a, token)    => { setAdmin(a);         setAdminToken(token); try { localStorage.setItem("admin_user", JSON.stringify(a)); } catch {} };
+  const handleAdminLogout = ()            => { setAdmin(null);      setAdminToken(null);  try { localStorage.removeItem("admin_user"); localStorage.removeItem("admin_token"); } catch {} };
 
-  const handleAdminLogout = () => {
-    setAdmin(null);
-    setAdminToken(null);
-    try {
-      localStorage.removeItem("op_admin");
-      localStorage.removeItem("admin_token");
-    } catch {}
-  };
+  const updateProduction = (p) => { setProduction(p); try { localStorage.setItem("op_prod",    JSON.stringify(p)); } catch {} };
+  const updateCastMember = (m) => { setCastMember(m); try { localStorage.setItem("cm_member",  JSON.stringify(m)); } catch {} };
 
   return (
     <>
-      <ScrollToTop />
-      {!isAdminPortal && <Navbar admin={admin} onAdminLogout={handleAdminLogout} />}
+      {!isAnyPortal && (
+        <Navbar
+          production={production} castMember={castMember}
+          onLoginClick={() => setShowLogin(true)}
+          onLogout={handleProdLogout} onCastLogout={handleCastLogout}
+        />
+      )}
 
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          {/* ── Public ── */}
-          <Route path="/"       element={<MemoHome />} />
-          <Route path="/movies" element={<Movies />} />
-          <Route path="/cast"   element={<Cast />} />
-          <Route path="/news"   element={<News />} />
-          <Route path="/songs"  element={<AllSongs />} />
+      <Routes>
+        {/* Public */}
+        <Route path="/"               element={<Home production={production} />} />
+        <Route path="/movies"         element={<Movies />} />
+        <Route path="/movie/:slug"    element={<MovieDetails production={production} onToast={showToast} />} />
+        <Route path="/cast"           element={<Cast />} />
+        <Route path="/cast/:id"       element={<CastProfile />} />
+        <Route path="/cast/:id/:nameSlug" element={<CastProfile />} />
+        <Route path="/news"           element={<News />} />
+        <Route path="/news/:id"       element={<NewsDetail />} />
+        <Route path="/production/:id" element={<ProductionProfile production={production} />} />
+        <Route path="/register"       element={<Register onSuccess={(p,t) => handleProdAuth(p,t)} onToast={showToast} />} />
+        <Route path="/cast-register"  element={<CastRegister onSuccess={(m,t) => handleCastAuth(m,t)} onToast={showToast} />} />
+        <Route path="/song/:movieSlug/:songIndex" element={<SongDetail />} />
+        <Route path="/song/:movieSlug/:songIndex/:songSlug" element={<SongDetail />} />
 
-          {/* Slug / detail routes */}
-          <Route path="/movie/:slug"                element={<MovieDetails onToast={showToast} />} />
-          <Route path="/cast/:slug"                 element={<CastProfile />} />
-          <Route path="/news/:slug"                 element={<NewsDetail />} />
-          <Route path="/song/:movieSlug/:songIndex" element={<SongDetail />} />
-          <Route path="/song/:movieSlug"            element={<SongDetail />} />
-          <Route path="/production/:id"             element={<ProductionProfile />} />
+        {/* Production Portal */}
+        <Route path="/dashboard"           element={<Dashboard production={production} onToast={showToast} onLogout={handleProdLogout} onProductionUpdate={updateProduction} />} />
+        <Route path="/dashboard/add-movie" element={<AddMovie production={production} onToast={showToast} />} />
+        <Route path="/portal/movie/:id"    element={<PortalMovieDetails production={production} onToast={showToast} />} />
+        <Route path="/portal/cast/:id"     element={<PortalCastProfile production={production} />} />
 
-          {/* ── Info / Legal ── */}
-          <Route path="/privacy-policy"  element={<PrivacyPolicy />} />
-          <Route path="/about"           element={<AboutUs />} />
-          <Route path="/contact"         element={<ContactUs />} />
+        {/* Cast Portal */}
+        <Route path="/cast-portal" element={<CastPortal castMember={castMember} onToast={showToast} onLogout={handleCastLogout} onUpdate={updateCastMember} />} />
 
-          {/* ── Admin ── */}
-          <Route path="/admin/login" element={<AdminLogin onSuccess={handleAdminAuth} onToast={showToast} />} />
-          <Route path="/admin/*"     element={<AdminPortal admin={admin} onLogout={handleAdminLogout} onToast={showToast} />} />
-        </Routes>
-      </Suspense>
+        {/* Admin */}
+        <Route path="/admin/login" element={<AdminLogin onSuccess={handleAdminAuth} onToast={showToast} />} />
+        <Route path="/admin/*"     element={<AdminPortal admin={admin} onLogout={handleAdminLogout} onToast={showToast} />} />
+      </Routes>
 
-      {showFooter && <Footer />}
-
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSuccess={(prod, token) => { handleProdAuth(prod, token); setShowLogin(false); showToast(`Welcome back, ${prod.name}!`); }}
+          onCastSuccess={(member, token) => { handleCastAuth(member, token); setShowLogin(false); showToast(`Welcome, ${member.name}!`); }}
+        />
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </>
   );
 }
 
-// ── Scroll to top on every route change ──────────────────────────
-function ScrollToTop() {
-  const { pathname } = useLocation();
-  useEffect(() => { window.scrollTo({ top:0, left:0, behavior:"instant" }); }, [pathname]);
-  return null;
-}
-
 export default function App() {
-  const [admin, setAdmin] = useState(() => {
-    try {
-      const s = localStorage.getItem("op_admin");
-      const t = localStorage.getItem("admin_token");
-      // Restore token into api.js module so admin API calls work after refresh
-      if (t) setAdminToken(t);
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
-  });
+  const [production, setProduction] = useState(() => { try { const s = localStorage.getItem("op_prod");    return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [castMember, setCastMember] = useState(() => { try { const s = localStorage.getItem("cm_member"); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [admin,      setAdmin]      = useState(() => { try { const s = localStorage.getItem("admin_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
+
   return (
     <BrowserRouter>
-      <AppInner admin={admin} setAdmin={setAdmin} />
+      <AppInner
+        production={production} setProduction={setProduction}
+        castMember={castMember} setCastMember={setCastMember}
+        admin={admin} setAdmin={setAdmin}
+      />
     </BrowserRouter>
   );
 }

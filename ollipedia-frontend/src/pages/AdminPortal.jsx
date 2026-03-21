@@ -7,7 +7,14 @@ import { API, getAdminToken } from "../api/api";
 // ════════════════════════════════════════════════════════════════
 const GENRES     = ["Action","Drama","Romance","Comedy","Thriller","Family","Historical","Devotional","Horror","Action-Drama","Crime","Mystery"];
 const CATEGORIES = ["Feature Film","Short Film","Web Series","Documentary"];
-const CAST_TYPES = ["Actor","Actress","Director","Producer","Music Director","Cinematographer","Choreographer","Lyricist","Singer","Editor","Background Score","Art Director","Costume Designer","Stunt Director","Voice Artist","Other"];
+const CAST_TYPES = [
+  "Actor","Actress","Director","Producer",
+  "Music Director","Singer","Lyricist","Musician",
+  "Screenplay Writer","Dialogue Writer","Writer",
+  "Cinematographer","Choreographer","Editor",
+  "Background Score","Art Director","Costume Designer",
+  "Stunt Director","Voice Artist","Other"
+];
 const VERDICTS   = ["Upcoming","Hit","Super Hit","Blockbuster","Average","Flop","Disaster"];
 const NEWS_CATS  = ["Update","Announcement","Review","Interview","Event","Award","Other"];
 
@@ -465,7 +472,10 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     verdict:     initial?.verdict      || "Upcoming",
     runtime:     initial?.runtime      || "",
     imdbId:      initial?.imdbId       || "",
-    imdbRating:  initial?.imdbRating   || "",
+    imdbRating:    initial?.imdbRating    || "",
+    imdbVotes:     initial?.imdbVotes     || "",
+    contentRating: initial?.contentRating || "",
+    bannerUrl:     initial?.bannerUrl     || "",
     boxOffice:   initial?.boxOffice    || { opening:"TBA", firstWeek:"TBA", total:"TBA" },
   });
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
@@ -559,7 +569,10 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       verdict:      form.verdict,
       runtime:      form.runtime,
       imdbId:       form.imdbId,
-      imdbRating:   form.imdbRating,
+      imdbRating:    form.imdbRating,
+      imdbVotes:     form.imdbVotes,
+      contentRating: form.contentRating,
+      bannerUrl:     form.bannerUrl,
       boxOffice:    form.boxOffice,
       productions:  productions.map(p=>String(p._id)).filter(isOid),
       cast:         castPayload,
@@ -672,6 +685,19 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
               <label className="form-label">IMDb Rating</label>
               <input className="form-input" value={form.imdbRating} onChange={e=>set("imdbRating",e.target.value)} placeholder="7.5" />
             </div>
+            <div className="form-group">
+              <label className="form-label">IMDb Votes</label>
+              <input className="form-input" value={form.imdbVotes} onChange={e=>set("imdbVotes",e.target.value)} placeholder="e.g. 1,234" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Content Rating</label>
+              <input className="form-input" value={form.contentRating} onChange={e=>set("contentRating",e.target.value)} placeholder="e.g. U/A, A, U" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Banner URL</label>
+            <input className="form-input" value={form.bannerUrl} onChange={e=>set("bannerUrl",e.target.value)} placeholder="Wide landscape image URL…" />
+            {form.bannerUrl && <img src={form.bannerUrl} alt="banner" style={{ marginTop:8, width:"100%", maxHeight:80, objectFit:"cover", borderRadius:6, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />}
           </div>
           <hr className="divider" />
           <p style={{ fontSize:"0.78rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:12 }}>Box Office</p>
@@ -787,36 +813,119 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
 // CAST FORM
 // ════════════════════════════════════════════════════════════════
 function CastForm({ initial, onSave, onCancel, saving }) {
+  // roles is stored as a comma-separated string in `type` for backward compat
+  // e.g. "Actor,Director" or just "Actor"
+  const initRoles = initial?.type
+    ? initial.type.split(",").map(r => r.trim()).filter(Boolean)
+    : ["Actor"];
+
   const [form, setForm] = useState({
-    name: initial?.name||"", type: initial?.type||"Actor",
-    bio: initial?.bio||"", photo: initial?.photo||"",
+    name:      initial?.name      || "",
+    photo:     initial?.photo     || "",
+    bio:       initial?.bio       || "",
+    dob:       initial?.dob       || "",
+    gender:    initial?.gender    || "",
+    location:  initial?.location  || "",
+    website:   initial?.website   || "",
+    instagram: initial?.instagram || "",
   });
-  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  const [roles, setRoles] = useState(initRoles);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const toggleRole = (r) => {
+    setRoles(prev =>
+      prev.includes(r)
+        ? prev.length > 1 ? prev.filter(x => x !== r) : prev  // keep at least 1
+        : [...prev, r]
+    );
+  };
+
+  const handleSave = () => {
+    onSave({ ...form, type: roles.join(", ") });
+  };
+
   return (
-    <div>
+    <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+      {/* Name */}
       <div className="form-group">
         <label className="form-label">Full Name *</label>
         <input className="form-input" value={form.name} onChange={e=>set("name",e.target.value)} autoFocus />
       </div>
+
+      {/* Multi-role selector */}
       <div className="form-group">
-        <label className="form-label">Primary Role</label>
-        <select className="form-select" value={form.type} onChange={e=>set("type",e.target.value)}>
-          {CAST_TYPES.map(t=><option key={t}>{t}</option>)}
-        </select>
+        <label className="form-label">Roles (select all that apply)</label>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6, padding:"10px 12px", background:"var(--bg3)", borderRadius:8, border:"1px solid var(--border)" }}>
+          {CAST_TYPES.map(r => {
+            const sel = roles.includes(r);
+            return (
+              <button key={r} type="button" onClick={() => toggleRole(r)} style={{
+                padding:"4px 12px", fontSize:"0.74rem", fontWeight:600,
+                borderRadius:20, cursor:"pointer", border:"none",
+                background: sel ? "var(--gold)" : "rgba(255,255,255,0.07)",
+                color:      sel ? "#000"        : "var(--muted)",
+                transition:"all 0.15s",
+              }}>{r}</button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize:"0.68rem", color:"var(--muted)", marginTop:5 }}>
+          Selected: <strong style={{ color:"var(--gold)" }}>{roles.join(", ")}</strong>
+        </div>
       </div>
+
+      {/* Photo */}
       <div className="form-group">
         <label className="form-label">Photo URL</label>
         <input className="form-input" value={form.photo} onChange={e=>set("photo",e.target.value)} placeholder="https://…" />
-        {form.photo && <img src={form.photo} alt={form.name} style={{ marginTop:8, width:64, height:64, borderRadius:"50%", objectFit:"cover", border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />}
+        {form.photo && (
+          <img src={form.photo} alt={form.name} style={{ marginTop:8, width:64, height:64, borderRadius:"50%", objectFit:"cover", border:"2px solid var(--gold)" }}
+            onError={e=>e.target.style.display="none"} />
+        )}
       </div>
+
+      {/* Bio */}
       <div className="form-group">
         <label className="form-label">Bio</label>
-        <textarea className="form-textarea" value={form.bio} onChange={e=>set("bio",e.target.value)} style={{ minHeight:80 }} placeholder="Short biography…" />
+        <textarea className="form-textarea" value={form.bio} onChange={e=>set("bio",e.target.value)} style={{ minHeight:70 }} placeholder="Short biography…" />
       </div>
+
+      {/* DOB + Gender in 2 cols */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div className="form-group">
+          <label className="form-label">Date of Birth</label>
+          <input className="form-input" type="date" value={form.dob} onChange={e=>set("dob",e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Gender</label>
+          <select className="form-select" value={form.gender} onChange={e=>set("gender",e.target.value)}>
+            <option value="">Select…</option>
+            <option>Male</option><option>Female</option><option>Non-binary</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Location + Website */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div className="form-group">
+          <label className="form-label">Location</label>
+          <input className="form-input" value={form.location} onChange={e=>set("location",e.target.value)} placeholder="e.g. Bhubaneswar, Odisha" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Instagram Handle</label>
+          <input className="form-input" value={form.instagram} onChange={e=>set("instagram",e.target.value)} placeholder="@username" />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Website</label>
+        <input className="form-input" value={form.website} onChange={e=>set("website",e.target.value)} placeholder="https://…" />
+      </div>
+
       <div style={{ display:"flex", gap:10, paddingTop:16, borderTop:"1px solid var(--border)" }}>
         <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
-        <button type="button" className="btn btn-gold" onClick={() => onSave(form)} disabled={saving||!form.name.trim()}>
-          {saving?"Saving…":"💾 Save"}
+        <button type="button" className="btn btn-gold" onClick={handleSave} disabled={saving || !form.name.trim()}>
+          {saving ? "Saving…" : "💾 Save"}
         </button>
       </div>
     </div>
@@ -1107,6 +1216,102 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
 // ════════════════════════════════════════════════════════════════
 // IN-PORTAL MOVIE DETAIL VIEW
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// CAST DETAIL TAB — inline edit with photo update
+// ════════════════════════════════════════════════════════════════
+function CastDetailTab({ movie, onAdd, onRemove, onToast, onMovieUpdate }) {
+  const [editIdx, setEditIdx] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = (c, i) => {
+    setEditIdx(i);
+    setEditForm({ name: c.name||"", type: c.type||"Actor", role: c.role||"", photo: c.photo||"" });
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      // Build updated cast array with the edited entry swapped in
+      const updatedCast = movie.cast.map((c, i) =>
+        i === editIdx
+          ? { castId: c.castId || String(c._id), name: editForm.name, type: editForm.type, role: editForm.role, photo: editForm.photo, isNew: false }
+          : { castId: c.castId || String(c._id), name: c.name, type: c.type, role: c.role||"", photo: c.photo||"", isNew: false }
+      );
+      const m = await API.adminUpdateMovie(movie._id, { cast: updatedCast });
+      onMovieUpdate?.(m);
+      onToast?.("Cast updated!");
+      setEditIdx(null);
+    } catch (e) { onToast?.(e.message, "error"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
+        <button className="btn btn-gold btn-sm" onClick={onAdd}>+ Add Cast Member</button>
+      </div>
+      {(!movie.cast || movie.cast.length===0)
+        ? <div style={{ color:"var(--muted)", textAlign:"center", padding:40 }}>No cast added yet.</div>
+        : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {movie.cast.map((c,i) => (
+              <div key={i} style={{ background:"var(--bg2)", border:`1px solid ${editIdx===i?"var(--gold)":"var(--border)"}`, borderRadius:10, overflow:"hidden", transition:"border-color 0.15s" }}>
+                {editIdx === i ? (
+                  <div style={{ padding:"14px 16px" }}>
+                    <div style={{ fontSize:"0.72rem", fontWeight:700, color:"var(--gold)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>✏ Editing: {c.name}</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                      <div>
+                        <label style={{ fontSize:"0.68rem", color:"var(--muted)", display:"block", marginBottom:3 }}>Name *</label>
+                        <input className="form-input" value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:"0.68rem", color:"var(--muted)", display:"block", marginBottom:3 }}>Role / Character</label>
+                        <input className="form-input" value={editForm.role} onChange={e=>setEditForm(f=>({...f,role:e.target.value}))} placeholder="e.g. Hero" />
+                      </div>
+                      <div>
+                        <label style={{ fontSize:"0.68rem", color:"var(--muted)", display:"block", marginBottom:3 }}>Type</label>
+                        <select className="form-select" value={editForm.type} onChange={e=>setEditForm(f=>({...f,type:e.target.value}))}>
+                          {CAST_TYPES.map(t=><option key={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize:"0.68rem", color:"var(--muted)", display:"block", marginBottom:3 }}>Photo URL</label>
+                        <input className="form-input" value={editForm.photo} onChange={e=>setEditForm(f=>({...f,photo:e.target.value}))} placeholder="https://…" />
+                      </div>
+                    </div>
+                    {editForm.photo && (
+                      <img src={editForm.photo} alt={editForm.name} style={{ width:56,height:56,borderRadius:"50%",objectFit:"cover",border:"2px solid var(--gold)",marginBottom:10 }} onError={e=>e.target.style.display="none"} />
+                    )}
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button className="btn btn-gold btn-sm" onClick={saveEdit} disabled={saving||!editForm.name.trim()}>{saving?"Saving…":"💾 Save"}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={()=>setEditIdx(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px" }}>
+                    <div style={{ width:42,height:42,borderRadius:"50%",background:"var(--bg3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem",border:"1px solid var(--border)" }}>
+                      {c.photo ? <img src={c.photo} alt={c.name} style={{ width:"100%",height:"100%",objectFit:"cover" }} onError={e=>e.target.style.display="none"}/> : "👤"}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:"0.87rem" }}>{c.name}</div>
+                      <div style={{ fontSize:"0.7rem", color:"var(--gold)", marginTop:1 }}>{c.type}{c.role?` · ${c.role}`:""}</div>
+                      {c.castId && <div style={{ fontSize:"0.62rem", color:"var(--muted)", marginTop:1 }}>ID: {String(c.castId).slice(-6)}</div>}
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize:"0.7rem" }} onClick={() => startEdit(c,i)}>✏ Edit</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color:"var(--red)", fontSize:"0.7rem" }} onClick={() => onRemove(c.castId || String(c._id), c.name)}>✕</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
 function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovieUpdate }) {
   const [movie, setMovie] = useState(initialMovie);
   const [detailTab, setDetailTab] = useState("cast");
@@ -1273,30 +1478,13 @@ function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovi
 
       {/* ── CAST tab ── */}
       {detailTab==="cast" && (
-        <div>
-          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
-            <button className="btn btn-gold btn-sm" onClick={() => setModal("add-cast")}>+ Add Cast Member</button>
-          </div>
-          {(!movie.cast || movie.cast.length===0)
-            ? <div style={{ color:"var(--muted)", textAlign:"center", padding:40 }}>No cast added yet.</div>
-            : (
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:8 }}>
-                {movie.cast.map((c,i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:"var(--bg2)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px" }}>
-                    <div style={{ width:40,height:40,borderRadius:"50%",background:"var(--bg3)",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem" }}>
-                      {c.photo ? <img src={c.photo} alt={c.name} style={{ width:"100%",height:"100%",objectFit:"cover" }} onError={e=>e.target.style.display="none"}/> : "👤"}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:700, fontSize:"0.85rem" }}>{c.name}</div>
-                      <div style={{ fontSize:"0.7rem", color:"var(--gold)" }}>{c.type}{c.role?` · ${c.role}`:""}</div>
-                    </div>
-                    <button className="btn btn-ghost btn-sm" onClick={() => handleRemoveCast(c.castId || String(c._id), c.name)}
-                      style={{ color:"var(--red)", fontSize:"0.7rem", flexShrink:0 }}>✕ Remove</button>
-                  </div>
-                ))}
-              </div>
-            )}
-        </div>
+        <CastDetailTab
+          movie={movie}
+          onAdd={() => setModal("add-cast")}
+          onRemove={handleRemoveCast}
+          onToast={onToast}
+          onMovieUpdate={(m) => { setMovie(m); onMovieUpdate?.(m); }}
+        />
       )}
 
       {/* ── SONGS tab ── */}

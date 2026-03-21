@@ -7,7 +7,7 @@ const path     = require("path");
 require("dotenv").config();
 
 const app = express();
-app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
+app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 
 mongoose.connect(process.env.MONGO_URI)
@@ -20,6 +20,20 @@ mongoose.connect(process.env.MONGO_URI)
 
 /** Is s a valid 24-hex MongoDB ObjectId string? */
 const isOid = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
+
+// Slugify a movie title + year into a clean URL-safe slug
+// e.g. "Bindusagar" 2026 → "bindusagar-2026"
+function makeMovieSlug(title, releaseDate) {
+  const year = releaseDate ? new Date(releaseDate).getFullYear() : "";
+  const base = String(title || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")   // strip accents
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+  return year ? `${base}-${year}` : base;
+}
 
 /** Extract bare 11-char YouTube ID from any URL or ID */
 const ytId = (input) => {
@@ -94,11 +108,18 @@ const ProductionSchema = new mongoose.Schema({
  * movies[] is a back-reference array for filmography display.
  */
 const CastSchema = new mongoose.Schema({
-  name:   { type: String, required: true, trim: true },
-  type:   { type: String, default: "Actor" },
-  bio:    { type: String, default: "" },
-  photo:  { type: String, default: "" },
-  movies: [{ type: mongoose.Schema.Types.ObjectId, ref: "Movie" }],
+  name:      { type: String, required: true, trim: true },
+  type:      { type: String, default: "Actor" },   // primary / legacy (comma-separated)
+  roles:     [{ type: String }],                   // multi-role array e.g. ["Actor","Singer"]
+  bio:       { type: String, default: "" },
+  photo:     { type: String, default: "" },
+  dob:       { type: String, default: "" },
+  gender:    { type: String, default: "" },
+  location:  { type: String, default: "" },
+  website:   { type: String, default: "" },
+  instagram: { type: String, default: "" },
+  banner:    { type: String, default: "" },
+  movies:    [{ type: mongoose.Schema.Types.ObjectId, ref: "Movie" }],
 }, { timestamps: true });
 
 const ReviewSchema = new mongoose.Schema({
@@ -172,6 +193,7 @@ const MovieSchema = new mongoose.Schema({
   status:   { type: String, default: "Upcoming" },
   reviews:  [ReviewSchema],
   news:     [{ type: mongoose.Schema.Types.ObjectId, ref: "News" }],
+  slug:     { type: String, default: "", index: true },   // SEO slug e.g. "bindusagar-2026"
 }, { timestamps: true });
 
 const NewsSchema = new mongoose.Schema({
@@ -201,6 +223,43 @@ const CastMemberSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Production = mongoose.model("Production",  ProductionSchema);
+
+// ── Auto-generate slug on Movie create/update ─────────────────
+MovieSchema.pre("save", async function(next) {
+  if (this.isNew || this.isModified("title") || this.isModified("releaseDate") || !this.slug) {
+    const base = makeMovieSlug(this.title, this.releaseDate);
+    let slug = base; let attempt = 0;
+    while (true) {
+      const existing = await mongoose.models.Movie?.findOne({ slug, _id: { $ne: this._id } }).lean();
+      if (!existing) break;
+      slug = `${base}-${++attempt}`;
+    }
+    this.slug = slug;
+  }
+  next();
+});
+
+MovieSchema.pre("findOneAndUpdate", async function(next) {
+  const u = this.getUpdate();
+  const titleNew = u.title ?? u.$set?.title;
+  const dateNew  = u.releaseDate ?? u.$set?.releaseDate;
+  if (titleNew !== undefined || dateNew !== undefined) {
+    const doc = await this.model.findOne(this.getQuery()).lean();
+    const title       = titleNew       ?? doc?.title ?? "";
+    const releaseDate = dateNew        ?? doc?.releaseDate ?? "";
+    const base = makeMovieSlug(title, releaseDate);
+    let slug = base; let attempt = 0;
+    while (true) {
+      const existing = await this.model.findOne({ slug, _id: { $ne: doc?._id } }).lean();
+      if (!existing) break;
+      slug = `${base}-${++attempt}`;
+    }
+    if (!u.$set) u.$set = {};
+    u.$set.slug = slug;
+  }
+  next();
+});
+
 const Movie      = mongoose.model("Movie",       MovieSchema);
 const Cast       = mongoose.model("Cast",        CastSchema);
 const News       = mongoose.model("News",        NewsSchema);
@@ -259,20 +318,29 @@ async function resolveCastEntry(item) {
   if (validId) {
     const existing = await Cast.findById(validId).lean();
     if (existing) {
+      // Use the values sent from the form — they reflect the admin's edits.
+      // Fall back to the stored Cast doc only if the field is empty.
+      const resolvedName  = name  || existing.name;
+      const resolvedPhoto = photo || existing.photo;   // ← was existing.photo || photo (wrong priority)
+      const resolvedType  = type  || existing.type;
+      // Also update the Cast doc itself so changes persist on the cast profile
+      if (photo && photo !== existing.photo) {
+        await Cast.findByIdAndUpdate(validId, { photo });
+      }
       return {
-        castId: existing._id,          // ObjectId instance
-        name:   existing.name || name,
-        photo:  existing.photo || photo,
-        type:   existing.type  || type,
+        castId: existing._id,
+        name:   resolvedName,
+        photo:  resolvedPhoto,
+        type:   resolvedType,
         role,
       };
     }
-    // If Cast doc is missing (stale id), fall through to create
   }
 
   // Create new Cast document
   if (!name) throw new Error("Cast entry requires a name");
-  const nc = await Cast.create({ name, type, bio, photo });
+  const rolesArr = type ? type.split(",").map(r => r.trim()).filter(Boolean) : ["Actor"];
+  const nc = await Cast.create({ name, type: rolesArr[0], roles: rolesArr, bio, photo });
   return {
     castId: nc._id,     // ObjectId instance
     name:   nc.name,
@@ -377,10 +445,16 @@ app.patch("/api/cast-auth/me", castAuth, async (req, res) => {
     const member = await CastMember.findByIdAndUpdate(req.castMemberId, update, { new: true, select: "-password" });
     if (member?.castId) {
       const cu = {};
-      if (update.name)  cu.name  = update.name;
-      if (update.photo) cu.photo = update.photo;
-      if (update.roles) cu.type  = update.roles[0];
-      if (update.bio)   cu.bio   = update.bio;
+      if (update.name)     cu.name     = update.name;
+      if (update.photo)    cu.photo    = update.photo;
+      if (update.bio)      cu.bio      = update.bio;
+      if (update.location) cu.location = update.location;
+      if (update.website)  cu.website  = update.website;
+      if (update.instagram)cu.instagram= update.instagram;
+      if (update.roles && Array.isArray(update.roles) && update.roles.length) {
+        cu.roles = update.roles;
+        cu.type  = update.roles[0]; // keep primary type in sync
+      }
       if (Object.keys(cu).length) await Cast.findByIdAndUpdate(member.castId, cu);
     }
     res.json(member);
@@ -434,8 +508,18 @@ app.get("/api/movies", async (req, res) => {
 
 app.get("/api/movies/:id", async (req, res) => {
   try {
-    const movie = await Movie.findById(req.params.id)
-      .populate("productionId","name logo").populate("collaborators","name logo").populate("news").lean();
+    const param = req.params.id;
+    // Accept both ObjectId (24-hex) and human-readable slug (e.g. "bindusagar-2026")
+    let movie = null;
+    if (isOid(param)) {
+      movie = await Movie.findById(param)
+        .populate("productionId","name logo").populate("collaborators","name logo").populate("news").lean();
+    } else {
+      // Slug lookup — strip any trailing ObjectId if old URLs sneak through
+      const slugPart = param.replace(/-[a-f0-9]{24}$/i, "");
+      movie = await Movie.findOne({ slug: slugPart })
+        .populate("productionId","name logo").populate("collaborators","name logo").populate("news").lean();
+    }
     if (!movie) return res.status(404).json({ error: "Not found" });
     res.json(movie);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1175,18 +1259,39 @@ app.post("/api/admin/movies/:id/news", adminAuth, async (req, res) => {
 // ════════════════════════════════════════════════════════════════
 app.post("/api/admin/cast", adminAuth, async (req, res) => {
   try {
-    const { name, type, bio, photo, dob, gender, location, website, instagram } = req.body;
+    const { name, type, bio, photo, dob, gender, location, website, instagram, banner, roles } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Name required" });
-    const c = await Cast.create({ name: name.trim(), type: type || "Actor", bio: bio || "", photo: photo || "", dob: dob || "", gender: gender || "", location: location || "", website: website || "", instagram: instagram || "" });
+    // Derive roles array: prefer explicit roles[], fallback to splitting type string
+    const rolesArr = Array.isArray(roles) && roles.length
+      ? roles
+      : (type ? type.split(",").map(r => r.trim()).filter(Boolean) : ["Actor"]);
+    const primaryType = rolesArr[0] || "Actor";
+    const c = await Cast.create({
+      name: name.trim(), type: primaryType,
+      roles: rolesArr,
+      bio: bio || "", photo: photo || "", banner: banner || "",
+      dob: dob || "", gender: gender || "", location: location || "",
+      website: website || "", instagram: instagram || "",
+    });
     res.json(c);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.patch("/api/admin/cast/:id", adminAuth, async (req, res) => {
   try {
-    const allowed = ["name","type","bio","photo","dob","gender","location","website","instagram"];
+    const allowed = ["name","bio","photo","dob","gender","location","website","instagram","banner"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    // Handle type / roles
+    if (req.body.type !== undefined || req.body.roles !== undefined) {
+      const rolesArr = Array.isArray(req.body.roles) && req.body.roles.length
+        ? req.body.roles
+        : (req.body.type ? req.body.type.split(",").map(r => r.trim()).filter(Boolean) : undefined);
+      if (rolesArr && rolesArr.length) {
+        update.roles = rolesArr;
+        update.type  = rolesArr[0]; // keep primary type in sync
+      }
+    }
     const c = await Cast.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!c) return res.status(404).json({ error: "Not found" });
     res.json(c);
@@ -1313,6 +1418,104 @@ app.delete("/api/admin/enquiries/:id", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ═════════════════════════════════════════════════════════════════
+// ADMIN — One-time slug backfill for existing movies
+// POST /api/admin/backfill-slugs  (admin token required)
+// Safe to call multiple times — only fills empty slugs
+// ═════════════════════════════════════════════════════════════════
+app.post("/api/admin/backfill-slugs", adminAuth, async (req, res) => {
+  try {
+    const movies = await Movie.find({}).lean();
+    let updated = 0, skipped = 0;
+    for (const m of movies) {
+      if (m.slug && !/-[a-f0-9]{24}$/i.test(m.slug)) { skipped++; continue; }
+      const base = makeMovieSlug(m.title, m.releaseDate);
+      let slug = base, attempt = 0;
+      while (true) {
+        const conflict = await Movie.findOne({ slug, _id: { $ne: m._id } }).lean();
+        if (!conflict) break;
+        slug = `${base}-${++attempt}`;
+      }
+      await Movie.updateOne({ _id: m._id }, { $set: { slug } });
+      updated++;
+    }
+    res.json({ ok: true, updated, skipped });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═════════════════════════════════════════════════════════════════
+// SEO — robots.txt
+// ═════════════════════════════════════════════════════════════════
+const SITE_URL = process.env.SITE_URL || "https://www.ollypedia.in";
+
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send(
+`User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /portal
+Disallow: /api/
+Sitemap: ${SITE_URL}/sitemap.xml
+Sitemap: ${SITE_URL}/sitemap-movies.xml
+Sitemap: ${SITE_URL}/sitemap-cast.xml`
+  );
+});
+
+// ─── helpers ───────────────────────────────────────────────────
+function xmlEsc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function urlEntry(loc, lastmod, freq="monthly", pri="0.7") {
+  return `  <url>\n    <loc>${xmlEsc(loc)}</loc>\n    <lastmod>${lastmod||new Date().toISOString().slice(0,10)}</lastmod>\n    <changefreq>${freq}</changefreq>\n    <priority>${pri}</priority>\n  </url>`;
+}
+
+// ─── Main sitemap (static pages + recent news) ─────────────────
+app.get("/sitemap.xml", async (req, res) => {
+  const today = new Date().toISOString().slice(0,10);
+  const statics = [
+    ["", "daily", "1.0"], ["/movies","daily","0.9"], ["/cast","weekly","0.8"],
+    ["/songs","weekly","0.8"], ["/news","daily","0.8"],
+    ["/about","monthly","0.4"], ["/contact","monthly","0.4"], ["/privacy","monthly","0.3"],
+  ];
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  statics.forEach(([p,f,pr]) => { xml += urlEntry(`${SITE_URL}${p}`, today, f, pr) + "\n"; });
+  try {
+    const recentNews = await News.find({ published:true }).sort({ createdAt:-1 }).limit(50).lean();
+    recentNews.forEach(n => {
+      xml += urlEntry(`${SITE_URL}/news/${n._id}`, n.updatedAt?new Date(n.updatedAt).toISOString().slice(0,10):today, "weekly","0.6") + "\n";
+    });
+  } catch {}
+  res.type("application/xml").send(xml + "</urlset>");
+});
+
+// ─── Movies sitemap (slug-based URLs) ──────────────────────────
+app.get("/sitemap-movies.xml", async (req, res) => {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  try {
+    const movies = await Movie.find({}, "title releaseDate slug updatedAt").lean();
+    movies.forEach(m => {
+      const slug    = m.slug || makeMovieSlug(m.title, m.releaseDate);
+      const lastmod = m.updatedAt ? new Date(m.updatedAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+      xml += urlEntry(`${SITE_URL}/movie/${slug}`, lastmod, "weekly","0.8") + "\n";
+    });
+  } catch {}
+  res.type("application/xml").send(xml + "</urlset>");
+});
+
+// ─── Cast sitemap ───────────────────────────────────────────────
+app.get("/sitemap-cast.xml", async (req, res) => {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  try {
+    const cast = await Cast.find({}, "name type updatedAt").lean();
+    cast.forEach(c => {
+      const slug = String(c.name||"").toLowerCase().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g,"-").trim();
+      const role = String(c.type||"artist").toLowerCase().replace(/\s+/g,"-");
+      const lastmod = c.updatedAt ? new Date(c.updatedAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+      xml += urlEntry(`${SITE_URL}/cast/${c._id}/${slug}-odia-${role}`, lastmod, "monthly","0.7") + "\n";
+    });
+  } catch {}
+  res.type("application/xml").send(xml + "</urlset>");
+});
+
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build
 // command is: cd frontend && npm run build  (or wherever your React app lives)
@@ -1332,4 +1535,3 @@ app.get("*", (req, res) => {
 app.listen(process.env.PORT || 4000, () =>
   console.log(`🚀 Server running on port ${process.env.PORT || 4000}`)
 );
-

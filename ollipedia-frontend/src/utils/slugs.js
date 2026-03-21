@@ -1,74 +1,99 @@
-/**
- * slugs.js — src/utils/slugs.js
- *
- * URL format: /movie/daman-2024-686abc123ef
- *             /cast/abhishek-sharma-686abc123ef
- *             /news/daman-box-office-hits-686abc123ef
- *             /song/daman-2024-686abc123ef/2
- *
- * The MongoDB _id is always the LAST segment after the final hyphen.
- * This means:
- *  - URLs look clean and SEO-friendly
- *  - We always extract the real _id for API calls
- *  - Old /:id-only links auto-redirect to the new slug URL
- *  - No backend changes needed
- */
+// ─────────────────────────────────────────────────────────────────
+//  src/utils/slugs.js
+//  Clean SEO-friendly URL helpers for Ollipedia
+//
+//  URLs produced:
+//    /movie/bindusagar-2026          ← movie page
+//    /cast/babushaan-mohanty         ← cast profile
+//    /song/bindusagar-2026/0/silpita ← song detail
+// ─────────────────────────────────────────────────────────────────
 
-/**
- * Convert a title to a URL slug.
- * "Daman (2024)" → "daman-2024"
- * "Hero No 1" → "hero-no-1"
- */
-export function toSlug(str = "") {
-  return str
+// ── Is a string a 24-hex MongoDB ObjectId? ────────────────────
+export const isOid = (s) =>
+  typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
+
+// ── Generic text → URL slug ───────────────────────────────────
+export function slugify(text = "") {
+  return String(text)
     .toLowerCase()
-    .replace(/[^\w\s-]/g, "")   // remove special chars except hyphens
-    .replace(/\s+/g, "-")        // spaces to hyphens
-    .replace(/-{2,}/g, "-")      // collapse multiple hyphens
-    .replace(/^-|-$/g, "")       // trim leading/trailing hyphens
-    .slice(0, 60);               // max 60 chars
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
 }
 
-/**
- * Build a full slug-id string.
- * movieSlugId(movie) → "daman-2024-686abc123ef"
- */
-export function movieSlugId(movie) {
-  if (!movie) return "";
-  const year = movie.releaseDate ? `-${new Date(movie.releaseDate).getFullYear()}` : "";
-  return `${toSlug(movie.title)}${year}-${movie._id}`;
+// ─────────────────────────────────────────────────────────────────
+// MOVIE
+// Produces:  /movie/bindusagar-2026
+//            /movie/sital-2025-2  (if duplicate slug)
+// ─────────────────────────────────────────────────────────────────
+export function moviePath(movie) {
+  if (!movie) return "/movies";
+  // Prefer server-generated slug stored on the movie object
+  if (movie.slug) return `/movie/${movie.slug}`;
+  // Fallback: derive from title + year (matches server makeMovieSlug)
+  const year  = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const base  = slugify(movie.title || "movie");
+  const slug  = year ? `${base}-${year}` : base;
+  return `/movie/${slug}`;
 }
 
-export function castSlugId(person) {
-  if (!person) return "";
-  return `${toSlug(person.name)}-${person._id}`;
+// Extract an ID or slug from a URL param for use in API calls.
+// Handles all formats that may appear in the wild:
+//   "bindusagar-2026"                      → slug  (new)
+//   "69b248e88d73808b70a105af"             → ObjectId (old)
+//   "bindusagar-2026-69b248e88d73808b70a105af"  → strip ID, return slug
+export function extractMovieParam(param = "") {
+  if (!param) return "";
+  // If the full string is a valid ObjectId, pass it straight through
+  if (isOid(param)) return param;
+  // If it ends with a 24-hex ObjectId, strip it → clean slug
+  return param.replace(/-[a-f0-9]{24}$/i, "");
 }
 
-export function newsSlugId(item) {
-  if (!item) return "";
-  return `${toSlug(item.title)}-${item._id}`;
+// Alias used by existing pages (MovieDetails uses `extractId`)
+export const extractId = extractMovieParam;
+
+// ─────────────────────────────────────────────────────────────────
+// CAST
+// Produces:  /cast/babushaan-mohanty
+//            /cast/69b248e88d73808b70a105af  (fallback when no name)
+// ─────────────────────────────────────────────────────────────────
+export function castPath(person) {
+  if (!person) return "/cast";
+  const id   = person._id ? String(person._id) : "";
+  const name = slugify(person.name || "");
+  // Use name-based slug when available, fall back to bare ID
+  if (name) return `/cast/${id}/${name}`;
+  return `/cast/${id}`;
 }
 
-/**
- * Extract the MongoDB _id from a slug param.
- * "daman-2024-686abc123ef456def789012" → "686abc123ef456def789012"
- *
- * MongoDB ObjectIds are exactly 24 hex characters.
- * We match the last 24-char hex segment in the string.
- *
- * Also handles bare _id params (old links): "686abc123ef456def789012"
- */
-export function extractId(slugParam = "") {
-  if (!slugParam) return "";
-  // Match last 24-char hex string (MongoDB ObjectId)
-  const match = slugParam.match(/([a-f0-9]{24})(?:[^a-f0-9].*)?$/i);
-  return match ? match[1] : slugParam; // fallback: return as-is (bare _id)
+// Extract cast ID from slug param — the ID is always the first segment
+// Route is /cast/:id/:nameSlug  so :id is the raw ObjectId
+export function extractCastId(param = "") {
+  return param; // already just the ID from :id segment
 }
 
-/**
- * Navigate helpers — use these instead of navigate(`/movie/${id}`)
- */
-export const moviePath = (movie) => `/movie/${movieSlugId(movie)}`;
-export const castPath  = (person) => `/cast/${castSlugId(person)}`;
-export const newsPath  = (item)   => `/news/${newsSlugId(item)}`;
-export const songPath  = (movie, songIndex) => `/song/${movieSlugId(movie)}/${songIndex}`;
+// ─────────────────────────────────────────────────────────────────
+// SONG
+// Produces:  /song/bindusagar-2026/3/silpita-odia-song
+// ─────────────────────────────────────────────────────────────────
+export function songPath(movie, songIndex, song) {
+  const movieSlug = movie?.slug || (() => {
+    const year = movie?.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+    const base = slugify(movie?.title || "movie");
+    return year ? `${base}-${year}` : base;
+  })();
+  const idx      = songIndex ?? 0;
+  const songSlug = song?.title ? `-${slugify(song.title)}` : "";
+  return `/song/${movieSlug}/${idx}${songSlug}`;
+}
+
+// For SongDetail: extract movieParam and songIndex from URL params
+export function extractSongParams(movieParam, songIndexParam) {
+  return {
+    movieParam: extractMovieParam(movieParam || ""),
+    songIndex:  parseInt(songIndexParam, 10) || 0,
+  };
+}
