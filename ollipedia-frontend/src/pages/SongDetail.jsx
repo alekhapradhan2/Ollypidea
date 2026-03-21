@@ -167,7 +167,263 @@ const CSS = `
 .sd-mc-box { position:relative; border-radius:9px; overflow:hidden; aspect-ratio:2/3; background:var(--bg3); box-shadow:0 3px 12px rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.06); }
 .sd-mc-box img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
 .sd-mc-title { margin:6px 0 0; font-weight:700; font-size:.7rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+/* Lyrics */
+.sd-tabs { display:flex; border-bottom:1px solid rgba(255,255,255,.08); flex-shrink:0; }
+.sd-tab { flex:1; padding:9px 0; text-align:center; font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:none; border:none; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; transition:all .15s; }
+.sd-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+.sd-lyrics-wrap { overflow-y:auto; flex:1; padding:12px 14px 20px; scroll-behavior:smooth; }
+.sd-lyric-line { padding:5px 8px; border-radius:5px; font-size:.82rem; line-height:1.7; color:rgba(255,255,255,.45); transition:all .3s; cursor:default; white-space:pre-wrap; }
+.sd-lyric-line.active { color:#fff; font-weight:700; font-size:.9rem; background:rgba(201,151,58,.12); border-left:3px solid var(--gold); padding-left:10px; }
+.sd-lyric-line.passed { color:rgba(255,255,255,.3); }
+.sd-no-lyrics { padding:32px 16px; text-align:center; color:var(--muted); font-size:.8rem; line-height:1.8; }
+/* Repeat / Queue */
+.sd-ctrl-btn { background:none; border:none; cursor:pointer; color:var(--muted); font-size:.8rem; padding:5px 9px; border-radius:7px; transition:all .15s; display:inline-flex; align-items:center; gap:4px; font-family:inherit; }
+.sd-ctrl-btn:hover { color:var(--text); background:rgba(255,255,255,.06); }
+.sd-ctrl-btn.on { color:var(--gold); background:rgba(201,151,58,.12); }
+/* Know this song */
+.sd-know-btn { display:inline-flex; align-items:center; gap:7px; padding:8px 18px; border-radius:20px; border:1px solid rgba(255,120,50,.3); background:rgba(255,120,50,.07); color:rgba(255,150,80,.85); font-size:.8rem; font-weight:700; cursor:pointer; transition:all .2s; font-family:inherit; }
+.sd-know-btn:hover,.sd-know-btn.voted { background:rgba(255,120,50,.18); border-color:rgba(255,120,50,.5); color:#ff9450; transform:scale(1.03); }
+/* Breadcrumb */
+.sd-breadcrumb { display:flex; align-items:center; gap:5px; flex-wrap:wrap; font-size:.71rem; color:var(--muted); padding:6px 0 2px; }
+.sd-breadcrumb span { cursor:pointer; transition:color .15s; }
+.sd-breadcrumb span:hover { color:var(--gold); }
+.sd-breadcrumb .sep { opacity:.35; cursor:default; }
+.sd-breadcrumb .cur { color:var(--text); font-weight:600; cursor:default; }
+/* Queue panel */
+.sd-queue-wrap { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:10px; overflow:hidden; margin-top:12px; }
+.sd-queue-head { display:flex; align-items:center; justify-content:space-between; padding:9px 13px; border-bottom:1px solid rgba(255,255,255,.06); font-size:.62rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+/* ── Now Playing Bar ── */
+.sd-now-playing {
+  position:fixed; bottom:0; left:0; right:0; z-index:200;
+  background:linear-gradient(to right, rgba(10,10,10,.97), rgba(20,16,8,.97));
+  border-top:1px solid rgba(201,151,58,.25);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  display:flex; align-items:center; gap:12px;
+  padding:10px 16px; transform:translateY(100%);
+  transition:transform .35s cubic-bezier(.34,1.56,.64,1);
+}
+@media(min-width:480px){ .sd-now-playing { padding:10px 24px; gap:16px; } }
+.sd-now-playing.visible { transform:translateY(0); }
+.sd-np-thumb { width:40px; height:40px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--bg3); border:1px solid rgba(201,151,58,.3); }
+.sd-np-thumb img { width:100%; height:100%; object-fit:cover; }
+.sd-np-info { flex:1; min-width:0; }
+.sd-np-title { font-weight:700; font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#fff; }
+.sd-np-singer { font-size:.68rem; color:var(--gold); margin-top:1px; }
+.sd-np-btn { width:36px; height:36px; border-radius:50%; background:var(--gold); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.9rem; color:#000; flex-shrink:0; transition:transform .15s; }
+.sd-np-btn:hover { transform:scale(1.1); }
+.sd-np-skip { background:rgba(255,255,255,.1); color:#fff; }
+.sd-np-skip:hover { background:rgba(255,255,255,.2); }
+.sd-rating { display:flex; align-items:center; gap:6px; padding:10px 0 4px; }
+.sd-star { font-size:1.3rem; cursor:pointer; transition:transform .15s; filter:grayscale(1) opacity(.35); user-select:none; }
+.sd-star:hover,.sd-star.lit { filter:none; }
+.sd-star:hover { transform:scale(1.2); }
+.sd-rating-info { font-size:.74rem; color:var(--muted); margin-left:4px; }
+.sd-share-overlay { position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(8px); }
+.sd-share-card { background:linear-gradient(145deg,#1a1200,#0f0a00,#0a0a0a); border:1px solid rgba(201,151,58,.45); border-radius:20px; width:100%; max-width:360px; overflow:hidden; }
+.sd-share-card-img { width:100%; aspect-ratio:16/9; object-fit:cover; display:block; }
+.sd-share-card-body { padding:18px 20px 20px; }
+.sd-share-card-eyebrow { font-size:.58rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin-bottom:6px; }
+.sd-share-card-title { font-family:"Playfair Display",serif; font-size:1.4rem; font-weight:900; line-height:1.2; margin:0 0 5px; }
+.sd-share-card-meta { font-size:.76rem; color:rgba(255,255,255,.55); margin-bottom:14px; }
+.sd-share-card-footer { display:flex; align-items:center; gap:10px; border-top:1px solid rgba(255,255,255,.08); padding-top:12px; }
+.sd-share-card-watermark { margin-left:auto; font-size:.62rem; font-weight:800; letter-spacing:.08em; color:rgba(201,151,58,.6); }
+.sd-autoplay-row { display:flex; align-items:center; gap:8px; padding:8px 0; font-size:.74rem; color:var(--muted); cursor:pointer; user-select:none; }
+.sd-autoplay-row.on { color:var(--gold); }
+.sd-autoplay-pill { width:30px; height:17px; border-radius:9px; background:rgba(255,255,255,.15); position:relative; transition:background .2s; flex-shrink:0; }
+.sd-autoplay-row.on .sd-autoplay-pill { background:var(--gold); }
+.sd-autoplay-pill::after { content:""; position:absolute; top:2.5px; left:3px; width:12px; height:12px; border-radius:50%; background:#fff; transition:transform .2s; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+.sd-autoplay-row.on .sd-autoplay-pill::after { transform:translateX(13px); }
+.sd-spotify-card { flex-shrink:0; width:156px; cursor:pointer; transition:transform .2s; }
+@media(min-width:480px){ .sd-spotify-card { width:168px; } }
+.sd-spotify-card:hover { transform:translateY(-4px); }
+.sd-spotify-img { width:100%; aspect-ratio:1/1; border-radius:10px; overflow:hidden; background:var(--bg3); box-shadow:0 4px 14px rgba(0,0,0,.4); position:relative; margin-bottom:8px; transition:box-shadow .2s; }
+.sd-spotify-card:hover .sd-spotify-img { box-shadow:0 12px 32px rgba(0,0,0,.7); }
+.sd-spotify-img img { width:100%; height:100%; object-fit:cover; display:block; }
+.sd-spotify-play-btn { position:absolute; bottom:8px; right:8px; width:36px; height:36px; border-radius:50%; background:var(--gold); display:flex; align-items:center; justify-content:center; font-size:.85rem; color:#000; box-shadow:0 4px 14px rgba(0,0,0,.5); opacity:0; transform:translateY(6px); transition:all .2s; }
+.sd-spotify-card:hover .sd-spotify-play-btn { opacity:1; transform:translateY(0); }
+.sd-spotify-title { font-weight:700; font-size:.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.sd-spotify-sub { font-size:.64rem; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 `;
+
+// ── LRC parser: "[mm:ss.xx] line" → [{time, text}] ──────────────
+function parseLRC(raw = "") {
+  if (!raw.trim()) return [];
+  const lines = raw.split("\n");
+  const parsed = [];
+  const timeRe = /\[(\d{1,2}):(\d{2})(?:[.:]\d+)?\]/g;
+  lines.forEach(line => {
+    const text = line.replace(/\[\d{1,2}:\d{2}(?:[.:]\d+)?\]/g, "").trim();
+    let m;
+    timeRe.lastIndex = 0;
+    while ((m = timeRe.exec(line)) !== null) {
+      const secs = parseInt(m[1], 10) * 60 + parseFloat(m[2]);
+      if (text) parsed.push({ time: secs, text });
+    }
+  });
+  // If no timestamps found, treat as plain text
+  if (parsed.length === 0 && raw.trim()) {
+    return raw.split("\n").map((text, i) => ({ time: null, text }));
+  }
+  return parsed.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+}
+
+// ── Lyrics panel with auto-scroll sync ───────────────────────────
+function LyricsPanel({ lyrics, currentTime }) {
+  const lines   = React.useMemo(() => parseLRC(lyrics || ""), [lyrics]);
+  const wrapRef = useRef(null);
+  const isLRC   = lines.some(l => l.time !== null);
+
+  // Find active line index
+  const activeIdx = React.useMemo(() => {
+    if (!isLRC || currentTime == null) return -1;
+    let idx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].time <= currentTime) idx = i;
+      else break;
+    }
+    return idx;
+  }, [lines, currentTime, isLRC]);
+
+  // Auto-scroll active line into view
+  useEffect(() => {
+    if (activeIdx < 0 || !wrapRef.current) return;
+    const el = wrapRef.current.children[activeIdx];
+    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeIdx]);
+
+  if (!lyrics?.trim()) return (
+    <div className="sd-no-lyrics">
+      <div style={{ fontSize:"1.8rem", marginBottom:8 }}>🎵</div>
+      <div>No lyrics available for this song.</div>
+      <div style={{ fontSize:".72rem", marginTop:8, opacity:.6 }}>
+        Lyrics can be added by the admin.
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="sd-lyrics-wrap" ref={wrapRef}>
+      {lines.map((line, i) => (
+        <div key={i}
+          className={
+            "sd-lyric-line" +
+            (isLRC && i === activeIdx ? " active" : "") +
+            (isLRC && i < activeIdx  ? " passed"  : "")
+          }
+        >
+          {line.text || "\u00a0"}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Spotify-style song card ──────────────────────────────────────
+// ── localStorage helpers ─────────────────────────────────────────
+const RECENT_KEY = "op_recent_songs";
+function saveRecent(song, movie, idx) {
+  if (!song?.title) return;
+  try {
+    const item = {
+      title:song.title, singer:song.singer||"", ytId:song.ytId||"",
+      movieTitle:movie?.title||"", movieId:String(movie?._id||""),
+      movieSlug:movie?.slug||"", songIdx:idx,
+      thumb:song.thumbnailUrl||(song.ytId?`https://img.youtube.com/vi/${song.ytId}/mqdefault.jpg`:""),
+      ts:Date.now(),
+    };
+    const prev = JSON.parse(localStorage.getItem(RECENT_KEY)||"[]")
+      .filter(r=>!(r.title===item.title&&r.movieId===item.movieId));
+    localStorage.setItem(RECENT_KEY, JSON.stringify([item,...prev].slice(0,20)));
+  } catch {}
+}
+export function getRecentPlayed() {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY)||"[]"); } catch { return []; }
+}
+function getKnowData(key) {
+  try { return JSON.parse(localStorage.getItem(key)||"{}"); } catch { return {}; }
+}
+
+function SpotifyCard({ song, onClick }) {
+  const thumb = song.thumbnailUrl || (song.ytId ? ytThumb(song.ytId) : null) || song.moviePoster;
+  return (
+    <div className="sd-spotify-card" onClick={onClick}>
+      <div className="sd-spotify-img">
+        {thumb && <img src={thumb} alt={song.title} onError={e=>e.target.style.opacity=".2"}/>}
+        {!thumb && <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2rem",color:"var(--muted)"}}>🎵</div>}
+        <div className="sd-spotify-play-btn">▶</div>
+      </div>
+      <div className="sd-spotify-title">{song.title}</div>
+      {song.singer && <div className="sd-spotify-sub">🎤 {song.singer}</div>}
+      {song.movieTitle && <div className="sd-spotify-sub" style={{color:"rgba(201,151,58,.7)"}}>{song.movieTitle}</div>}
+    </div>
+  );
+}
+
+// ── Share Card modal ──────────────────────────────────────────────
+function ShareCardModal({ song, movie, onClose }) {
+  const thumb = song.thumbnailUrl || (song.ytId ? `https://img.youtube.com/vi/${song.ytId}/hqdefault.jpg` : null) || movie?.posterUrl;
+  const url   = typeof window !== "undefined" ? window.location.href : "";
+
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(url).then(() => {
+      alert("Link copied!");
+    }).catch(() => {
+      prompt("Copy this link:", url);
+    });
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: song.title, text: `🎵 ${song.title}${song.singer?" — "+song.singer:""}${movie?" | "+movie.title:""}`, url });
+    } else {
+      handleCopy();
+    }
+  };
+
+  return (
+    <div className="sd-share-overlay" onClick={onClose}>
+      <div className="sd-share-card" onClick={e=>e.stopPropagation()}>
+        {/* Card image */}
+        {thumb
+          ? <img src={thumb} alt={song.title} className="sd-share-card-img"/>
+          : <div style={{width:"100%",aspectRatio:"16/9",background:"linear-gradient(135deg,#1a1200,#0a0a0a)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"3rem"}}>🎵</div>
+        }
+        <div className="sd-share-card-body">
+          <div className="sd-share-card-eyebrow">🎵 Now Playing</div>
+          <div className="sd-share-card-title">{song.title}</div>
+          <div className="sd-share-card-meta">
+            {song.singer && <span>🎤 {song.singer}</span>}
+            {song.singer && song.musicDirector && <span style={{margin:"0 6px",opacity:.4}}>·</span>}
+            {song.musicDirector && <span>🎼 {song.musicDirector}</span>}
+          </div>
+          {movie && (
+            <div className="sd-share-card-footer">
+              {movie.posterUrl && <img src={movie.posterUrl} alt={movie.title} style={{width:32,height:44,objectFit:"cover",borderRadius:4,border:"1px solid rgba(255,255,255,.1)"}} onError={e=>e.target.style.display="none"}/>}
+              <div>
+                <div style={{fontSize:".68rem",color:"var(--muted)"}}>From the film</div>
+                <div style={{fontSize:".82rem",fontWeight:700,color:"var(--gold)"}}>{movie.title}</div>
+              </div>
+              <div className="sd-share-card-watermark">Ollypedia</div>
+            </div>
+          )}
+          {/* Actions */}
+          <div style={{display:"flex",gap:8,marginTop:14}}>
+            <button onClick={handleShare} className="btn btn-gold btn-sm" style={{flex:1,justifyContent:"center"}}>
+              {navigator.share ? "📤 Share" : "🔗 Copy Link"}
+            </button>
+            {song.ytId && (
+              <a href={`https://www.youtube.com/watch?v=${song.ytId}`} target="_blank" rel="noreferrer"
+                className="btn btn-outline btn-sm" style={{flex:1,textAlign:"center",textDecoration:"none"}}>
+                ▶ Open On YouTube
+              </a>
+            )}
+            <button onClick={onClose} className="btn btn-ghost btn-sm" style={{flexShrink:0}}>✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SongItem({ song, active, onClick }) {
   const thumb = song.ytId ? ytThumb(song.ytId) : null;
@@ -247,11 +503,36 @@ export default function SongDetail() {
   const [error,           setError]           = useState(null);
   const [activeSongIdx,   setActiveSongIdx]   = useState(songIdx);
   const [activeMovieParam,setActiveMovieParam]= useState(movieParam);
+  const [sidebarTab,      setSidebarTab]      = useState("playlist"); // "playlist" | "lyrics"
+  const [currentTime,     setCurrentTime]     = useState(0);
+  const [autoplay,        setAutoplay]        = useState(true);
+  const [showBar,         setShowBar]         = useState(false);
+  const [isPlaying,       setIsPlaying]       = useState(true);
+  const [userRating,      setUserRating]      = useState(0);
+  const [hoverRating,     setHoverRating]     = useState(0);
+  const [showShare,       setShowShare]       = useState(false);
+  const [ratingMsg,       setRatingMsg]       = useState("");
+  const [repeatMode,  setRepeatMode]  = useState("none");  // "none"|"one"|"all"
+  const [queue,        setQueue]        = useState([]);       // [{idx, title, singer, ytId}]
+  const [showQueue,    setShowQueue]    = useState(false);
+  const [knowCount,    setKnowCount]    = useState(0);
+  const [knowVoted,    setKnowVoted]    = useState(false);
+  const playerRef  = useRef(null);
+  const playerWrap = useRef(null);
 
   // ── Derive movie from state ───────────────────────────────────
   const movie = allMovies.find(m =>
     String(m._id) === activeMovieParam || m.slug === activeMovieParam
   ) || null;
+
+  // ── Derived song data — ABOVE all useEffects (React rules) ─────
+  const songs      = movie?.media?.songs || [];
+  const activeSong = songs[activeSongIdx] || songs[0] || null;
+  const activeIdx  = activeSong ? songs.indexOf(activeSong) : 0;
+  const ytId       = activeSong?.ytId ? extractYtId(activeSong.ytId) : null;
+
+  // ── URL upgrade ref ───────────────────────────────────────────
+  const upgradedRef = useRef("");
 
   // ── Load movie ────────────────────────────────────────────────
   useEffect(() => {
@@ -286,19 +567,105 @@ export default function SongDetail() {
     return () => { cancelled = true; };
   }, [movieParam]);
 
-  // ── Sync state when URL params change (e.g. browser back/forward) ──
+  // ── Sync state when URL params change ──────────────────────────
   useEffect(() => {
     setActiveMovieParam(movieParam);
     setActiveSongIdx(songIdx);
   }, [movieParam, songIdx]);
 
-  // ── Derived song data ─────────────────────────────────────────
-  const songs      = movie?.media?.songs || [];
-  const activeSong = songs[activeSongIdx] || songs[0] || null;
-  const activeIdx  = activeSong ? (songs.indexOf(activeSong)) : 0;
 
-  // ── URL upgrade: once we know the song title, put it in the URL ──
-  const upgradedRef = useRef("");
+  // Auto-switch to lyrics tab when song changes
+  useEffect(() => {
+    if (activeSong?.lyrics?.trim()) setSidebarTab("lyrics");
+    else setSidebarTab("playlist");
+    setCurrentTime(0);
+  }, [activeSong?.title]);
+
+  // ── Save to recently played + load know count ────────────────
+  useEffect(() => {
+    if (!activeSong || !movie) return;
+    saveRecent(activeSong, movie, activeIdx);
+    // Load know count
+    const kd = getKnowData(`know_${movie._id}_${activeIdx}`);
+    setKnowCount(kd.count || 0);
+    setKnowVoted(kd.voted || false);
+  }, [activeSong?.title, activeIdx]);
+
+  // ── Show/hide Now Playing bar on scroll ──────────────────────
+  useEffect(() => {
+    const onScroll = () => {
+      if (!playerWrap.current) return;
+      const rect = playerWrap.current.getBoundingClientRect();
+      setShowBar(rect.bottom < 60);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // ── Autoplay: detect song end via YouTube postMessage ─────────
+  // ── Also track play/pause state ──────────────────────────────
+
+  // ── Load saved rating for this song ──────────────────────────
+  useEffect(() => {
+    if (!activeSong?.title) return;
+    const key = `rating_${movie?._id}_${activeIdx}`;
+    const saved = parseInt(localStorage.getItem(key) || "0", 10);
+    setUserRating(saved);
+    setRatingMsg("");
+  }, [activeSong?.title, activeIdx]);
+
+  // ── Poll YouTube player time for lyrics sync ─────────────────
+  useEffect(() => {
+    if (!ytId) return;
+    let interval = null;
+    const onMsg = (e) => {
+      try {
+        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+        if (d?.event === "infoDelivery" && d?.info?.currentTime != null) {
+          setCurrentTime(d.info.currentTime);
+          // Detect play/pause state
+          if (d.info.playerState === 1) setIsPlaying(true);
+          if (d.info.playerState === 2) setIsPlaying(false);
+          // Detect song end (playerState === 0)
+          if (d.info.playerState === 0) {
+            if (repeatMode === "one") {
+              // Seek back to start
+              setTimeout(() => {
+                playerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({event:"command",func:"seekTo",args:[0,true]}), "*"
+                );
+              }, 300);
+            } else if (queue.length > 0) {
+              // Play from queue
+              const [next, ...rest] = queue;
+              setQueue(rest);
+              setTimeout(() => changeActiveSong(next.idx), 800);
+            } else if (autoplay || repeatMode === "all") {
+              const nextIdx = repeatMode === "all" && activeIdx === songs.length - 1
+                ? 0 : activeIdx + 1;
+              if (nextIdx < songs.length) {
+                setTimeout(() => changeActiveSong(nextIdx), 800);
+              }
+            }
+          }
+        }
+      } catch {}
+    };
+    window.addEventListener("message", onMsg);
+    // Ask YouTube iframe to send time every second
+    const askTime = () => {
+      try {
+        playerRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ event: "listening" }), "*"
+        );
+        playerRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ event: "command", func: "getVideoData" }), "*"
+        );
+      } catch {}
+    };
+    interval = setInterval(askTime, 1000);
+    return () => { window.removeEventListener("message", onMsg); clearInterval(interval); };
+  }, [ytId]);
   useEffect(() => {
     if (!movie || !activeSong) return;
     const target = songPath(movie, activeIdx, activeSong);
@@ -329,6 +696,51 @@ export default function SongDetail() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // ── Rating handler ───────────────────────────────────────────
+  const handleRate = (stars) => {
+    setUserRating(stars);
+    const key = `rating_${movie?._id}_${activeIdx}`;
+    localStorage.setItem(key, String(stars));
+    setRatingMsg(["😕","😐","🙂","😊","🤩"][stars-1] + " Thanks for rating!");
+    setTimeout(() => setRatingMsg(""), 2500);
+  };
+
+  // ── Know this song ───────────────────────────────────────────
+  const handleKnow = () => {
+    if (knowVoted) return;
+    const key = `know_${movie?._id}_${activeIdx}`;
+    const kd = getKnowData(key);
+    const newCount = (kd.count || 0) + 1;
+    try { localStorage.setItem(key, JSON.stringify({count:newCount, voted:true})); } catch {}
+    setKnowCount(newCount);
+    setKnowVoted(true);
+  };
+
+  const addToQueue = (idx) => {
+    const s = songs[idx];
+    if (!s || idx === activeIdx) return;
+    setQueue(q => {
+      if (q.some(x => x.idx === idx)) return q; // already in queue
+      return [...q, {idx, title:s.title, singer:s.singer||"", ytId:s.ytId||""}];
+    });
+    setShowQueue(true);
+  };
+
+  const cycleRepeat = () => {
+    setRepeatMode(m => m==="none"?"one":m==="one"?"all":"none");
+  };
+
+  // ── Now Playing bar controls ──────────────────────────────────
+  const togglePlay = () => {
+    try {
+      const cmd = isPlaying ? "pauseVideo" : "playVideo";
+      playerRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event:"command", func:cmd, args:[] }), "*"
+      );
+      setIsPlaying(p => !p);
+    } catch {}
+  };
+
   // ── Early returns ─────────────────────────────────────────────
   if (loading) return (
     <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:10,color:"var(--muted)"}}>
@@ -354,7 +766,6 @@ export default function SongDetail() {
     </div>
   );
 
-  const ytId     = activeSong.ytId?extractYtId(activeSong.ytId):null;
   const bannerImg= movie.thumbnailUrl||ytThumb(movie.media?.trailer?.ytId)||movie.posterUrl;
 
   const allSongs=[];
@@ -377,14 +788,26 @@ export default function SongDetail() {
           <button onClick={()=>navigate(movie?moviePath(movie):`/movie/${movie?._id}`)}>
             ← {movie.title}
           </button>
+          {/* Breadcrumb */}
+          <div className="sd-breadcrumb">
+            <span onClick={()=>navigate("/")}>Home</span>
+            <span className="sep">›</span>
+            <span onClick={()=>navigate("/songs")}>Songs</span>
+            <span className="sep">›</span>
+            <span onClick={()=>navigate(moviePath(movie))}>{movie.title}</span>
+            <span className="sep">›</span>
+            <span className="cur">{activeSong.title}</span>
+          </div>
         </div>
 
         <div className="sd-grid">
           {/* ── Left: Player + Info + Playlist ── */}
           <div style={{minWidth:0}}>
+            <div ref={playerWrap}>
             <div className="sd-player">
               {ytId
-                ? <iframe key={ytId} src={`https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`}
+                ? <iframe key={ytId} ref={playerRef}
+                    src={`https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&enablejsapi=1`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen title={activeSong.title}/>
                 : <div style={{width:"100%",height:"100%",minHeight:220,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,background:"var(--bg3)"}}>
@@ -393,6 +816,7 @@ export default function SongDetail() {
                   </div>
               }
             </div>
+            </div>{/* /playerWrap */}
 
             <div className="sd-info-card">
               <div className="sd-badges">
@@ -421,27 +845,151 @@ export default function SongDetail() {
               {movie.director&&<div className="sd-meta-row"><span className="sd-meta-label">Director</span><span className="sd-meta-val">{movie.director}</span></div>}
               {movie.releaseDate&&<div className="sd-meta-row"><span className="sd-meta-label">Release</span><span className="sd-meta-val">{fmtDate(movie.releaseDate)}</span></div>}
 
-              {ytId&&(
-                <a href={`https://www.youtube.com/watch?v=${ytId}`} target="_blank" rel="noreferrer"
-                  className="btn-hero-play" style={{display:"inline-flex",marginTop:14,fontSize:".8rem",padding:"9px 18px"}}>
-                  ▶ Open on YouTube
-                </a>
-              )}
+              {/* ── Single action row: YT + Autoplay + Share + Rating ── */}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:16,flexWrap:"wrap",borderTop:"1px solid rgba(255,255,255,.06)",paddingTop:14}}>
+                {/* Open on YouTube */}
+                {ytId && (
+                  <a href={`https://www.youtube.com/watch?v=${ytId}`} target="_blank" rel="noreferrer"
+                    className="btn-hero-play" style={{fontSize:".76rem",padding:"7px 14px",whiteSpace:"nowrap"}}>
+                    ▶ YouTube
+                  </a>
+                )}
+
+                {/* Autoplay toggle — pill style */}
+                <button className={`sd-ctrl-btn${autoplay?" on":""}`} onClick={()=>setAutoplay(a=>!a)}
+                  style={{padding:"6px 12px",border:`1px solid ${autoplay?"rgba(201,151,58,.4)":"rgba(255,255,255,.12)"}`,borderRadius:20}}>
+                  {autoplay?"⏭ Auto: On":"⏭ Auto: Off"}
+                </button>
+
+                {/* Share */}
+                <button onClick={()=>setShowShare(true)}
+                  className="sd-ctrl-btn"
+                  style={{padding:"6px 12px",border:"1px solid rgba(255,255,255,.12)",borderRadius:20}}>
+                  📤 Share
+                </button>
+
+                {/* I Know This Song */}
+                <button className={`sd-know-btn${knowVoted?" voted":""}`} onClick={handleKnow}
+                  style={{padding:"6px 14px",fontSize:".76rem"}}>
+                  🔥 {knowVoted?"Known!":"I know this!"}
+                  {knowCount>0&&<span style={{fontWeight:900,marginLeft:3}}>{knowCount>=1000?(knowCount/1000).toFixed(1)+"K":knowCount}</span>}
+                </button>
+
+                {/* Star rating inline */}
+                <div style={{display:"flex",alignItems:"center",gap:3,marginLeft:"auto"}}>
+                  {[1,2,3,4,5].map(star=>(
+                    <span key={star}
+                      className={`sd-star${(hoverRating||userRating)>=star?" lit":""}`}
+                      onMouseEnter={()=>setHoverRating(star)}
+                      onMouseLeave={()=>setHoverRating(0)}
+                      onClick={()=>handleRate(star)}
+                      style={{fontSize:"1.1rem"}}>
+                      ⭐
+                    </span>
+                  ))}
+                  {ratingMsg && <span style={{fontSize:".7rem",color:"var(--gold)",marginLeft:4}}>{ratingMsg}</span>}
+                </div>
+              </div>
+
+
             </div>
 
-            {/* Full playlist — inline on mobile */}
-            {songs.length>1&&(
-              <div className="sd-playlist-box">
-                <div className="sd-playlist-header">🎵 Full Album — {movie.title} ({songs.length} songs)</div>
-                <div style={{padding:"5px"}}>
-                  {songs.map((s,i)=><SongItem key={i} song={s} active={i===activeIdx} onClick={()=>changeActiveSong(i)}/>)}
+            {/* ── Song Description ── */}
+            {activeSong.description && (
+              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:12,padding:"16px 18px",marginBottom:0}}>
+                <div style={{fontSize:".62rem",fontWeight:800,letterSpacing:".12em",textTransform:"uppercase",color:"var(--muted)",marginBottom:8}}>🎵 About This Song</div>
+                <p style={{fontSize:".86rem",lineHeight:1.8,color:"rgba(255,255,255,.75)",margin:0}}>{activeSong.description}</p>
+              </div>
+            )}
+
+            {/* ── Queue Panel ── */}
+            {showQueue && (
+              <div className="sd-queue-wrap">
+                <div className="sd-queue-head">
+                  <span>📋 Queue ({queue.length})</span>
+                  <button onClick={()=>setQueue([])} style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer",fontSize:".68rem",fontFamily:"inherit"}}>Clear</button>
+                </div>
+                {queue.length===0
+                  ? <div style={{padding:"14px 16px",color:"var(--muted)",fontSize:".78rem",textAlign:"center"}}>
+                      Queue is empty. Right-click a song below to add it!
+                    </div>
+                  : queue.map((q,i)=>{
+                      const qs=songs[q.idx];
+                      const thumb=q.ytId?ytThumb(q.ytId):null;
+                      return (
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid rgba(255,255,255,.04)",cursor:"pointer"}}
+                          onClick={()=>{setQueue(prev=>prev.filter((_,pi)=>pi!==i));changeActiveSong(q.idx);}}>
+                          <div style={{width:44,height:30,borderRadius:4,overflow:"hidden",background:"var(--bg3)",flexShrink:0}}>
+                            {thumb&&<img src={thumb} alt={q.title} style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:".78rem",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{q.title}</div>
+                            {q.singer&&<div style={{fontSize:".64rem",color:"var(--muted)"}}>🎤 {q.singer}</div>}
+                          </div>
+                          <button onClick={e=>{e.stopPropagation();setQueue(prev=>prev.filter((_,pi)=>pi!==i));}}
+                            style={{background:"none",border:"none",color:"var(--muted)",cursor:"pointer",fontSize:".8rem",padding:"2px 6px"}}>✕</button>
+                        </div>
+                      );
+                    })
+                }
+                <div style={{padding:"10px 12px",borderTop:"1px solid rgba(255,255,255,.05)",fontSize:".66rem",color:"var(--muted)"}}>
+                  💡 Right-click any song in the playlist to add to queue
                 </div>
               </div>
             )}
+
+            {/* ── About This Song ── */}
+            <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:12,padding:"18px 20px",marginBottom:0}}>
+              <div style={{fontSize:".62rem",fontWeight:800,letterSpacing:".12em",textTransform:"uppercase",color:"var(--muted)",marginBottom:12}}>About This Movie</div>
+
+              {/* Song number in album */}
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+                <span style={{fontSize:".68rem",color:"var(--muted)",width:80,flexShrink:0}}>Track</span>
+                <span style={{fontSize:".84rem",fontWeight:600}}>#{activeIdx+1} of {songs.length} in {movie.title}</span>
+              </div>
+
+              {/* Language */}
+              {movie.language && (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+                  <span style={{fontSize:".68rem",color:"var(--muted)",width:80,flexShrink:0}}>Language</span>
+                  <span style={{fontSize:".84rem"}}>🌐 {movie.language}</span>
+                </div>
+              )}
+
+              {/* Genre */}
+              {movie.genre?.length>0 && (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+                  <span style={{fontSize:".68rem",color:"var(--muted)",width:80,flexShrink:0}}>Genre</span>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {movie.genre.map(g=>(
+                      <span key={g} style={{fontSize:".7rem",background:"rgba(201,151,58,.1)",color:"var(--gold)",padding:"2px 9px",borderRadius:20,border:"1px solid rgba(201,151,58,.2)"}}>{g}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Verdict */}
+              {movie.verdict && (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+                  <span style={{fontSize:".68rem",color:"var(--muted)",width:80,flexShrink:0}}>Verdict</span>
+                  <span style={{fontSize:".84rem",fontWeight:700,color:["Hit","Super Hit","Blockbuster"].includes(movie.verdict)?"#4caf82":movie.verdict==="Upcoming"?"var(--gold)":"var(--red)"}}>{movie.verdict}</span>
+                </div>
+              )}
+
+              {/* IMDB Rating */}
+              {movie.imdbRating && (
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,.05)"}}>
+                  <span style={{fontSize:".68rem",color:"var(--muted)",width:80,flexShrink:0}}>IMDb</span>
+                  <span style={{fontSize:".84rem",fontWeight:700,color:"#f5c518"}}>⭐ {movie.imdbRating}/10</span>
+                </div>
+              )}
+
+            </div>
           </div>
 
-          {/* ── Right sidebar ── */}
+          {/* ── Right sidebar: Playlist + Lyrics tabs ── */}
           <div className="sd-sidebar">
+            {/* Movie info header */}
             <div className="sd-sidebar-head">
               <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
                 {movie.posterUrl&&(
@@ -456,16 +1004,36 @@ export default function SongDetail() {
                   {movie.releaseDate&&<div style={{fontSize:".64rem",color:"var(--muted)",marginTop:2}}>{fmtDate(movie.releaseDate)}</div>}
                 </div>
               </div>
-              <div style={{fontSize:".58rem",fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",color:"var(--muted)"}}>
-                🎵 {songs.length} song{songs.length!==1?"s":""}
+            </div>
+
+            {/* Tabs */}
+            <div className="sd-tabs">
+              <button className={`sd-tab${sidebarTab==="playlist"?" active":""}`}
+                onClick={()=>setSidebarTab("playlist")}>
+                🎵 Playlist <span style={{opacity:.6}}>({songs.length})</span>
+              </button>
+              <button className={`sd-tab${sidebarTab==="lyrics"?" active":""}`}
+                onClick={()=>setSidebarTab("lyrics")}>
+                ✍️ Lyrics
+                {activeSong?.lyrics && <span style={{marginLeft:4,width:6,height:6,borderRadius:"50%",background:"var(--gold)",display:"inline-block",verticalAlign:"middle"}}/>}
+              </button>
+            </div>
+
+            {/* Playlist tab */}
+            {sidebarTab==="playlist" && (
+              <div className="sd-sidebar-list">
+                {songs.length===0
+                  ? <div style={{padding:"16px",color:"var(--muted)",fontSize:".8rem",textAlign:"center"}}>No songs</div>
+                  : songs.map((s,i)=><div key={i} onContextMenu={e=>{e.preventDefault();addToQueue(i);}}><SongItem song={s} active={i===activeIdx} onClick={()=>changeActiveSong(i)}/></div>)
+                }
               </div>
-            </div>
-            <div className="sd-sidebar-list">
-              {songs.length===0
-                ? <div style={{padding:"16px",color:"var(--muted)",fontSize:".8rem",textAlign:"center"}}>No songs</div>
-                : songs.map((s,i)=><SongItem key={i} song={s} active={i===activeIdx} onClick={()=>changeActiveSong(i)}/>)
-              }
-            </div>
+            )}
+
+            {/* Lyrics tab */}
+            {sidebarTab==="lyrics" && (
+              <LyricsPanel lyrics={activeSong?.lyrics} currentTime={currentTime} />
+            )}
+
             <div className="sd-sidebar-footer">
               <button className="btn btn-outline btn-sm" style={{width:"100%",justifyContent:"center",fontSize:".74rem"}}
                 onClick={()=>navigate(movie?moviePath(movie):`/movie/${movie?._id}`)}>
@@ -478,9 +1046,61 @@ export default function SongDetail() {
 
       {/* Below: related rows */}
       <div className="sd-sections">
-        {bySinger.length>0&&<SongScrollRow title={`🎤 More by ${activeSong.singer?.split(/[,&]/)[0]?.trim()}`} songs={bySinger.slice(0,15)} onSongClick={handleRelatedSongClick}/>}
+
+        {/* Spotify-style "You May Also Like" — songs by same singer */}
+        {bySinger.length>0&&(
+          <section className="sd-section">
+            <div className="sd-sec-head">
+              <div>
+                <h2 className="sd-sec-title">🎤 More by {activeSong.singer?.split(/[,&]/)[0]?.trim()}</h2>
+                <div style={{fontSize:".66rem",color:"var(--muted)",marginTop:2}}>Songs you may also like</div>
+              </div>
+            </div>
+            <div className="sd-hrow" style={{paddingBottom:16}}>
+              {bySinger.slice(0,12).map((s,i)=>(
+                <SpotifyCard key={i} song={s} onClick={()=>handleRelatedSongClick(s)}/>
+              ))}
+            </div>
+          </section>
+        )}
+
         {byMusicDirector.length>0&&<SongScrollRow title={`🎼 More by ${activeSong.musicDirector?.split(/[,&]/)[0]?.trim()}`} songs={byMusicDirector.slice(0,15)} onSongClick={handleRelatedSongClick}/>}
         {byLyricist.length>0&&<SongScrollRow title={`✍️ More by ${activeSong.lyricist?.split(/[,&]/)[0]?.trim()}`} songs={byLyricist.slice(0,15)} onSongClick={handleRelatedSongClick}/>}
+
+        {/* ── Similar movies featuring same singer ── */}
+        {activeSong.singer&&(()=>{
+          const singerName=firstToken(activeSong.singer);
+          const singerMovies=allMovies.filter(m=>
+            String(m._id)!==String(movie._id)&&
+            m.media?.songs?.some(s=>s.singer&&firstToken(s.singer)===singerName)
+          ).sort((a,b)=>new Date(b.releaseDate||0)-new Date(a.releaseDate||0)).slice(0,14);
+          if(!singerMovies.length)return null;
+          return(
+            <section className="sd-section">
+              <div className="sd-sec-head">
+                <div>
+                  <h2 className="sd-sec-title">🎬 More films with {activeSong.singer?.split(/[,&]/)[0]?.trim()}</h2>
+                  <div style={{fontSize:".64rem",color:"var(--muted)",marginTop:2}}>Movies where this singer has songs</div>
+                </div>
+              </div>
+              <div className="sd-hrow">
+                {singerMovies.map(m=>(
+                  <div key={m._id} className="sd-mc" onClick={()=>navigate(moviePath(m))}>
+                    <div className="sd-mc-box">
+                      {(m.posterUrl||m.thumbnailUrl)&&<img src={m.posterUrl||m.thumbnailUrl} alt={m.title} loading="lazy" onError={e=>e.target.style.display="none"}/>}
+                      {!m.posterUrl&&!m.thumbnailUrl&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem"}}>🎬</div>}
+                      <div style={{position:"absolute",top:6,right:6,fontSize:".55rem",fontWeight:800,padding:"2px 6px",borderRadius:8,background:"rgba(0,0,0,.75)",color:"rgba(201,151,58,.9)"}}>
+                        {m.media?.songs?.filter(s=>s.singer&&firstToken(s.singer)===singerName).length} songs
+                      </div>
+                    </div>
+                    <p className="sd-mc-title">{m.title}</p>
+                    <p style={{margin:"2px 0 0",fontSize:".6rem",color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.releaseDate?new Date(m.releaseDate).getFullYear():""}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {movie.cast?.length>0&&(
           <section className="sd-section">
@@ -526,6 +1146,33 @@ export default function SongDetail() {
             </section>
           );
         })()}
+      </div>{/* /sd-sections */}
+
+      {/* ── Share Card Modal ── */}
+      {showShare && <ShareCardModal song={activeSong} movie={movie} onClose={()=>setShowShare(false)}/>}
+
+      {/* ── Now Playing floating bar ── */}
+      <div className={`sd-now-playing${showBar?" visible":""}`}>
+        <div className="sd-np-thumb">
+          {(activeSong.thumbnailUrl||(ytId?ytThumb(ytId):null))
+            ? <img src={activeSong.thumbnailUrl||ytThumb(ytId)} alt={activeSong.title} onError={e=>e.target.style.display="none"}/>
+            : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem"}}>🎵</div>
+          }
+        </div>
+        <div className="sd-np-info">
+          <div className="sd-np-title">{activeSong.title}</div>
+          {activeSong.singer && <div className="sd-np-singer">🎤 {activeSong.singer}</div>}
+        </div>
+        <button className="sd-np-btn sd-np-skip" title="Previous"
+          onClick={()=>activeIdx>0&&changeActiveSong(activeIdx-1)}
+          style={{opacity:activeIdx>0?1:.4}}>‹</button>
+        <button className="sd-np-btn" title={isPlaying?"Pause":"Play"} onClick={togglePlay}>
+          {isPlaying?"⏸":"▶"}
+        </button>
+        <button className="sd-np-btn sd-np-skip" title="Next"
+          onClick={()=>activeIdx<songs.length-1&&changeActiveSong(activeIdx+1)}
+          style={{opacity:activeIdx<songs.length-1?1:.4}}>›</button>
+        <button className="sd-np-btn sd-np-skip" title="Share" onClick={()=>setShowShare(true)} style={{fontSize:".75rem"}}>📤</button>
       </div>
     </div>
   );

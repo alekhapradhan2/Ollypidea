@@ -614,12 +614,18 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — re-fetch if stale
 //  Phase 2: news               → deferred via requestIdleCallback
 //  Phase 3: all other rows     → IntersectionObserver (scroll-lazy)
 // ═══════════════════════════════════════════════════════════════════
+// ── Recently played helper (reads localStorage) ─────────────────
+function readRecentPlayed() {
+  try { return JSON.parse(localStorage.getItem("op_recent_songs") || "[]"); } catch { return []; }
+}
+
 export default function Home({ production }) {
   const navigate = useNavigate();
 
   // ── State — initialise from cache so back-navigation is instant ──
   const [movies,      setMovies]      = useState(() => _cache.movies || []);
   const [moviesReady, setMoviesReady] = useState(() => _cache.movies !== null);
+  const [recentPlayed, setRecentPlayed] = useState(() => readRecentPlayed());
   const [news,        setNews]        = useState(() => _cache.news   || []);
   const [heroIdx,     setHeroIdx]     = useState(0);
   const timerRef = useRef(null);
@@ -897,6 +903,32 @@ export default function Home({ production }) {
           </Row>
         )}
 
+        {/* ── Recently Played ── */}
+        {recentPlayed.length > 0 && (
+          <Row title="🕐 Recently Played" viewAll="/songs" gap={14} cardRatio="1/1" cardWidth={150}>
+            {recentPlayed.slice(0, 12).map((s, i) => {
+              const thumb = s.thumb || (s.ytId ? `https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg` : null);
+              return (
+                <div key={i} className="home-song-card" style={{flexShrink:0,width:150}}
+                  onClick={() => navigate(`/song/${s.movieSlug||s.movieId}/${s.songIdx}`)}>
+                  <div className="home-song-thumb">
+                    {thumb
+                      ? <img src={thumb} alt={s.title} loading="lazy" onError={e=>e.target.style.display="none"}/>
+                      : <div style={{width:"100%",height:"100%",background:"linear-gradient(135deg,#111,#1a1200)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.8rem"}}>🎵</div>
+                    }
+                    <div className="home-song-play">▶</div>
+                  </div>
+                  <div className="home-song-info">
+                    <p className="home-song-title">{s.title}</p>
+                    {s.singer && <p className="home-song-singer">{s.singer}</p>}
+                    <p className="home-song-movie" style={{color:"var(--gold)"}}>{s.movieTitle}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </Row>
+        )}
+
         {trendingSongs.length > 0 && (
           <Row title="🎵 Trending Songs" viewAll="/songs" gap={14} cardRatio="1/1" cardWidth={150}>
             {trendingSongs.map((s, i) => (
@@ -905,8 +937,8 @@ export default function Home({ production }) {
                 s={s}
                 onClick={() => navigate(
                   s._movieSlug
-                    ? (() => { const ms=s._movieSlug.replace(/^\/movie\//,""); const idx=isNaN(s.songIndex)?0:s.songIndex; const ss=s.title?`/${String(s.title).toLowerCase().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g,"-").trim()}-odia-song`:""; return `/song/${ms}/${idx}${ss}`; })()
-                    : `/song/${s.movieId}/${isNaN(s.songIndex)?0:s.songIndex}`
+                    ? s._movieSlug.replace("/movie/", "/song/") + "/" + s.songIndex
+                    : `/song/${s.movieId}/${s.songIndex}`
                 )}
               />
             ))}
@@ -929,7 +961,7 @@ export default function Home({ production }) {
           <div className="home-empty">
             <div style={{ fontSize: "4rem", marginBottom: 16 }}>🎬</div>
             <h2>No movies yet</h2>
-            <p style={{ color: "var(--muted)" }}>Be the first to add a film to Ollypedia</p>
+            <p style={{ color: "var(--muted)" }}>Be the first to add a film to Ollipedia</p>
             {production && (
               <button className="btn btn-gold" onClick={() => navigate("/dashboard/add-movie")}>+ Add Movie</button>
             )}

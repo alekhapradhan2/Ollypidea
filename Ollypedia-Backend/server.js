@@ -140,6 +140,8 @@ const SongSchema = new mongoose.Schema({
   ytId:            { type: String, default: "" },
   url:             { type: String, default: "" },
   thumbnailUrl:    { type: String, default: "" },
+  lyrics:          { type: String, default: "" },
+  description:     { type: String, default: "" },
 });
 
 /**
@@ -1017,6 +1019,8 @@ function parseSongs(rawSongs) {
       ytId:            sid,
       url:             String(s.url            || ""),
       thumbnailUrl:    String(s.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
+      lyrics:          String(s.lyrics         || ""),
+      description:     String(s.description   || ""),
     };
   });
 }
@@ -1209,6 +1213,8 @@ app.post("/api/admin/movies/:id/songs", adminAuth, async (req, res) => {
       lyricistRef:     safeRefs(req.body.lyricistRef),
       ytId: sid, url: String(req.body.url || ""),
       thumbnailUrl: String(req.body.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
+      lyrics:      String(req.body.lyrics      || ""),
+      description: String(req.body.description || ""),
     };
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { "media.songs": song } }, { new: true })
       .populate("productionId","name logo").lean();
@@ -1239,6 +1245,8 @@ app.patch("/api/admin/movies/:id/songs/:songIndex", adminAuth, async (req, res) 
       lyricistRef:     s.lyricistRef     !== undefined ? safeRefs(s.lyricistRef)  : (existing.lyricistRef || []),
       ytId: sid, url: String(s.url || existing.url || ""),
       thumbnailUrl: String(s.thumbnailUrl || existing.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
+      lyrics:       s.lyrics      !== undefined ? String(s.lyrics)      : (existing.lyrics      || ""),
+      description:  s.description !== undefined ? String(s.description) : (existing.description || ""),
     };
     const setKey = `media.songs.${idx}`;
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $set: { [setKey]: updatedSong } }, { new: true })

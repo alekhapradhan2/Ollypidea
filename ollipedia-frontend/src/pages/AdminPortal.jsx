@@ -529,7 +529,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     initial?.media?.trailer?.url || (initial?.media?.trailer?.ytId ? `https://youtube.com/watch?v=${initial.media.trailer.ytId}` : "")
   );
   const [songs, setSongs] = useState(initial?.media?.songs || []);
-  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[] };
+  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[], lyrics:"", description:"" };
   const [sf, setSf] = useState(EMPTY_SF);
   const trailerPreview = extractYtId(trailerUrl);
 
@@ -1098,7 +1098,7 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
   const [movieSearch,  setMovieSearch]  = useState("");
   const [showMovieDrop,setShowMovieDrop]= useState(false);
 
-  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[] };
+  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[], lyrics:"", description:"" };
   const [sf, setSf] = useState(() => initial ? {
     url:             initial.url            || (initial.ytId ? `https://youtu.be/${initial.ytId}` : ""),
     title:           initial.title          || "",
@@ -1108,6 +1108,8 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
     musicDirectorRef:initial.musicDirectorRef || [],
     lyricist:        initial.lyricist       || "",
     lyricistRef:     initial.lyricistRef    || [],
+    lyrics:          initial.lyrics         || "",
+    description:     initial.description   || "",
   } : EMPTY_SF);
 
   const filteredMovies = (movies||[]).filter(m =>
@@ -1128,7 +1130,9 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
       title:sf.title.trim(), singer:sf.singer.trim(), singerRef:sf.singerRef,
       musicDirector:sf.musicDirector.trim(), musicDirectorRef:sf.musicDirectorRef,
       lyricist:sf.lyricist.trim(), lyricistRef:sf.lyricistRef,
-      ytId, url:sf.url, thumbnailUrl:ytId?`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`:""
+      ytId, url:sf.url, thumbnailUrl:ytId?`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`:"",
+      lyrics:sf.lyrics.trim(),
+      description:sf.description.trim(),
     } });
   };
 
@@ -1203,6 +1207,24 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
             onChange={(name, refs) => setSf(f=>({...f, lyricist:name, lyricistRef:refs}))} />
         </div>
       </div>
+      <div className="form-group" style={{ marginTop:12 }}>
+        <label className="form-label">Description <span style={{ fontSize:"0.68rem", color:"var(--muted)", fontWeight:400 }}>(optional — theme, mood, background)</span></label>
+        <textarea className="form-textarea"
+          value={sf.description}
+          onChange={e=>setSf(f=>({...f,description:e.target.value}))}
+          style={{ minHeight:70, fontSize:"0.82rem", lineHeight:1.7 }}
+          placeholder="e.g. A romantic melody expressing longing and love..." />
+      </div>
+
+      <div className="form-group" style={{ marginTop:12 }}>
+        <label className="form-label">Lyrics <span style={{ fontSize:"0.68rem", color:"var(--muted)", fontWeight:400 }}>(optional — plain text or LRC format for sync)</span></label>
+        <textarea className="form-textarea"
+          value={sf.lyrics}
+          onChange={e=>setSf(f=>({...f,lyrics:e.target.value}))}
+          style={{ minHeight:160, fontFamily:"monospace", fontSize:"0.78rem", lineHeight:1.8 }}
+          placeholder={"Paste lyrics here...\n\nFor auto-scroll sync use LRC format:\n[00:12.00] Tate dekhile mun bhuli jaye\n[00:15.50] Hrudaya mora naache re"} />
+      </div>
+
       <div style={{ display:"flex", gap:10, paddingTop:16, borderTop:"1px solid var(--border)" }}>
         <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-gold" onClick={handleAdd} disabled={saving||!sf.title.trim()||!movieId}>
