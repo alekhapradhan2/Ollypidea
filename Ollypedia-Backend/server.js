@@ -535,9 +535,26 @@ app.get("/api/cast/search/:q", async (req, res) => {
 
 app.get("/api/cast/:id", async (req, res) => {
   try {
-    const c = await Cast.findById(req.params.id).lean();
+    const param = req.params.id;
+    let c = null;
+    if (isOid(param)) {
+      // Standard ObjectId lookup
+      c = await Cast.findById(param).lean();
+    } else {
+      // Name-slug lookup: "babushaan-mohanty" → search by name
+      // Convert slug back to searchable name (hyphens → spaces)
+      const nameQuery = param.replace(/-/g, " ").trim();
+      // Exact case-insensitive match first
+      c = await Cast.findOne({ name: { $regex: new RegExp("^" + nameQuery + "$", "i") } }).lean();
+      // Fallback: match any cast member whose name words all appear in the slug
+      if (!c) {
+        const words = nameQuery.split(" ").filter(w => w.length > 2);
+        const pattern = words.map(w => "(?=.*" + w + ")").join("") + ".*";
+        c = await Cast.findOne({ name: { $regex: new RegExp(pattern, "i") } }).lean();
+      }
+    }
     if (!c) return res.status(404).json({ error: "Not found" });
-    const movies = await Movie.find({ "cast.castId": c._id }, "title posterUrl releaseDate verdict productionId genre cast")
+    const movies = await Movie.find({ "cast.castId": c._id }, "title posterUrl releaseDate verdict productionId genre cast slug")
       .populate("productionId","name logo").lean();
     res.json({ ...c, moviesList: movies });
   } catch (e) { res.status(500).json({ error: e.message }); }
