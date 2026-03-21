@@ -11,23 +11,30 @@ import path from "path";
 
 const API_URL    = process.env.VITE_API_URL || "http://localhost:4000/api";
 const SITE_URL   = "https://ollypedia.in";
-const OUTPUT_DIR = "../ollipedia-frontend/public";
+const OUTPUT_DIR = process.env.OUTPUT_DIR || "../ollipedia-frontend/public";
 
 // ── Slug helpers — MUST match src/utils/slugs.js exactly ──────────
 function toSlug(str = "") {
   return String(str)
     .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60);
+    .replace(/-+/g, "-")
+    .trim()
+    .slice(0, 80);
 }
-const movieSlugId = (m) => {
-  const year = m.releaseDate ? `-${new Date(m.releaseDate).getFullYear()}` : "";
-  return `${toSlug(m.title)}${year}-${m._id}`;
+
+// /movie/bindusagar-2026  (uses server-stored slug if available)
+const movieSlug = (m) => {
+  if (m.slug) return m.slug;
+  const year = m.releaseDate ? new Date(m.releaseDate).getFullYear() : "";
+  const base = toSlug(m.title || "movie");
+  return year ? `${base}-${year}` : base;
 };
-const castSlugId = (c) => `${toSlug(c.name)}-${c._id}`;
+
+// /cast/babushaan-mohanty
+const castSlug = (c) => toSlug(c.name || "artist");
 // ──────────────────────────────────────────────────────────────────
 
 async function fetchJSON(url) {
@@ -68,7 +75,7 @@ async function generate() {
   movies.forEach(m => {
     const isHit = m.verdict && !["Upcoming","Flop","Disaster"].includes(m.verdict);
     urls.push(urlEntry({
-      loc:        `/movie/${movieSlugId(m)}`,
+      loc:        `/movie/${movieSlug(m)}`,
       lastmod:    m.updatedAt || m.releaseDate,
       priority:   isHit ? "0.8" : "0.6",
       changefreq: m.verdict === "Upcoming" ? "weekly" : "monthly",
@@ -79,7 +86,7 @@ async function generate() {
   castList.forEach(c => {
     const n = c.movies?.length || 0;
     urls.push(urlEntry({
-      loc:        `/cast/${castSlugId(c)}`,
+      loc:        `/cast/${castSlug(c)}`,
       lastmod:    c.updatedAt,
       priority:   n >= 5 ? "0.7" : n >= 2 ? "0.6" : "0.5",
       changefreq: "monthly",
