@@ -1,5 +1,5 @@
 import SEO, { staticSEO } from "../components/SEO";
-import { moviePath } from "../utils/slugs";
+import { moviePath, slugify } from "../utils/slugs";
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
@@ -674,8 +674,10 @@ export default function AllSongs() {
   const classicYrs = useMemo(() => [...new Set(classic.map(s=>s.movieYear).filter(Boolean))].slice(0,8), [classic]);
 
   const handleClick = useCallback(s => {
-    const slug = s._slug?.replace("/movie/", "/song/");
-    navigate(slug ? `${slug}/${s.songIndex}` : `/song/${s.movieId}/${s.songIndex}`);
+    const idx = typeof s.songIndex === "number" && !isNaN(s.songIndex) ? s.songIndex : 0;
+    // Build movie slug from _slug (/movie/bindusagar-2026 → bindusagar-2026)
+    const movieSlug = s._slug ? s._slug.replace(/^\/movie\//, "") : s.movieId;
+    navigate(`/song/${movieSlug}/${idx}/${slugify(s.title || "")}-odia-song`);
   }, [navigate]);
 
   const shownF  = filtered.slice(0, page * PER_PAGE);

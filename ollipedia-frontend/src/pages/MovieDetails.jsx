@@ -909,7 +909,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                   {crew.slice(0,8).map((c,i) => (
                     <div key={c.castId||i} className="md-crew-pill"
-                      onClick={() => c.castId && navigate(castPath({ _id:c.castId }))}>
+                      onClick={() => c.castId && navigate(castPath({ _id:c.castId, name:c.name }))}>
                       <div className="md-crew-av">
                         {c.photo
                           ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/>
@@ -935,7 +935,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 <div className="md-hscroll">
                   {actors.slice(0,14).map((c,i) => (
                     <div key={c.castId||i} className="md-actor"
-                      onClick={() => c.castId && navigate(castPath({ _id:c.castId }))}
+                      onClick={() => c.castId && navigate(castPath({ _id:c.castId, name:c.name }))}
                       onMouseEnter={e => e.currentTarget.querySelector(".md-actor-av").style.borderColor="#c9973a"}
                       onMouseLeave={e => e.currentTarget.querySelector(".md-actor-av").style.borderColor="rgba(255,255,255,.1)"}>
                       <div className="md-actor-av">
@@ -1067,7 +1067,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
                   {crew.map((c,i) => (
                     <div key={c.castId||i} className="md-crew-pill"
-                      onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId }))}>
+                      onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId, name:c.name }))}>
                       <div className="md-crew-av">
                         {c.photo ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/> : "👤"}
                       </div>
@@ -1088,7 +1088,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 <div className="md-cast-grid">
                   {actors.map((c,i) => (
                     <div key={c.castId||i} className="md-cast-card"
-                      onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId }))}>
+                      onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId, name:c.name }))}>
                       <div className="md-cast-img">
                         {c.photo ? <img src={c.photo} alt={c.name} loading="lazy" onError={e=>e.target.style.display="none"}/> : "👤"}
                         {isOwner && <button style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,.6)",border:"none",color:"rgba(255,100,100,.8)",cursor:"pointer",borderRadius:4,fontSize:".72rem",padding:"2px 6px"}} onClick={e=>{e.stopPropagation();removeCast(c.castId);}}>✕</button>}
@@ -1277,7 +1277,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           <HomeRow title="🎭 Full Cast">
             {[...crew,...actors].map((c,i) => (
               <MiniCastCard key={c.castId||i} person={c}
-                onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId }))} />
+                onClick={() => c.castId && navigate(portalMode?`/portal/cast/${c.castId}`:castPath({ _id:c.castId, name:c.name }))} />
             ))}
           </HomeRow>
         )}

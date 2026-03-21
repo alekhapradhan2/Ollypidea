@@ -1,5 +1,5 @@
 import SEO, { songDetailSEO } from "../components/SEO";
-import { extractId, moviePath, songPath } from "../utils/slugs";
+import { extractId, moviePath, songPath, castPath } from "../utils/slugs";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { API } from "../api/api";
@@ -230,68 +230,135 @@ function SongScrollRow({ title, songs, onSongClick }) {
 }
 
 export default function SongDetail() {
-  const { movieSlug:_rawMovieSlug, songIndex:urlSongIdx } = useParams();
-  const urlMovieId = extractId(_rawMovieSlug);
+  // ── URL params ────────────────────────────────────────────────
+  // Route: /song/:movieSlug/:songIndex  OR  /song/:movieSlug/:songIndex/:songSlug
+  const { movieSlug: _rawSlug, songIndex: _rawIdx } = useParams();
+
+  // movieParam: slug ("bindusagar-2026") or ObjectId — server accepts both
+  const movieParam = extractId(_rawSlug) || _rawSlug;
+  // songIdx: parse safely, default to 0
+  const songIdx    = (() => { const n = parseInt(_rawIdx, 10); return isNaN(n) ? 0 : n; })();
+
   const navigate = useNavigate();
 
-  // Pre-populate from cache so related songs show instantly
-  const [allMovies,  setAllMovies]  = useState(() => Cache.peek("movies") || []);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(null);
-  const [currentMovieId,  setCurrentMovieId]  = useState(urlMovieId);
-  const [currentSongIdx,  setCurrentSongIdx]  = useState(urlSongIdx!=null?Number(urlSongIdx):0);
+  // ── State ─────────────────────────────────────────────────────
+  const [allMovies,       setAllMovies]       = useState(() => Cache.peek("movies") || []);
+  const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState(null);
+  const [activeSongIdx,   setActiveSongIdx]   = useState(songIdx);
+  const [activeMovieParam,setActiveMovieParam]= useState(movieParam);
 
-  const movie = allMovies.find(m=>String(m._id)===currentMovieId)||null;
+  // ── Derive movie from state ───────────────────────────────────
+  const movie = allMovies.find(m =>
+    String(m._id) === activeMovieParam || m.slug === activeMovieParam
+  ) || null;
 
-  useEffect(()=>{
-    // If we already have this movie in cache, skip individual fetch
+  // ── Load movie ────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    // Check cache first
     const cached = Cache.peek("movies");
     if (cached) {
-      const found = cached.find(m => String(m._id) === urlMovieId);
-      if (found) { setLoading(false); return; }
+      const found = cached.find(m => String(m._id) === movieParam || m.slug === movieParam);
+      if (found) {
+        if (!cancelled) { setAllMovies(cached); setLoading(false); }
+        return;
+      }
     }
-    API.getMovie(urlMovieId)
-      .then(m=>{
-        setAllMovies(prev=>[m,...prev.filter(x=>String(x._id)!==String(m._id))]);
+
+    // Fetch individual movie
+    API.getMovie(movieParam)
+      .then(m => {
+        if (cancelled) return;
+        setAllMovies(prev => [m, ...prev.filter(x => String(x._id) !== String(m._id))]);
         setLoading(false);
-        // Deferred: load all movies via cache for related songs
-        const tid=typeof requestIdleCallback!=="undefined"
-          ?requestIdleCallback(()=>Cache.getMovies().catch(()=>[]).then(all=>setAllMovies(all)))
-          :setTimeout(()=>Cache.getMovies().catch(()=>[]).then(all=>setAllMovies(all)),200);
-        return()=>typeof requestIdleCallback!=="undefined"?cancelIdleCallback(tid):clearTimeout(tid);
+        // Background: load all movies for related sections
+        const tid = typeof requestIdleCallback !== "undefined"
+          ? requestIdleCallback(() => Cache.getMovies().catch(() => []).then(all => { if (!cancelled) setAllMovies(all); }))
+          : setTimeout(() => Cache.getMovies().catch(() => []).then(all => { if (!cancelled) setAllMovies(all); }), 300);
+        return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(tid) : clearTimeout(tid);
       })
-      .catch(e=>{ setError(typeof e==="string"?e:"Failed to load"); setLoading(false); });
-  },[urlMovieId]);
+      .catch(e => { if (!cancelled) { setError(e?.message || "Failed to load"); setLoading(false); } });
 
-  useEffect(()=>{
-    setCurrentMovieId(urlMovieId);
-    setCurrentSongIdx(urlSongIdx!=null?Number(urlSongIdx):0);
-  },[urlMovieId,urlSongIdx]);
+    return () => { cancelled = true; };
+  }, [movieParam]);
 
+  // ── Sync state when URL params change (e.g. browser back/forward) ──
+  useEffect(() => {
+    setActiveMovieParam(movieParam);
+    setActiveSongIdx(songIdx);
+  }, [movieParam, songIdx]);
+
+  // ── Derived song data ─────────────────────────────────────────
+  const songs      = movie?.media?.songs || [];
+  const activeSong = songs[activeSongIdx] || songs[0] || null;
+  const activeIdx  = activeSong ? (songs.indexOf(activeSong)) : 0;
+
+  // ── URL upgrade: once we know the song title, put it in the URL ──
+  const upgradedRef = useRef("");
+  useEffect(() => {
+    if (!movie || !activeSong) return;
+    const target = songPath(movie, activeIdx, activeSong);
+    // Avoid infinite loop: only navigate if URL is genuinely different
+    if (target !== upgradedRef.current && window.location.pathname !== target) {
+      upgradedRef.current = target;
+      navigate(target, { replace: true });
+    }
+  }, [movie?._id, activeIdx, activeSong?.title]);
+
+  // ── Navigation handlers ───────────────────────────────────────
   const changeActiveSong = (idx) => {
-    setCurrentSongIdx(idx);
-    navigate(movie?songPath(movie,idx):`/song/${currentMovieId}/${idx}`,{replace:true});
+    const s = songs[idx];
+    if (!s) return;
+    setActiveSongIdx(idx);
+    navigate(songPath(movie, idx, s), { replace: true });
   };
+
   const handleRelatedSongClick = (s) => {
-    setCurrentMovieId(s.movieId); setCurrentSongIdx(s.songIdx);
-    const relM=allMovies.find(x=>String(x._id)===s.movieId);
-    navigate(relM?songPath(relM,s.songIdx):`/song/${s.movieId}/${s.songIdx}`,{replace:false});
-    window.scrollTo({top:0,behavior:"smooth"});
+    const relM = allMovies.find(x => String(x._id) === s.movieId);
+    const idx  = (typeof s.songIdx === "number" && !isNaN(s.songIdx)) ? s.songIdx : 0;
+    setActiveMovieParam(relM?.slug || s.movieId);
+    setActiveSongIdx(idx);
+    navigate(
+      relM ? songPath(relM, idx, s) : `/song/${s.movieId}/${idx}`,
+      { replace: false }
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (loading) return <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:10,color:"var(--muted)"}}><div style={{fontSize:"2rem"}}>🎵</div><p style={{fontSize:".8rem"}}>Loading…</p></div>;
-  if (error)   return <div className="page empty-state"><h3>Song not found</h3><p>{error}</p><button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(-1)}>← Go Back</button></div>;
-  if (!movie)  return <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)"}}><p>Loading movie…</p></div>;
-
-  const songs      = movie.media?.songs||[];
-  const activeSong = songs[currentSongIdx]||songs[0];
-  if (!activeSong) return <div className="page empty-state"><h3>No songs for this movie</h3><button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(movie?moviePath(movie):`/movie/${movie?._id}`)}>← Back to Movie</button></div>;
+  // ── Early returns ─────────────────────────────────────────────
+  if (loading) return (
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:10,color:"var(--muted)"}}>
+      <div style={{fontSize:"2rem"}}>🎵</div>
+      <p style={{fontSize:".8rem"}}>Loading…</p>
+    </div>
+  );
+  if (error) return (
+    <div className="page empty-state">
+      <h3>Song not found</h3><p>{error}</p>
+      <button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(-1)}>← Go Back</button>
+    </div>
+  );
+  if (!movie) return (
+    <div style={{minHeight:"100vh",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--muted)"}}>
+      <p>Loading movie…</p>
+    </div>
+  );
+  if (!activeSong) return (
+    <div className="page empty-state">
+      <h3>No songs for this movie</h3>
+      <button className="btn btn-outline" style={{marginTop:16}} onClick={()=>navigate(moviePath(movie))}>← Back to Movie</button>
+    </div>
+  );
 
   const ytId     = activeSong.ytId?extractYtId(activeSong.ytId):null;
   const bannerImg= movie.thumbnailUrl||ytThumb(movie.media?.trailer?.ytId)||movie.posterUrl;
 
   const allSongs=[];
-  allMovies.forEach(m=>(m.media?.songs||[]).forEach((s,i)=>allSongs.push({...s,movieId:String(m._id),movieTitle:m.title,moviePoster:m.posterUrl,songIdx:i,isCurrent:String(m._id)===currentMovieId&&i===currentSongIdx})));
+  allMovies.forEach(m=>(m.media?.songs||[]).forEach((s,i)=>allSongs.push({...s,movieId:String(m._id),movieTitle:m.title,moviePoster:m.posterUrl,songIdx:i,isCurrent:String(m._id)===String(movie._id)&&i===activeIdx})));
 
   const bySinger        = activeSong.singer?allSongs.filter(s=>!s.isCurrent&&s.ytId&&s.singer&&firstToken(s.singer)===firstToken(activeSong.singer)):[];
   const byMusicDirector = activeSong.musicDirector?allSongs.filter(s=>!s.isCurrent&&s.ytId&&s.musicDirector&&firstToken(s.musicDirector)===firstToken(activeSong.musicDirector)):[];
@@ -300,7 +367,7 @@ export default function SongDetail() {
   return (
     <div className="sd-root">
       <style>{CSS}</style>
-      <SEO {...songDetailSEO({...activeSong,songIndex:currentSongIdx},movie)}/>
+      <SEO {...songDetailSEO({...activeSong,songIndex:activeIdx},movie)}/>
 
       <div className="sd-hero">
         {bannerImg && <div className="sd-hero-bg" style={{backgroundImage:`url(${bannerImg})`}}/>}
@@ -367,7 +434,7 @@ export default function SongDetail() {
               <div className="sd-playlist-box">
                 <div className="sd-playlist-header">🎵 Full Album — {movie.title} ({songs.length} songs)</div>
                 <div style={{padding:"5px"}}>
-                  {songs.map((s,i)=><SongItem key={i} song={s} active={i===currentSongIdx} onClick={()=>changeActiveSong(i)}/>)}
+                  {songs.map((s,i)=><SongItem key={i} song={s} active={i===activeIdx} onClick={()=>changeActiveSong(i)}/>)}
                 </div>
               </div>
             )}
@@ -396,7 +463,7 @@ export default function SongDetail() {
             <div className="sd-sidebar-list">
               {songs.length===0
                 ? <div style={{padding:"16px",color:"var(--muted)",fontSize:".8rem",textAlign:"center"}}>No songs</div>
-                : songs.map((s,i)=><SongItem key={i} song={s} active={i===currentSongIdx} onClick={()=>changeActiveSong(i)}/>)
+                : songs.map((s,i)=><SongItem key={i} song={s} active={i===activeIdx} onClick={()=>changeActiveSong(i)}/>)
               }
             </div>
             <div className="sd-sidebar-footer">
@@ -440,7 +507,7 @@ export default function SongDetail() {
         )}
 
         {(()=>{
-          const related=allMovies.filter(m=>String(m._id)!==currentMovieId&&movie.genre?.length&&m.genre?.some(g=>movie.genre.includes(g))).sort((a,b)=>new Date(b.releaseDate||0)-new Date(a.releaseDate||0)).slice(0,15);
+          const related=allMovies.filter(m=>String(m._id)!==String(movie._id)&&movie.genre?.length&&m.genre?.some(g=>movie.genre.includes(g))).sort((a,b)=>new Date(b.releaseDate||0)-new Date(a.releaseDate||0)).slice(0,15);
           if(!related.length)return null;
           return(
             <section className="sd-section">

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { setToken, setCastToken, setAdminToken } from "./api/api";
 
 import Navbar             from "./components/Navbar";
@@ -16,6 +17,9 @@ import NewsDetail         from "./pages/NewsDetail";
 import Register           from "./pages/Register";
 import ProductionProfile  from "./pages/ProductionProfile";
 import SongDetail         from "./pages/SongDetail";
+import AllSongs           from "./pages/AllSongs";
+import AboutUs            from "./pages/AboutUs";
+import PrivacyPolicy      from "./pages/PrivacyPolicy";
 
 import Dashboard          from "./pages/Dashboard";
 import AddMovie           from "./pages/AddMovie";
@@ -68,13 +72,16 @@ function AppInner({ production, setProduction, castMember, setCastMember, admin,
         <Route path="/movies"         element={<Movies />} />
         <Route path="/movie/:slug"    element={<MovieDetails production={production} onToast={showToast} />} />
         <Route path="/cast"           element={<Cast />} />
-        <Route path="/cast/:id"       element={<CastProfile />} />
-        <Route path="/cast/:id/:nameSlug" element={<CastProfile />} />
+        <Route path="/cast/:slug"     element={<CastProfile />} />
+        <Route path="/cast/:slug/:nameSlug" element={<CastProfile />} />
+        <Route path="/songs"          element={<AllSongs />} />
         <Route path="/news"           element={<News />} />
         <Route path="/news/:id"       element={<NewsDetail />} />
         <Route path="/production/:id" element={<ProductionProfile production={production} />} />
         <Route path="/register"       element={<Register onSuccess={(p,t) => handleProdAuth(p,t)} onToast={showToast} />} />
         <Route path="/cast-register"  element={<CastRegister onSuccess={(m,t) => handleCastAuth(m,t)} onToast={showToast} />} />
+        <Route path="/about"          element={<AboutUs />} />
+        <Route path="/privacy"        element={<PrivacyPolicy />} />
         <Route path="/song/:movieSlug/:songIndex" element={<SongDetail />} />
         <Route path="/song/:movieSlug/:songIndex/:songSlug" element={<SongDetail />} />
 
@@ -110,6 +117,7 @@ export default function App() {
   const [admin,      setAdmin]      = useState(() => { try { const s = localStorage.getItem("admin_user"); return s ? JSON.parse(s) : null; } catch { return null; } });
 
   return (
+    <HelmetProvider>
     <BrowserRouter>
       <AppInner
         production={production} setProduction={setProduction}
@@ -117,5 +125,6 @@ export default function App() {
         admin={admin} setAdmin={setAdmin}
       />
     </BrowserRouter>
+    </HelmetProvider>
   );
 }

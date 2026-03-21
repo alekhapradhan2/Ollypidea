@@ -905,8 +905,8 @@ export default function Home({ production }) {
                 s={s}
                 onClick={() => navigate(
                   s._movieSlug
-                    ? s._movieSlug.replace("/movie/", "/song/") + "/" + s.songIndex
-                    : `/song/${s.movieId}/${s.songIndex}`
+                    ? (() => { const ms=s._movieSlug.replace(/^\/movie\//,""); const idx=isNaN(s.songIndex)?0:s.songIndex; const ss=s.title?`/${String(s.title).toLowerCase().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g,"-").trim()}-odia-song`:""; return `/song/${ms}/${idx}${ss}`; })()
+                    : `/song/${s.movieId}/${isNaN(s.songIndex)?0:s.songIndex}`
                 )}
               />
             ))}

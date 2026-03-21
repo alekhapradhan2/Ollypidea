@@ -497,7 +497,7 @@ export default function CastProfile({ portalMode }) {
                 key={i}
                 className="home-card"
                 style={{ width: 150, cursor: c.castId ? "pointer" : "default" }}
-                onClick={() => c.castId && navigate(castPath({ _id: c.castId }))}
+                onClick={() => c.castId && navigate(castPath({ _id:c.castId, name:c.name }))}
               >
                 <div className="home-card-img" style={{ height: 150 }}>
                   <SafeImg
