@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
 
@@ -150,6 +151,10 @@ export default function ContactUs() {
 
   return (
     <>
+      <Helmet>
+        <title>Contact Us — Ollypedia</title>
+        <meta name="description" content="Get in touch with Ollypedia. Report errors, suggest additions, or send us your feedback." />
+      </Helmet>
       <style>{CSS}</style>
       <div className="contact-root">
         <button className="policy-back" onClick={() => navigate(-1)}>← Back</button>

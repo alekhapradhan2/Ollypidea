@@ -1,4 +1,5 @@
 import React from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 
 const CSS = `
@@ -75,6 +76,10 @@ export default function AboutUs() {
   const navigate = useNavigate();
   return (
     <>
+      <Helmet>
+        <title>About Us — Ollypedia | Odia Cinema Encyclopedia</title>
+        <meta name="description" content="Learn about Ollypedia — your complete encyclopedia of Odia cinema. Our mission, story and how to contribute." />
+      </Helmet>
       <style>{CSS}</style>
       <div className="about-root">
         <button className="policy-back" onClick={() => navigate(-1)}>← Back</button>

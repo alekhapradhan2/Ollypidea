@@ -1,4 +1,5 @@
 import React from "react";
+import { Helmet } from "react-helmet-async";
 import { useNavigate } from "react-router-dom";
 
 const PAGE_CSS = `
@@ -62,6 +63,10 @@ export default function PrivacyPolicy() {
   const year = new Date().getFullYear();
   return (
     <>
+      <Helmet>
+        <title>Privacy Policy — Ollypedia</title>
+        <meta name="description" content="Privacy Policy for Ollypedia — how we collect, use and protect your information." />
+      </Helmet>
       <style>{PAGE_CSS}</style>
       <div className="policy-root">
         <button className="policy-back" onClick={() => navigate(-1)}>← Back</button>
