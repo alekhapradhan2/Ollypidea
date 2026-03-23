@@ -1,5 +1,6 @@
 import SEO, { songDetailSEO } from "../components/SEO";
 import { extractId, moviePath, songPath, castPath } from "../utils/slugs";
+import { setNowPlaying } from "../components/MiniPlayer";
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { API } from "../api/api";
@@ -414,7 +415,7 @@ function ShareCardModal({ song, movie, onClose }) {
             {song.ytId && (
               <a href={`https://www.youtube.com/watch?v=${song.ytId}`} target="_blank" rel="noreferrer"
                 className="btn btn-outline btn-sm" style={{flex:1,textAlign:"center",textDecoration:"none"}}>
-                ▶ Open On YouTube
+                ▶ YouTube
               </a>
             )}
             <button onClick={onClose} className="btn btn-ghost btn-sm" style={{flexShrink:0}}>✕</button>
@@ -574,12 +575,22 @@ export default function SongDetail() {
   }, [movieParam, songIdx]);
 
 
-  // Auto-switch to lyrics tab when song changes
+  // Auto-switch to lyrics tab + sync MiniPlayer when song changes
   useEffect(() => {
     if (activeSong?.lyrics?.trim()) setSidebarTab("lyrics");
     else setSidebarTab("playlist");
     setCurrentTime(0);
-  }, [activeSong?.title]);
+    if (!activeSong || !movie) return;
+    const trackData = {
+      title: activeSong.title, singer: activeSong.singer||"",
+      ytId: activeSong.ytId ? extractYtId(activeSong.ytId) : "",
+      movieTitle: movie.title, movieId: String(movie._id),
+      movieSlug: movie.slug||"", songIdx: activeIdx,
+      thumb: activeSong.ytId ? `https://img.youtube.com/vi/${extractYtId(activeSong.ytId)}/mqdefault.jpg` : (movie.posterUrl||""),
+    };
+    setNowPlaying(trackData);
+    // MiniPlayer's iframe will autoplay via key change
+  }, [activeSong?.title, activeIdx]);
 
   // ── Save to recently played + load know count ────────────────
   useEffect(() => {
@@ -682,6 +693,7 @@ export default function SongDetail() {
     if (!s) return;
     setActiveSongIdx(idx);
     navigate(songPath(movie, idx, s), { replace: true });
+    // setNowPlaying will be called by the useEffect above when activeSong changes
   };
 
   const handleRelatedSongClick = (s) => {

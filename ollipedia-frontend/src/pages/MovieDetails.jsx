@@ -50,6 +50,137 @@ const NCATS  = ["Update","Release","Trailer","Song","Award","Interview","Other"]
 const CTYPES = ["Actor","Actress","Director","Producer","Music Director","Cinematographer","Choreographer","Lyricist","Other"];
 
 // ── Horizontal scroll row ─────────────────────────────────
+// ── Interested widget (BookMyShow style) ─────────────────────
+function InterestedWidget({ movieId }) {
+  const voteKey = `interested_${movieId}`;
+
+  const [vote,     setVote]     = React.useState(() => { try { return localStorage.getItem(voteKey)||null; } catch { return null; } });
+  const [yesCount, setYesCount] = React.useState(0);
+  const [noCount,  setNoCount]  = React.useState(0);
+  const [loading,  setLoading]  = React.useState(true);
+  const [voting,   setVoting]   = React.useState(false);
+
+  // Load counts from DB on mount
+  React.useEffect(() => {
+    if (!movieId) return;
+    API.getInterested(movieId)
+      .then(d => { setYesCount(d.yes||0); setNoCount(d.no||0); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [movieId]);
+
+  const totalVotes = yesCount + noCount;
+  const yesPercent = totalVotes ? Math.round((yesCount / totalVotes) * 100) : 0;
+
+  const handleVote = async (v) => {
+    if (vote || voting) return;
+    setVoting(true);
+    try {
+      const d = await API.postInterested(movieId, v);
+      setYesCount(d.yes||0);
+      setNoCount(d.no||0);
+      setVote(v);
+      try { localStorage.setItem(voteKey, v); } catch {}
+    } catch {
+      // Optimistic fallback
+      setVote(v);
+      if (v === "yes") setYesCount(n => n+1);
+      else setNoCount(n => n+1);
+      try { localStorage.setItem(voteKey, v); } catch {}
+    } finally { setVoting(false); }
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize:".62rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"rgba(255,255,255,.4)", marginBottom:8 }}>
+        🎬 Interested?
+      </div>
+
+      {loading ? (
+        <div style={{ height:36, background:"rgba(255,255,255,.04)", borderRadius:8, animation:"pulse 1.5s infinite" }}/>
+      ) : !vote ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {/* Show total people interested before voting */}
+          {yesCount > 0 && (
+            <div style={{ fontSize:".68rem", color:"rgba(255,255,255,.4)", marginBottom:2 }}>
+              🔥 <strong style={{ color:"rgba(255,255,255,.7)" }}>{yesCount.toLocaleString()}</strong> people are interested
+            </div>
+          )}
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => handleVote("yes")} disabled={voting}
+              style={{ flex:1, padding:"9px 6px", borderRadius:8, border:"1px solid rgba(80,200,120,.4)", background:"rgba(80,200,120,.1)", color:"#80e8a8", fontWeight:700, fontSize:".78rem", cursor:"pointer", fontFamily:"inherit", transition:"all .15s", opacity:voting?.6:1 }}
+              onMouseEnter={e=>{if(!voting)e.currentTarget.style.background="rgba(80,200,120,.22)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(80,200,120,.1)";}}>
+              👍 Interested
+            </button>
+            <button onClick={() => handleVote("no")} disabled={voting}
+              style={{ flex:1, padding:"9px 6px", borderRadius:8, border:"1px solid rgba(255,255,255,.15)", background:"rgba(255,255,255,.05)", color:"rgba(255,255,255,.55)", fontWeight:700, fontSize:".78rem", cursor:"pointer", fontFamily:"inherit", transition:"all .15s", opacity:voting?.6:1 }}
+              onMouseEnter={e=>{if(!voting)e.currentTarget.style.background="rgba(255,255,255,.1)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.05)";}}>
+              👎 Not sure
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize:".76rem", color:vote==="yes"?"#80e8a8":"rgba(255,255,255,.45)", fontWeight:700, marginBottom:8 }}>
+            {vote === "yes" ? "✓ You're interested!" : "👎 Not interested"}
+          </div>
+          {/* People count prominently */}
+          {yesCount > 0 && (
+            <div style={{ fontSize:".8rem", color:"rgba(255,255,255,.65)", marginBottom:8 }}>
+              🔥 <strong style={{ color:"#80e8a8", fontSize:"1rem" }}>{yesCount.toLocaleString()}</strong> people interested
+            </div>
+          )}
+          {totalVotes > 0 && (
+            <>
+              <div style={{ height:5, background:"rgba(255,255,255,.08)", borderRadius:3, overflow:"hidden", marginBottom:5 }}>
+                <div style={{ height:"100%", width:`${yesPercent}%`, background:"linear-gradient(to right,#80e8a8,#4caf82)", borderRadius:3, transition:"width .7s ease" }}/>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:".6rem", color:"rgba(255,255,255,.35)" }}>
+                <span>👍 {yesPercent}%</span>
+                <span>{totalVotes.toLocaleString()} total votes</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Live countdown timer component ───────────────────────────
+function CountdownDisplay({ releaseDate }) {
+  const calc = () => {
+    const diff = new Date(releaseDate) - new Date();
+    if (diff <= 0) return null;
+    return {
+      d: Math.floor(diff / 86400000),
+      h: Math.floor((diff % 86400000) / 3600000),
+      m: Math.floor((diff % 3600000) / 60000),
+      s: Math.floor((diff % 60000) / 1000),
+    };
+  };
+  const [t, setT] = React.useState(calc);
+  React.useEffect(() => {
+    const iv = setInterval(() => setT(calc()), 1000);
+    return () => clearInterval(iv);
+  }, [releaseDate]);
+  if (!t) return null;
+  return (
+    <div style={{ display:"flex", gap:4, marginTop:6, width:"100%" }}>
+      {[["d","Days"],["h","Hrs"],["m","Min"],["s","Sec"]].map(([k, lbl]) => (
+        <div key={k} style={{ flex:1, textAlign:"center", background:"rgba(0,0,0,.5)", border:"1px solid rgba(201,151,58,.3)", borderRadius:7, padding:"5px 4px" }}>
+          <div style={{ fontSize:"1.1rem", fontWeight:900, color:"#c9973a", lineHeight:1, fontVariantNumeric:"tabular-nums" }}>
+            {String(t[k]).padStart(2,"0")}
+          </div>
+          <div style={{ fontSize:".5rem", textTransform:"uppercase", letterSpacing:".06em", color:"rgba(255,255,255,.35)", marginTop:2 }}>{lbl}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HomeRow({ title, tag, children }) {
   const ref = useRef(null);
   const slide = (n) => ref.current?.scrollBy({ left: n, behavior:"smooth" });
@@ -263,7 +394,7 @@ function AddSongModal({ movieId, onAdded, onClose }) {
 // ═══════════════════════════════════════════════════════════
 export default function MovieDetails({ production, onToast, portalMode }) {
   const { slug }     = useParams();
-  const id           = extractId(slug);
+  const id           = extractId(slug) || slug;  // support both ObjectId and slug URLs
   const navigate     = useNavigate();
   const location     = useLocation();
   const trailerRef   = useRef(null);
@@ -292,10 +423,23 @@ export default function MovieDetails({ production, onToast, portalMode }) {
   const [editTrailer,  setEditTrailer]  = useState(false);
   const [trailerInput, setTrailerInput] = useState("");
   const [savingTrailer, setSavingTrailer] = useState(false);
-  const [rvUser, setRvUser] = useState("");
-  const [rvRating, setRvRating] = useState(5);
-  const [rvText, setRvText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [rvUser,    setRvUser]    = useState("");
+  const [rvRating,  setRvRating]  = useState(0);   // 0 = not chosen yet
+  const [rvHover,   setRvHover]   = useState(0);
+  const [rvText,    setRvText]    = useState("");
+  const [submitting,setSubmitting]= useState(false);
+  const [rvSuccess,    setRvSuccess]    = useState(false);
+  const [rvError,      setRvError]      = useState("");
+  const [heroRating,   setHeroRating]   = useState(() => { try { return parseInt(localStorage.getItem(`hero_r_${id}`)||"0",10)||0; } catch { return 0; } });
+  const [heroHover,    setHeroHover]    = useState(0);
+  const [heroFeedback, setHeroFeedback] = useState("");
+  // New features
+  const [watchlisted,  setWatchlisted]  = useState(() => { try { return JSON.parse(localStorage.getItem("op_watchlist")||"[]").includes(String(id)); } catch { return false; } });
+  const [seenPoll,     setSeenPoll]     = useState(() => { try { return localStorage.getItem(`seen_${id}`)||null; } catch { return null; } });
+  const [viewCount,    setViewCount]    = useState(() => { try { const k=`views_${id}`; const n=(parseInt(localStorage.getItem(k)||"0",10))+1; localStorage.setItem(k,String(n)); return n; } catch { return 0; } });
+  const [showShare,    setShowShare]    = useState(false);
+  const [miniHeader,   setMiniHeader]   = useState(false);
+  const heroRef = useRef(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -316,6 +460,16 @@ export default function MovieDetails({ production, onToast, portalMode }) {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Sticky mini-header on scroll
+  useEffect(() => {
+    const onScroll = () => {
+      if (!heroRef.current) return;
+      setMiniHeader(heroRef.current.getBoundingClientRect().bottom < 60);
+    };
+    window.addEventListener("scroll", onScroll, { passive:true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // ── Scroll to trailer if navigated here with scrollTo:"trailer" state ──
   useEffect(() => {
@@ -387,12 +541,62 @@ export default function MovieDetails({ production, onToast, portalMode }) {
     catch(e) { onToast&&onToast(typeof e==="string"?e:"Failed","error"); }
   };
 
+  // Watchlist
+  const toggleWatchlist = () => {
+    try {
+      const list = JSON.parse(localStorage.getItem("op_watchlist")||"[]");
+      const sid = String(id);
+      const next = watchlisted ? list.filter(x=>x!==sid) : [...list, sid];
+      localStorage.setItem("op_watchlist", JSON.stringify(next));
+      setWatchlisted(!watchlisted);
+    } catch {}
+  };
+
+  // "Have you seen this?" poll
+  const voteSeen = (answer) => {
+    try { localStorage.setItem(`seen_${id}`, answer); } catch {}
+    setSeenPoll(answer);
+  };
+
+  // Share
+  const handleShare = () => {
+    const url = window.location.href;
+    const text = `🎬 ${movie.title}${movie.releaseDate?" ("+new Date(movie.releaseDate).getFullYear()+")":""} — Check it out on Ollypedia!`;
+    if (navigator.share) { navigator.share({ title:movie.title, text, url }); }
+    else { navigator.clipboard?.writeText(url).then(()=>onToast&&onToast("Link copied!")); }
+  };
+
+  // Quick rate from hero — auto-navigate to review form
+  const reviewFormRef = useRef(null);
+  const handleHeroRate = (star) => {
+    setHeroRating(star);
+    try { localStorage.setItem(`hero_r_${id}`, String(star)); } catch {}
+    const labels = ["","Terrible 😞","Poor 😕","Average 😐","Good 😊","Excellent 🤩"];
+    setHeroFeedback(labels[star]);
+    setRvRating(star);
+    // Switch to reviews tab and scroll to form
+    setTab("reviews");
+    setTimeout(() => {
+      reviewFormRef.current?.scrollIntoView({ behavior:"smooth", block:"center" });
+    }, 250);
+    setTimeout(() => setHeroFeedback(""), 3000);
+  };
+
   const submitReview = async (e) => {
     e.preventDefault();
-    if (!rvUser.trim()||!rvText.trim()) return;
+    setRvError("");
+    if (!rvUser.trim()) return setRvError("Please enter your name.");
+    if (!rvRating)      return setRvError("Please select a star rating.");
+    if (!rvText.trim()) return setRvError("Please write your review.");
     setSubmitting(true);
-    try { const reviews = await API.postReview(id,{user:rvUser,rating:rvRating,text:rvText}); setMovie(m=>({...m,reviews})); setRvUser(""); setRvText(""); setRvRating(5); onToast&&onToast("Review submitted!"); }
-    catch { onToast&&onToast("Failed","error"); }
+    try {
+      const reviews = await API.postReview(id, { user:rvUser.trim(), rating:rvRating, text:rvText.trim() });
+      setMovie(m=>({...m,reviews}));
+      setRvUser(""); setRvText(""); setRvRating(0); setRvSuccess(true);
+      setTimeout(()=>setRvSuccess(false), 4000);
+      onToast&&onToast("Review submitted! 🎉");
+    }
+    catch(err) { setRvError(typeof err==="string"?err:"Failed to submit. Please try again."); }
     finally { setSubmitting(false); }
   };
 
@@ -440,9 +644,23 @@ export default function MovieDetails({ production, onToast, portalMode }) {
     .sort((a,b) => new Date(b.releaseDate||0) - new Date(a.releaseDate||0))
     .slice(0, 12);
 
+  const genreClass = movie.genre?.includes("Action") ? "genre-action" : movie.genre?.includes("Romance") ? "genre-romance" : movie.genre?.includes("Horror") ? "genre-horror" : "";
+  const isBlockbuster = ["Blockbuster","Super Hit"].includes(movie.verdict);
+
   return (
-    <div style={{ minHeight:"100vh", background:"#0f0f0f", color:"#f1f1f1" }}>
+    <div style={{ minHeight:"100vh", background:"#0f0f0f", color:"#f1f1f1" }} className={genreClass}>
       <SEO {...movieSEO(movie)} />
+
+      {/* ── Sticky Mini Header ── */}
+      <div className={`md-mini-header${miniHeader?" visible":""}`}>
+        {movie.posterUrl && <img src={movie.posterUrl} alt={movie.title} className="md-mini-poster" onError={e=>e.target.style.display="none"}/>}
+        <span className="md-mini-title">{movie.title}</span>
+        {movie.verdict && <span className="md-mini-verdict" style={{background:`${verdictColor}22`,border:`1px solid ${verdictColor}`,color:verdictColor}}>{movie.verdict}</span>}
+        {movie.media?.trailer?.ytId && (
+          <button className="md-btn-play" style={{padding:"6px 14px",fontSize:".75rem"}} onClick={()=>{setTab("overview");setTimeout(()=>trailerRef.current?.scrollIntoView({behavior:"smooth",block:"center"}),200);}}>▶ Trailer</button>
+        )}
+        <button className={`md-wl-btn${watchlisted?" active":""}`} style={{padding:"6px 12px",fontSize:".75rem"}} onClick={toggleWatchlist}>{watchlisted?"✓ Saved":"+ Watchlist"}</button>
+      </div>
       <Helmet>
         {movie && <script type="application/ld+json">{JSON.stringify({
           "@context":"https://schema.org","@type":"Movie",
@@ -508,38 +726,35 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           z-index: 2;
           max-width: 1200px;
           margin: 0 auto;
-          padding: 24px 16px 44px;
+          padding: 16px 14px 36px;
           display: flex;
-          gap: 28px;
-          align-items: flex-end; /* align to bottom so poster sits on same baseline as text */
+          flex-wrap: wrap;
+          gap: 16px;
+          align-items: flex-end;
         }
-        @media(min-width:600px){ .md-hero-inner { padding: 32px 24px 48px; gap: 32px; } }
-        @media(min-width:900px){ .md-hero-inner { padding: 44px 40px 56px; gap: 40px; align-items: flex-end; } }
+        @media(min-width:480px){ .md-hero-inner { padding: 24px 20px 44px; gap: 20px; } }
+        @media(min-width:600px){ .md-hero-inner { padding: 32px 24px 48px; gap: 28px; flex-wrap:nowrap; } }
+        @media(min-width:900px){ .md-hero-inner { padding: 44px 40px 56px; gap: 40px; } }
 
         /* Poster — taller, more cinematic */
         .md-poster {
           flex-shrink: 0;
-          width: clamp(130px, 20vw, 220px);
-          border-radius: 12px;
+          width: clamp(90px, 22vw, 220px);
+          border-radius: 10px;
           overflow: hidden;
-          /* Strong shadow so poster lifts off the background */
-          box-shadow:
-            0 8px 24px rgba(0,0,0,.6),
-            0 24px 64px rgba(0,0,0,.8),
-            0 0 0 1px rgba(255,255,255,.1);
+          box-shadow: 0 8px 24px rgba(0,0,0,.6), 0 24px 64px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.1);
           background: #1a1a1a;
-          /* Slight upward nudge for cinematic feel */
-          transform: translateY(0);
         }
+        @media(max-width:480px){ .md-poster { width: 80px; border-radius:8px; } }
         .md-poster img { width: 100%; display: block; }
         .md-poster-ph {
           aspect-ratio: 2/3;
           display: flex; align-items: center; justify-content: center;
-          font-size: 3rem; color: rgba(255,255,255,.2);
+          font-size: 2rem; color: rgba(255,255,255,.2);
         }
 
         /* Info column */
-        .md-info { flex:1; min-width:0; padding-top:4px; }
+        .md-info { flex:1; min-width:0; padding-top:2px; }
         .md-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
         .md-tag {
           font-size:.62rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
@@ -553,12 +768,12 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         }
         .md-title {
           font-family:'Playfair Display',serif;
-          font-size:clamp(1.5rem,4vw,2.8rem);
-          font-weight:900; line-height:1.08; margin:0 0 10px;
+          font-size:clamp(1.2rem,5vw,2.8rem);
+          font-weight:900; line-height:1.08; margin:0 0 8px;
           color:#fff; text-shadow:0 2px 20px rgba(0,0,0,.5);
         }
         .md-score-row {
-          display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;
+          display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; margin-bottom:10px;
         }
         .md-rating { display:flex; align-items:center; gap:5px; }
         .md-rating-num { color:#c9973a; font-size:1.1rem; font-weight:800; }
@@ -569,19 +784,21 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           padding:4px 12px; border-radius:4px;
         }
         .md-meta-row {
-          display:flex; flex-wrap:wrap; gap:6px 16px;
-          font-size:.78rem; color:rgba(255,255,255,.55);
-          margin-bottom:12px; align-items:center;
+          display:flex; flex-wrap:wrap; gap:4px 12px;
+          font-size:clamp(.7rem,2.5vw,.78rem); color:rgba(255,255,255,.55);
+          margin-bottom:10px; align-items:center;
         }
         .md-meta-row span { display:flex; align-items:center; gap:4px; }
         .md-synopsis {
-          font-size:.88rem; color:rgba(255,255,255,.68);
-          line-height:1.7; margin:0 0 18px;
+          font-size:clamp(.8rem,2.5vw,.88rem); color:rgba(255,255,255,.68);
+          line-height:1.65; margin:0 0 14px;
           max-width:620px;
-          display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
+          display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
         }
+        @media(min-width:480px){ .md-synopsis { -webkit-line-clamp:4; } }
         @media(min-width:768px){ .md-synopsis { -webkit-line-clamp:5; } }
-        .md-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+        .md-actions { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+        @media(max-width:480px){ .md-actions .md-btn-play { font-size:.78rem; padding:8px 14px; } .md-actions .md-btn-outline,.md-actions .md-wl-btn { font-size:.74rem; padding:7px 11px; } }
         .md-btn-play {
           display:inline-flex; align-items:center; gap:7px;
           background:#c9973a; color:#000; border:none;
@@ -602,11 +819,11 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         /* Box office chips row */
         .md-bo-row {
-          display:flex; gap:12px; flex-wrap:wrap;
-          padding:10px 14px;
+          display:flex; gap:10px; flex-wrap:wrap;
+          padding:8px 12px;
           background:rgba(255,255,255,.05);
           border:1px solid rgba(255,255,255,.08);
-          border-radius:8px; width:fit-content;
+          border-radius:8px; width:fit-content; max-width:100%;
         }
         .md-bo-item { }
         .md-bo-label { font-size:.58rem; color:rgba(255,255,255,.38); text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:2px; }
@@ -622,13 +839,15 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         }
         .md-tabs-bar::-webkit-scrollbar { display:none; }
         .md-tabs-inner {
-          display:flex; padding:0 16px;
+          display:flex; padding:0 10px;
           min-width:max-content;
+          -webkit-overflow-scrolling:touch;
         }
+        @media(min-width:480px){ .md-tabs-inner { padding:0 14px; } }
         @media(min-width:600px){ .md-tabs-inner { padding:0 24px; } }
         @media(min-width:900px){ .md-tabs-inner { padding:0 40px; } }
         .md-tab {
-          padding:12px 14px;
+          padding:11px 11px;
           background:none; border:none; cursor:pointer;
           font-weight:700; font-size:.78rem;
           color:rgba(255,255,255,.45);
@@ -636,7 +855,8 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           white-space:nowrap; transition:all .18s;
           flex-shrink:0;
         }
-        @media(min-width:480px){ .md-tab { padding:13px 18px; font-size:.8rem; } }
+        @media(min-width:480px){ .md-tab { padding:12px 14px; font-size:.78rem; } }
+        @media(min-width:600px){ .md-tab { padding:13px 18px; font-size:.8rem; } }
         .md-tab.on { color:#c9973a; border-bottom-color:#c9973a; }
         .md-tab:hover:not(.on) { color:#f1f1f1; }
 
@@ -691,24 +911,28 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         /* Song card */
         .md-song {
-          flex-shrink:0; width:130px; cursor:pointer;
-          border-radius:8px; overflow:hidden;
+          flex-shrink:0; width:160px; cursor:pointer;
+          border-radius:10px; overflow:hidden;
           background:#1a1a1a; border:1px solid rgba(255,255,255,.08);
-          transition:border-color .16s;
+          transition:all .2s; box-shadow:0 2px 8px rgba(0,0,0,.3);
         }
-        .md-song:hover { border-color:#c9973a; }
+        .md-song:hover { border-color:#c9973a; transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.5); }
         .md-song-thumb {
           width:100%; aspect-ratio:16/9; background:#272727;
           position:relative; overflow:hidden;
         }
-        .md-song-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+        .md-song-thumb img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .2s; }
+        .md-song:hover .md-song-thumb img { transform:scale(1.05); }
         .md-song-icon {
           position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-          background:rgba(0,0,0,.25); font-size:1.2rem;
+          background:rgba(0,0,0,.3); font-size:1.5rem; transition:opacity .2s;
         }
-        .md-song-info { padding:7px 8px; }
-        .md-song-title { font-size:.72rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f1f1f1; }
-        .md-song-singer { font-size:.62rem; color:#c9973a; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .md-song:hover .md-song-icon { background:rgba(0,0,0,.5); }
+        .md-song-icon::after { content:"▶"; position:absolute; width:32px; height:32px; border-radius:50%; background:rgba(201,151,58,.9); display:flex; align-items:center; justify-content:center; font-size:.75rem; color:#000; opacity:0; transition:opacity .2s; }
+        .md-song:hover .md-song-icon::after { opacity:1; }
+        .md-song-info { padding:8px 10px; }
+        .md-song-title { font-size:.76rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f1f1f1; }
+        .md-song-singer { font-size:.65rem; color:#c9973a; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
         /* Cast full grid */
         .md-cast-grid {
@@ -765,10 +989,145 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         /* Empty */
         .md-empty { text-align:center; padding:48px 20px; color:rgba(255,255,255,.3); }
         .md-empty p { font-size:.84rem; margin:8px 0 0; }
+
+        /* Sticky mini-header */
+        .md-mini-header {
+          position:fixed; top:58px; left:0; right:0; z-index:50;
+          background:rgba(10,10,10,.97); backdrop-filter:blur(16px);
+          border-bottom:1px solid rgba(255,255,255,.08);
+          display:flex; align-items:center; gap:8px; padding:7px 14px;
+          transform:translateY(-100%); transition:transform .3s ease;
+          overflow:hidden;
+        }
+        @media(min-width:480px){ .md-mini-header { gap:12px; padding:8px 20px; } }
+        .md-mini-header.visible { transform:translateY(0); }
+        .md-mini-poster { width:32px; height:44px; border-radius:4px; object-fit:cover; flex-shrink:0; }
+        .md-mini-title { font-weight:700; font-size:.88rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .md-mini-verdict { font-size:.62rem; font-weight:800; padding:2px 8px; border-radius:4px; flex-shrink:0; }
+
+        /* Watchlist / Share buttons */
+        .md-wl-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:8px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.06); color:#f1f1f1; font-size:.82rem; font-weight:600; cursor:pointer; transition:all .18s; font-family:inherit; }
+        .md-wl-btn:hover { background:rgba(255,255,255,.12); }
+        .md-wl-btn.active { background:rgba(201,151,58,.15); border-color:rgba(201,151,58,.5); color:#c9973a; }
+
+        /* Popularity badge */
+        .md-pop-badge { display:inline-flex; align-items:center; gap:5px; font-size:.7rem; color:rgba(255,150,80,.85); background:rgba(255,120,50,.08); border:1px solid rgba(255,120,50,.2); padding:3px 9px; border-radius:20px; }
+
+        /* Verdict pulse for blockbuster */
+        @keyframes md-pulse { 0%,100%{box-shadow:0 0 0 0 currentColor} 50%{box-shadow:0 0 0 6px transparent} }
+        .verdict-blockbuster-pulse { animation:md-pulse 2.2s infinite; }
+
+        /* Seen poll */
+        .md-poll { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+        .md-poll-btn { padding:7px 16px; border-radius:20px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); color:rgba(255,255,255,.7); font-size:.78rem; font-weight:600; cursor:pointer; transition:all .18s; font-family:inherit; }
+        .md-poll-btn:hover { background:rgba(201,151,58,.12); border-color:rgba(201,151,58,.4); color:#c9973a; }
+        .md-poll-btn.selected { background:rgba(201,151,58,.18); border-color:#c9973a; color:#c9973a; }
+
+        /* Song preview cards in overview */
+        .md-song-preview { display:flex; align-items:center; gap:10px; padding:10px 12px; background:#1a1a1a; border:1px solid rgba(255,255,255,.07); border-radius:8px; cursor:pointer; transition:border-color .15s; }
+        .md-song-preview:hover { border-color:rgba(201,151,58,.4); }
+        .md-song-thumb { width:54px; height:36px; border-radius:5px; overflow:hidden; background:#272727; position:relative; flex-shrink:0; }
+        .md-song-thumb img { width:100%;height:100%;object-fit:cover; }
+        .md-song-play-icon { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);font-size:.85rem; }
+
+        /* Cast hover card */
+        .md-cast-card { position:relative; }
+        .md-cast-hover { display:none; position:absolute; bottom:calc(100%+8px); left:50%; transform:translateX(-50%); z-index:30; background:#1e1e1e; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:12px 14px; width:200px; box-shadow:0 8px 30px rgba(0,0,0,.6); }
+        .md-cast-card:hover .md-cast-hover { display:block; }
+
+        /* ── Review System ── */
+        .md-rv-avatar { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:1rem; flex-shrink:0; color:#000; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+        .md-rv-form { background:linear-gradient(135deg,rgba(30,25,10,.9),rgba(20,20,20,.9)); border:1px solid rgba(201,151,58,.2); border-radius:16px; padding:16px; margin-bottom:20px; }
+        @media(min-width:480px){ .md-rv-form { padding:22px 24px; } }
+        .md-rv-form-title { font-size:1rem; font-weight:800; margin:0 0 4px; }
+        .md-rv-form-sub { font-size:.74rem; color:rgba(255,255,255,.4); margin:0 0 20px; }
+        .md-rv-stars { display:flex; gap:6px; margin-bottom:16px; }
+        .md-rv-star { font-size:2rem; cursor:pointer; transition:transform .15s; filter:grayscale(1) opacity(.3); user-select:none; line-height:1; }
+        .md-rv-star.lit { filter:none; }
+        .md-rv-star:hover { transform:scale(1.2); }
+        .md-rv-star-label { font-size:.78rem; color:rgba(255,255,255,.5); margin-left:4px; align-self:center; }
+        .md-rv-input { width:100%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; color:#f1f1f1; font-family:inherit; font-size:.86rem; padding:10px 14px; transition:border-color .2s; outline:none; box-sizing:border-box; }
+        .md-rv-input:focus { border-color:rgba(201,151,58,.5); background:rgba(255,255,255,.08); }
+        .md-rv-textarea { resize:vertical; min-height:100px; line-height:1.65; }
+        .md-rv-char { font-size:.66rem; color:rgba(255,255,255,.3); text-align:right; margin-top:4px; }
+        .md-rv-error { background:rgba(255,80,80,.1); border:1px solid rgba(255,80,80,.3); border-radius:8px; padding:8px 12px; font-size:.78rem; color:#ff9090; margin-bottom:12px; }
+        .md-rv-success { background:rgba(80,200,120,.1); border:1px solid rgba(80,200,120,.3); border-radius:8px; padding:12px 16px; font-size:.84rem; color:#80e8a8; text-align:center; }
+        .md-rv-submit { width:100%; padding:12px; border-radius:10px; background:linear-gradient(135deg,#c9973a,#a87830); border:none; color:#000; font-weight:800; font-size:.88rem; cursor:pointer; transition:opacity .18s; font-family:inherit; }
+        .md-rv-submit:hover:not(:disabled) { opacity:.88; }
+        .md-rv-submit:disabled { opacity:.5; cursor:default; }
+        /* Summary bar */
+        .md-rv-summary { display:flex; align-items:center; gap:20px; padding:18px 20px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:14px; margin-bottom:24px; flex-wrap:wrap; }
+        .md-rv-big-score { font-size:3rem; font-weight:900; color:#c9973a; line-height:1; }
+        .md-rv-bars { flex:1; min-width:180px; display:flex; flex-direction:column; gap:5px; }
+        .md-rv-bar-row { display:flex; align-items:center; gap:8px; }
+        .md-rv-bar-label { font-size:.66rem; color:rgba(255,255,255,.45); width:28px; text-align:right; flex-shrink:0; }
+        .md-rv-bar-track { flex:1; height:6px; background:rgba(255,255,255,.1); border-radius:3px; overflow:hidden; }
+        .md-rv-bar-fill { height:100%; background:linear-gradient(to right,#c9973a,#e8c87a); border-radius:3px; transition:width .6s ease; }
+        .md-rv-bar-count { font-size:.64rem; color:rgba(255,255,255,.3); width:20px; flex-shrink:0; }
+        /* Review cards */
+        .md-rv-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:14px; padding:16px 18px; margin-bottom:12px; transition:border-color .15s; }
+        .md-rv-card:hover { border-color:rgba(255,255,255,.12); }
+        .md-rv-card-header { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+        .md-rv-card-meta { flex:1; min-width:0; }
+        .md-rv-card-name { font-weight:700; font-size:.88rem; }
+        .md-rv-card-date { font-size:.66rem; color:rgba(255,255,255,.35); margin-top:2px; }
+        .md-rv-card-stars { display:flex; gap:2px; margin-bottom:8px; }
+        .md-rv-card-star { font-size:.88rem; }
+        .md-rv-card-text { font-size:.84rem; line-height:1.72; color:rgba(255,255,255,.75); margin:0; }
+        .md-rv-helpful { font-size:.7rem; color:rgba(255,255,255,.3); margin-top:10px; cursor:pointer; transition:color .15s; display:inline-flex; align-items:center; gap:4px; }
+        .md-rv-helpful:hover { color:rgba(201,151,58,.8); }
+
+        /* Genre color coding */
+        .genre-action .md-hero-bg { filter:blur(0px) brightness(.32) saturate(1.6) hue-rotate(-10deg); }
+        .genre-romance .md-hero-bg { filter:blur(0px) brightness(.32) saturate(1.4) hue-rotate(300deg); }
+        .genre-horror .md-hero-bg { filter:blur(0px) brightness(.2) saturate(.8); }
+
+        /* Skeleton shimmer */
+        @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+        .skeleton-shimmer { background:linear-gradient(90deg,#1a1a1a 25%,#252525 50%,#1a1a1a 75%); background-size:800px 100%; animation:shimmer 1.6s infinite; border-radius:8px; }
+
+        /* Hero rating strip */
+        .md-hero-rating-strip {
+          display:flex; flex-direction:column; gap:10px;
+          padding:12px 14px;
+          background:rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.1);
+          border-radius:14px; backdrop-filter:blur(14px);
+          width:200px;
+          position:absolute; bottom:36px; right:14px; z-index:4;
+        }
+        @media(max-width:600px){
+          .md-hero-rating-strip {
+            position:static; width:100%;
+            /* On mobile: full width row below poster+info */
+            order:3; flex-basis:100%;
+          }
+        }
+        .md-hero-avg { font-size:2rem; font-weight:900; color:#c9973a; line-height:1; flex-shrink:0; }
+        .md-hero-bars { display:flex; flex-direction:column; gap:3px; flex-shrink:0; min-width:100px; }
+        .md-hero-bar-row { display:flex; align-items:center; gap:5px; }
+        .md-hero-bar-lbl { font-size:.56rem; color:rgba(255,255,255,.4); width:16px; text-align:right; flex-shrink:0; }
+        .md-hero-bar-track { width:80px; height:4px; background:rgba(255,255,255,.1); border-radius:2px; overflow:hidden; }
+        .md-hero-bar-fill { height:100%; background:#c9973a; border-radius:2px; transition:width .5s ease; }
+        /* Quick rate widget in hero */
+        .md-hero-quick-rate { }  /* stacked layout — no border needed */
+        .md-hero-quick-lbl { font-size:.62rem; color:rgba(255,255,255,.4); text-transform:uppercase; letter-spacing:.07em; margin-bottom:5px; }
+        .md-hero-stars { display:flex; gap:4px; }
+        .md-hero-star { font-size:1.4rem; cursor:pointer; filter:grayscale(1) opacity(.35); transition:all .15s; user-select:none; }
+        .md-hero-star.lit { filter:none; }
+        .md-hero-star:hover { transform:scale(1.22); filter:none; }
+        .md-hero-rate-feedback { font-size:.68rem; margin-top:4px; color:rgba(201,151,58,.85); min-height:16px; transition:opacity .3s; }
+
+        /* Countdown in right panel */
+        .md-cd-section { border-bottom:1px solid rgba(255,255,255,.08); padding-bottom:10px; margin-bottom:10px; }
+        .md-cd-label { font-size:.58rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.35); margin-bottom:4px; display:flex; align-items:center; gap:5px; }
+
+        /* Share overlay */
+        .md-share-overlay { position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(8px); }
+        .md-share-card { background:linear-gradient(145deg,#1a1200,#0f0a00,#0a0a0a);border:1px solid rgba(201,151,58,.4);border-radius:20px;width:100%;max-width:360px;overflow:hidden; }
       `}</style>
 
       {/* ══ HERO ══ */}
-      <div className="md-hero">
+      <div className="md-hero" ref={heroRef}>
         {/* Blurred backdrop — visible, atmospheric */}
         {bannerImg && (
           <div className="md-hero-bg" style={{ backgroundImage:`url(${bannerImg})` }} />
@@ -802,14 +1161,8 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             {/* Title */}
             <h1 className="md-title">{movie.title}</h1>
 
-            {/* Rating + Verdict */}
+            {/* Verdict only — rating shown in the strip below */}
             <div className="md-score-row">
-              {avgRating && (
-                <div className="md-rating">
-                  <span className="md-rating-num">⭐ {avgRating}</span>
-                  <span className="md-rating-cnt">({movie.reviews.length} reviews)</span>
-                </div>
-              )}
               <span className="md-verdict-badge" style={{
                 background:`${verdictColor}25`,
                 border:`1.5px solid ${verdictColor}`,
@@ -832,16 +1185,33 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             {/* CTA buttons */}
             <div className="md-actions">
               {movie.media?.trailer?.ytId && (
-                <button className="md-btn-play" onClick={() => {
-                  setTab("overview");
-                  setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200);
-                }}>▶ Watch Trailer</button>
+                <button className="md-btn-play" style={{...(isBlockbuster?{boxShadow:`0 0 0 0 ${verdictColor}`}:{})}} className={`md-btn-play${isBlockbuster?" verdict-blockbuster-pulse":""}`}
+                  onClick={() => { setTab("overview"); setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200); }}>▶ Watch Trailer</button>
               )}
               <button className="md-btn-outline" onClick={() => setTab("cast")}>👥 Cast</button>
               <button className="md-btn-outline" onClick={() => setTab("media")}>🎵 Songs</button>
+              <button className={`md-wl-btn${watchlisted?" active":""}`} onClick={toggleWatchlist}>
+                {watchlisted ? "✓ Watchlist" : "＋ Watchlist"}
+              </button>
+              <button className="md-wl-btn" onClick={handleShare}>📤 Share</button>
               {isOwner && (
                 <button className="btn btn-gold btn-sm" onClick={() => { setEditing(true); setTab("overview"); }}>✏ Edit</button>
               )}
+            </div>
+
+            {/* Popularity + poll */}
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
+              <span className="md-pop-badge">🔥 {viewCount>=1000?(viewCount/1000).toFixed(1)+"K":viewCount} views</span>
+              {!seenPoll
+                ? <><span style={{fontSize:".74rem",color:"rgba(255,255,255,.4)"}}>Have you seen this?</span>
+                    <button className="md-poll-btn" onClick={()=>voteSeen("yes")}>👍 Yes</button>
+                    <button className="md-poll-btn" onClick={()=>voteSeen("no")}>👀 Not yet</button>
+                    <button className="md-poll-btn" onClick={()=>voteSeen("watching")}>📺 Watching</button>
+                  </>
+                : <span style={{fontSize:".76rem",color:"rgba(201,151,58,.8)"}}>
+                    {seenPoll==="yes"?"✓ You've seen this!":seenPoll==="watching"?"📺 Currently watching":"👀 Added to your list!"}
+                  </span>
+              }
             </div>
 
             {/* Production houses */}
@@ -871,6 +1241,86 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               </div>
             )}
           </div>
+
+          {/* ── Rating strip: absolute top-right on desktop, below info on mobile ── */}
+          {(() => {
+            const reviews = movie.reviews || [];
+            const total   = reviews.length;
+            const avg     = total ? (reviews.reduce((s,r)=>s+(r.rating||0),0)/total).toFixed(1) : null;
+            const dist    = [5,4,3,2,1].map(n=>({ n, count:reviews.filter(r=>r.rating===n).length }));
+            return (
+              <div className="md-hero-rating-strip">
+                {/* Countdown for upcoming movies — at the top of the panel */}
+                {movie.verdict === "Upcoming" && movie.releaseDate && (() => {
+                  const diff = new Date(movie.releaseDate) - new Date();
+                  return diff > 0 ? (
+                    <div className="md-cd-section">
+                      <div className="md-cd-label">🗓 Releasing in</div>
+                      <CountdownDisplay releaseDate={movie.releaseDate} />
+                    </div>
+                  ) : null;
+                })()}
+
+                {avg && (
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <div style={{flexShrink:0,textAlign:"center"}}>
+                      <div className="md-hero-avg">{avg}</div>
+                      <div style={{display:"flex",gap:1,justifyContent:"center",marginTop:2}}>
+                        {[1,2,3,4,5].map(s=>(
+                          <span key={s} style={{fontSize:".6rem",filter:parseFloat(avg)>=s?"none":"grayscale(1) opacity(.25)"}}>⭐</span>
+                        ))}
+                      </div>
+                      <div style={{fontSize:".56rem",color:"rgba(255,255,255,.35)",marginTop:2,whiteSpace:"nowrap"}}>{total} review{total!==1?"s":""}</div>
+                    </div>
+                    <div className="md-hero-bars" style={{flex:1}}>
+                      {dist.map(({n,count})=>(
+                        <div key={n} className="md-hero-bar-row">
+                          <span className="md-hero-bar-lbl">{n}★</span>
+                          <div className="md-hero-bar-track" style={{flex:1}}>
+                            <div className="md-hero-bar-fill" style={{width:`${total?Math.round(count/total*100):0}%`}}/>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {avg && <div style={{borderTop:"1px solid rgba(255,255,255,.08)"}}/>}
+
+                {/* Interested widget — shows on ALL movies */}
+                <InterestedWidget movieId={id} />
+
+                {/* Star rating — only for released movies */}
+                {movie.verdict !== "Upcoming" && (
+                  <>
+                    <div style={{borderTop:"1px solid rgba(255,255,255,.08)",margin:"8px 0"}}/>
+                    <div>
+                      <div className="md-hero-quick-lbl">{heroRating ? "Your rating" : "Rate this film"}</div>
+                      <div className="md-hero-stars">
+                        {[1,2,3,4,5].map(star=>(
+                          <span key={star}
+                            className={`md-hero-star${(heroHover||heroRating)>=star?" lit":""}`}
+                            onMouseEnter={()=>setHeroHover(star)}
+                            onMouseLeave={()=>setHeroHover(0)}
+                            onClick={()=>handleHeroRate(star)}>⭐</span>
+                        ))}
+                      </div>
+                      {(heroFeedback||(heroRating>0)) && (
+                        <div className="md-hero-rate-feedback">
+                          {heroFeedback || ["","Terrible 😞","Poor 😕","Average 😐","Good 😊","Excellent 🤩"][heroRating]}
+                        </div>
+                      )}
+                      {heroRating > 0 && (
+                        <button onClick={()=>setTab("reviews")}
+                          style={{fontSize:".64rem",background:"none",border:"none",color:"rgba(201,151,58,.7)",cursor:"pointer",padding:0,marginTop:4,textDecoration:"underline",fontFamily:"inherit",display:"block"}}>
+                          ✍️ Write a full review →
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -971,7 +1421,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                     <div key={i} className="md-song"
                       onClick={() => navigate(movie ? songPath(movie,i) : `/song/${id}/${i}`)}>
                       <div className="md-song-thumb">
-                        {s.ytId && <img src={`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`} alt={s.title} loading="lazy" onError={e=>e.target.style.opacity=".2"}/>}
+                        {s.ytId && <img src={`https://img.youtube.com/vi/${s.ytId}/hqdefault.jpg`} alt={s.title} loading="lazy" onError={e=>{e.target.src=`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`;}}/>}
                         <div className="md-song-icon">♪</div>
                       </div>
                       <div className="md-song-info">
@@ -1060,6 +1510,14 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 <button className="btn btn-gold btn-sm" onClick={() => setAddCastModal(true)}>+ Add Cast</button>
               </div>
             )}
+            {/* Cast stats summary */}
+            {(movie.cast||[]).length > 0 && (
+              <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:24,padding:"14px 16px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10}}>
+                <div style={{textAlign:"center"}}><div style={{fontSize:"1.3rem",fontWeight:800,color:"var(--gold)"}}>{actors.length}</div><div style={{fontSize:".64rem",color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:".06em"}}>Actors</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontSize:"1.3rem",fontWeight:800,color:"var(--gold)"}}>{crew.length}</div><div style={{fontSize:".64rem",color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:".06em"}}>Crew</div></div>
+                {movie.director&&<div style={{textAlign:"center"}}><div style={{fontSize:".82rem",fontWeight:700,color:"#f1f1f1"}}>{movie.director}</div><div style={{fontSize:".64rem",color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:".06em"}}>Director</div></div>}
+              </div>
+            )}
             {/* Crew section */}
             {crew.length > 0 && (
               <div style={{ marginBottom:28 }}>
@@ -1145,7 +1603,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                       onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(201,151,58,.4)"}
                       onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,.07)"}>
                       <div style={{ flexShrink:0, width:60, height:40, borderRadius:5, overflow:"hidden", background:"#272727", position:"relative" }}>
-                        {s.ytId && <img src={`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`} alt={s.title} style={{ width:"100%",height:"100%",objectFit:"cover" }} loading="lazy" onError={e=>e.target.style.opacity=".2"}/>}
+                        {s.ytId && <img src={`https://img.youtube.com/vi/${s.ytId}/hqdefault.jpg`} alt={s.title} style={{ width:"100%",height:"100%",objectFit:"cover" }} loading="lazy" onError={e=>{e.target.src=`https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg`;}}/>}
                         <div style={{ position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.25)",fontSize:".9rem" }}>♪</div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -1235,38 +1693,141 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
         {/* ── REVIEWS ── */}
         {tab==="reviews" && (
-          <div style={{ maxWidth:800 }}>
-            <div style={{ background:"#1a1a1a", border:"1px solid rgba(255,255,255,.08)", borderRadius:10, padding:"20px", marginBottom:32 }}>
-              <h3 style={{ marginBottom:16, fontSize:".94rem", fontWeight:700 }}>Write a Review</h3>
-              <form onSubmit={submitReview}>
-                <div className="form-grid" style={{ marginBottom:12 }}>
-                  <div className="form-group" style={{ marginBottom:0 }}><label className="form-label">Your Name</label><input className="form-input" required value={rvUser} onChange={e=>setRvUser(e.target.value)} /></div>
-                  <div className="form-group" style={{ marginBottom:0 }}><label className="form-label">Rating</label>
-                    <select className="form-select" value={rvRating} onChange={e=>setRvRating(Number(e.target.value))}>
-                      {[5,4,3,2,1].map(n=><option key={n} value={n}>{n} ★ — {["","Poor","Below Average","Average","Good","Excellent"][n]}</option>)}
-                    </select>
+          <div style={{ maxWidth:820 }}>
+
+            {/* ── Rating Summary ── */}
+            {movie.reviews?.length > 0 && (() => {
+              const total = movie.reviews.length;
+              const avg = (movie.reviews.reduce((s,r)=>s+(r.rating||0),0)/total).toFixed(1);
+              const dist = [5,4,3,2,1].map(n => ({ n, count: movie.reviews.filter(r=>r.rating===n).length }));
+              return (
+                <div className="md-rv-summary">
+                  <div style={{textAlign:"center"}}>
+                    <div className="md-rv-big-score">{avg}</div>
+                    <div style={{display:"flex",gap:2,justifyContent:"center",margin:"4px 0"}}>
+                      {[1,2,3,4,5].map(s=>(
+                        <span key={s} style={{fontSize:".9rem",filter:parseFloat(avg)>=s?"none":"grayscale(1) opacity(.3)"}}>⭐</span>
+                      ))}
+                    </div>
+                    <div style={{fontSize:".7rem",color:"rgba(255,255,255,.4)"}}>{total} review{total!==1?"s":""}</div>
+                  </div>
+                  <div className="md-rv-bars">
+                    {dist.map(({n,count})=>(
+                      <div key={n} className="md-rv-bar-row">
+                        <span className="md-rv-bar-label">{n}★</span>
+                        <div className="md-rv-bar-track">
+                          <div className="md-rv-bar-fill" style={{width:`${total?Math.round(count/total*100):0}%`}}/>
+                        </div>
+                        <span className="md-rv-bar-count">{count}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="form-group"><label className="form-label">Review</label><textarea className="form-textarea" required value={rvText} onChange={e=>setRvText(e.target.value)} /></div>
-                <button className="btn btn-gold btn-sm" type="submit" disabled={submitting}>{submitting?"Submitting…":"Submit Review"}</button>
-              </form>
-            </div>
-            {movie.reviews?.length ? (
-              <div className="review-list">
-                {[...movie.reviews].reverse().map((r,i) => (
-                  <div key={i} className="review-item">
-                    <div className="review-header">
-                      <span className="review-user">{r.user}</span>
-                      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                        <span className="review-stars">{stars(r.rating)}</span>
-                        {r.date && <span className="review-date">{r.date}</span>}
-                      </div>
-                    </div>
-                    <p className="review-text">{r.text}</p>
+              );
+            })()}
+
+            {/* ── Write a Review ── */}
+            <div className="md-rv-form" ref={reviewFormRef}>
+              <p className="md-rv-form-title">✍️ Write a Review</p>
+              <p className="md-rv-form-sub">Share your honest opinion about {movie.title}</p>
+
+              {rvSuccess ? (
+                <div className="md-rv-success">
+                  🎉 Thank you! Your review has been published.
+                </div>
+              ) : (
+                <form onSubmit={submitReview}>
+                  {/* Name */}
+                  <div style={{marginBottom:14}}>
+                    <label style={{fontSize:".72rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"rgba(255,255,255,.45)",display:"block",marginBottom:6}}>Your Name</label>
+                    <input className="md-rv-input" value={rvUser} onChange={e=>setRvUser(e.target.value)}
+                      placeholder="e.g. Raju Mohanty" maxLength={60} />
                   </div>
-                ))}
+
+                  {/* Star Rating */}
+                  <div style={{marginBottom:16}}>
+                    <label style={{fontSize:".72rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"rgba(255,255,255,.45)",display:"block",marginBottom:8}}>Your Rating</label>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <div className="md-rv-stars">
+                        {[1,2,3,4,5].map(star=>(
+                          <span key={star}
+                            className={`md-rv-star${(rvHover||rvRating)>=star?" lit":""}`}
+                            onMouseEnter={()=>setRvHover(star)}
+                            onMouseLeave={()=>setRvHover(0)}
+                            onClick={()=>setRvRating(star)}>⭐</span>
+                        ))}
+                      </div>
+                      {(rvHover||rvRating)>0 && (
+                        <span className="md-rv-star-label">
+                          {["","Terrible 😞","Poor 😕","Average 😐","Good 😊","Excellent 🤩"][rvHover||rvRating]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Review Text */}
+                  <div style={{marginBottom:16}}>
+                    <label style={{fontSize:".72rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"rgba(255,255,255,.45)",display:"block",marginBottom:6}}>Your Review</label>
+                    <textarea className="md-rv-input md-rv-textarea"
+                      value={rvText} onChange={e=>setRvText(e.target.value)}
+                      placeholder={`What did you think of ${movie.title}? Was it worth watching?`}
+                      maxLength={1000} />
+                    <div className="md-rv-char">{rvText.length}/1000</div>
+                  </div>
+
+                  {rvError && <div className="md-rv-error">⚠️ {rvError}</div>}
+
+                  <button className="md-rv-submit" type="submit" disabled={submitting||!rvRating}>
+                    {submitting ? "Publishing…" : rvRating ? `Submit ${["","★","★★","★★★","★★★★","★★★★★"][rvRating]} Review` : "Select a rating to continue"}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* ── Review Cards ── */}
+            {movie.reviews?.length ? (
+              <div>
+                <div style={{fontSize:".72rem",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"rgba(255,255,255,.35)",marginBottom:14}}>
+                  {movie.reviews.length} Review{movie.reviews.length!==1?"s":""}
+                </div>
+                {[...movie.reviews].reverse().map((r,i) => {
+                  const avatarColors = ["#c9973a","#4caf82","#7aaae8","#e5799a","#a78be8","#e8c87a"];
+                  const avatarColor  = avatarColors[(r.user?.charCodeAt(0)||0) % avatarColors.length];
+                  const filled = Math.round(r.rating||0);
+                  return (
+                    <div key={i} className="md-rv-card">
+                      <div className="md-rv-card-header">
+                        <div className="md-rv-avatar" style={{background:avatarColor,width:44,height:44,fontSize:"1.1rem"}}>
+                          {(r.user||"?")[0].toUpperCase()}
+                        </div>
+                        <div className="md-rv-card-meta">
+                          <div className="md-rv-card-name">{r.user}</div>
+                          {r.date && <div className="md-rv-card-date">{r.date}</div>}
+                        </div>
+                        <div style={{marginLeft:"auto",textAlign:"right"}}>
+                          <div className="md-rv-card-stars">
+                            {[1,2,3,4,5].map(s=>(
+                              <span key={s} className="md-rv-card-star" style={{filter:s<=filled?"none":"grayscale(1) opacity(.25)"}}>⭐</span>
+                            ))}
+                          </div>
+                          <div style={{fontSize:".66rem",color:"rgba(255,255,255,.35)",marginTop:2}}>
+                            {["","Terrible","Poor","Average","Good","Excellent"][filled]}
+                          </div>
+                        </div>
+                      </div>
+                      <p className="md-rv-card-text">{r.text}</p>
+                      <span className="md-rv-helpful">👍 Helpful?</span>
+                    </div>
+                  );
+                })}
               </div>
-            ) : <p style={{ color:"rgba(255,255,255,.35)", marginTop:20 }}>No reviews yet. Be the first!</p>}
+            ) : (
+              <div style={{textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,.25)"}}>
+                <div style={{fontSize:"3rem",marginBottom:10}}>✍️</div>
+                <div style={{fontWeight:700,marginBottom:6}}>No reviews yet</div>
+                <div style={{fontSize:".8rem"}}>Be the first to review {movie.title}</div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1297,6 +1858,33 @@ export default function MovieDetails({ production, onToast, portalMode }) {
       {newsModal    && <NewsModal movieId={id} existing={editingNews} onSave={handleNewsSaved} onClose={()=>{setNewsModal(false);setEditingNews(null);}} />}
       {addCastModal && <AddCastModal movieId={id} onAdded={m=>{setMovie(prev=>({...prev,cast:m.cast}));}} onClose={()=>setAddCastModal(false)} />}
       {addSongModal && <AddSongModal movieId={id} onAdded={m=>{setMovie(prev=>({...prev,media:m.media}));}} onClose={()=>setAddSongModal(false)} />}
+
+      {/* ── Share Modal ── */}
+      {showShare && (
+        <div className="md-share-overlay" onClick={()=>setShowShare(false)}>
+          <div className="md-share-card" onClick={e=>e.stopPropagation()}>
+            {(movie.thumbnailUrl||movie.posterUrl) && (
+              <img src={movie.thumbnailUrl||movie.posterUrl} alt={movie.title}
+                style={{width:"100%",aspectRatio:"16/9",objectFit:"cover",display:"block"}}
+                onError={e=>e.target.style.display="none"}/>
+            )}
+            <div style={{padding:"18px 20px 20px"}}>
+              <div style={{fontSize:".58rem",fontWeight:800,letterSpacing:".14em",textTransform:"uppercase",color:"#c9973a",marginBottom:6}}>🎬 Odia Film</div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.4rem",fontWeight:900,lineHeight:1.2,marginBottom:5}}>{movie.title}</div>
+              <div style={{fontSize:".76rem",color:"rgba(255,255,255,.5)",marginBottom:14}}>
+                {movie.releaseDate&&<span>{new Date(movie.releaseDate).getFullYear()} · </span>}
+                {movie.director&&<span>{movie.director}</span>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={handleShare} className="md-btn-play" style={{flex:1,justifyContent:"center",fontSize:".8rem",padding:"9px"}}>
+                  {navigator.share?"📤 Share":"🔗 Copy Link"}
+                </button>
+                <button onClick={()=>setShowShare(false)} style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,color:"#f1f1f1",padding:"9px 14px",cursor:"pointer",fontSize:".8rem"}}>✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

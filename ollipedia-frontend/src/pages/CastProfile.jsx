@@ -406,6 +406,34 @@ export default function CastProfile({ portalMode }) {
                 </p>
               )}
 
+              {/* Social links */}
+              {(person.website || person.instagram) && (
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+                  {person.instagram && (
+                    <a href={`https://instagram.com/${person.instagram.replace("@","")}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20, background:"rgba(225,48,108,.12)", border:"1px solid rgba(225,48,108,.3)", color:"#e1306c", fontSize:".72rem", fontWeight:700, textDecoration:"none", transition:"all .15s" }}
+                      onMouseEnter={e=>{e.currentTarget.style.background="rgba(225,48,108,.22)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.background="rgba(225,48,108,.12)";}}>
+                      📸 Instagram
+                    </a>
+                  )}
+                  {person.website && (
+                    <a href={person.website} target="_blank" rel="noreferrer"
+                      style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20, background:"rgba(255,255,255,.07)", border:"1px solid rgba(255,255,255,.15)", color:"rgba(255,255,255,.7)", fontSize:".72rem", fontWeight:700, textDecoration:"none" }}>
+                      🌐 Website
+                    </a>
+                  )}
+                  {person.instagram && (
+                    <a href={`https://youtube.com/@${person.instagram.replace("@","")}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"5px 12px", borderRadius:20, background:"rgba(255,0,0,.1)", border:"1px solid rgba(255,0,0,.25)", color:"#ff4444", fontSize:".72rem", fontWeight:700, textDecoration:"none" }}>
+                      ▶ YouTube
+                    </a>
+                  )}
+                </div>
+              )}
+
               {/* Verdict pills — compact */}
               {verdictPills.length > 0 && (
                 <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginTop:10 }}>
@@ -489,6 +517,55 @@ export default function CastProfile({ portalMode }) {
           </div>
         )}
 
+        {/* ── CAREER TIMELINE ── */}
+        {movies.length > 0 && (() => {
+          const byYear = {};
+          movies.forEach(m => {
+            const yr = m.releaseDate ? new Date(m.releaseDate).getFullYear() : "TBA";
+            if (!byYear[yr]) byYear[yr] = [];
+            byYear[yr].push(m);
+          });
+          const years = Object.keys(byYear).sort((a,b) => (b==="TBA"?-1:b) - (a==="TBA"?-1:a));
+          const debutYear = years[years.length-1];
+          return (
+            <div style={{ padding:"0 24px", marginBottom:32 }}>
+              <div style={{ fontSize:".62rem", fontWeight:800, letterSpacing:".1em", textTransform:"uppercase", color:"rgba(255,255,255,.35)", marginBottom:16 }}>
+                🕐 Career Timeline · {movies.length} films · Debut {debutYear}
+              </div>
+              <div style={{ position:"relative", paddingLeft:20 }}>
+                {/* Vertical line */}
+                <div style={{ position:"absolute", left:7, top:4, bottom:4, width:2, background:"linear-gradient(to bottom,#c9973a,rgba(201,151,58,.1))", borderRadius:1 }}/>
+                {years.map((yr,yi) => (
+                  <div key={yr} style={{ position:"relative", marginBottom:18 }}>
+                    {/* Dot */}
+                    <div style={{ position:"absolute", left:-13, top:3, width:10, height:10, borderRadius:"50%", background:yi===0?"#c9973a":"rgba(201,151,58,.4)", border:"2px solid #c9973a", boxShadow:yi===0?"0 0 8px rgba(201,151,58,.6)":"none" }}/>
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                      <div style={{ minWidth:40, fontSize:".72rem", fontWeight:800, color:"#c9973a", paddingTop:2, flexShrink:0 }}>{yr}</div>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                        {byYear[yr].map(m => {
+                          const vc = {"Blockbuster":"#95e5b8","Super Hit":"#95e5b8","Hit":"#95e5b8","Average":"#e8c87a","Flop":"#e59595","Disaster":"#e59595","Upcoming":"#7aaae8"}[m.verdict]||"#7aaae8";
+                          return (
+                            <div key={m._id} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 10px 4px 6px", background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.09)", borderRadius:20, cursor:"pointer", transition:"border-color .15s" }}
+                              onClick={() => navigate(typeof moviePath==="function"?moviePath(m):`/movie/${m._id}`)}
+                              onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(201,151,58,.4)"}
+                              onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,.09)"}>
+                              {m.posterUrl && <img src={m.posterUrl} alt="" style={{ width:20,height:28,objectFit:"cover",borderRadius:3,flexShrink:0 }} onError={e=>e.target.style.display="none"}/>}
+                              <span style={{ fontSize:".72rem", fontWeight:600, whiteSpace:"nowrap" }}>{m.title}</span>
+                              {m.verdict && m.verdict!=="Upcoming" && (
+                                <span style={{ fontSize:".58rem", fontWeight:800, color:vc, background:`${vc}18`, padding:"1px 5px", borderRadius:8 }}>{m.verdict}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── CO-STARS ROW ── */}
         {costars.length > 0 && (
           <HomeRow title="Frequent Co-stars" count={costars.length}>
@@ -497,7 +574,7 @@ export default function CastProfile({ portalMode }) {
                 key={i}
                 className="home-card"
                 style={{ width: 150, cursor: c.castId ? "pointer" : "default" }}
-                onClick={() => c.castId && navigate(castPath({ _id:c.castId, name:c.name }))}
+                onClick={() => c.castId && navigate(castPath({ _id: c.castId }))}
               >
                 <div className="home-card-img" style={{ height: 150 }}>
                   <SafeImg

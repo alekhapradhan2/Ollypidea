@@ -195,7 +195,9 @@ const MovieSchema = new mongoose.Schema({
   status:   { type: String, default: "Upcoming" },
   reviews:  [ReviewSchema],
   news:     [{ type: mongoose.Schema.Types.ObjectId, ref: "News" }],
-  slug:     { type: String, default: "", index: true },   // SEO slug e.g. "bindusagar-2026"
+  slug:     { type: String, default: "", index: true },
+  interestedYes: { type: Number, default: 0 },
+  interestedNo:  { type: Number, default: 0 },   // SEO slug e.g. "bindusagar-2026"
 }, { timestamps: true });
 
 const NewsSchema = new mongoose.Schema({
@@ -598,12 +600,38 @@ app.get("/api/songs", async (req, res) => {
 app.post("/api/movies/:id/reviews", async (req, res) => {
   try {
     const { user, rating, text } = req.body;
-    const movie = await Movie.findByIdAndUpdate(
-      req.params.id,
-      { $push: { reviews: { user, rating, text, date: new Date().toISOString().split("T")[0] } } },
+    if (!user?.trim() || !text?.trim()) return res.status(400).json({ error:"Name and review required." });
+    const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
+    const movie = await Movie.findOneAndUpdate(
+      query,
+      { $push: { reviews: { user:user.trim(), rating:Number(rating)||5, text:text.trim(), date:new Date().toISOString().split("T")[0] } } },
       { new: true }
     );
+    if (!movie) return res.status(404).json({ error:"Movie not found" });
     res.json(movie.reviews);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/movies/:id/interested — vote yes or no
+app.post("/api/movies/:id/interested", async (req, res) => {
+  try {
+    const { vote } = req.body;  // "yes" | "no"
+    if (!["yes","no"].includes(vote)) return res.status(400).json({ error:"vote must be yes or no" });
+    const query  = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
+    const field  = vote === "yes" ? "interestedYes" : "interestedNo";
+    const movie  = await Movie.findOneAndUpdate(query, { $inc: { [field]: 1 } }, { new: true });
+    if (!movie) return res.status(404).json({ error:"Movie not found" });
+    res.json({ yes: movie.interestedYes || 0, no: movie.interestedNo || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/movies/:id/interested — get counts
+app.get("/api/movies/:id/interested", async (req, res) => {
+  try {
+    const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
+    const movie = await Movie.findOne(query, "interestedYes interestedNo").lean();
+    if (!movie) return res.status(404).json({ error:"Not found" });
+    res.json({ yes: movie.interestedYes || 0, no: movie.interestedNo || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

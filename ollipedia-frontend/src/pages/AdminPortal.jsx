@@ -477,6 +477,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     contentRating: initial?.contentRating || "",
     bannerUrl:     initial?.bannerUrl     || "",
     boxOffice:   initial?.boxOffice    || { opening:"TBA", firstWeek:"TBA", total:"TBA" },
+    trivia:      initial?.trivia       || [],
   });
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x=>x!==g) : [...form.genre,g]);
@@ -529,7 +530,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     initial?.media?.trailer?.url || (initial?.media?.trailer?.ytId ? `https://youtube.com/watch?v=${initial.media.trailer.ytId}` : "")
   );
   const [songs, setSongs] = useState(initial?.media?.songs || []);
-  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[], lyrics:"", description:"" };
+  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[] };
   const [sf, setSf] = useState(EMPTY_SF);
   const trailerPreview = extractYtId(trailerUrl);
 
@@ -574,6 +575,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       contentRating: form.contentRating,
       bannerUrl:     form.bannerUrl,
       boxOffice:    form.boxOffice,
+      trivia:       form.trivia,
       productions:  productions.map(p=>String(p._id)).filter(isOid),
       cast:         castPayload,
       media: { trailer: trailerYtId ? { ytId:trailerYtId, url:trailerUrl } : (initial?.media?.trailer||{}), songs },
@@ -699,6 +701,36 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
             <input className="form-input" value={form.bannerUrl} onChange={e=>set("bannerUrl",e.target.value)} placeholder="Wide landscape image URL…" />
             {form.bannerUrl && <img src={form.bannerUrl} alt="banner" style={{ marginTop:8, width:"100%", maxHeight:80, objectFit:"cover", borderRadius:6, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />}
           </div>
+
+          {/* Trivia */}
+          <div className="form-group">
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+              <label className="form-label" style={{ margin:0 }}>💡 Trivia & Fun Facts <span style={{ fontWeight:400, color:"var(--muted)", fontSize:"0.7rem" }}>({(form.trivia||[]).length} facts)</span></label>
+              <button type="button" className="btn btn-outline btn-sm"
+                onClick={() => set("trivia", [...(form.trivia||[]), ""])}>
+                + Add Fact
+              </button>
+            </div>
+            {(form.trivia||[]).length === 0 && (
+              <div style={{ textAlign:"center", padding:"14px", background:"rgba(255,255,255,.02)", borderRadius:8, border:"1px dashed rgba(255,255,255,.1)", color:"var(--muted)", fontSize:"0.78rem" }}>
+                No trivia yet. Click "+ Add Fact" to add fun facts about this movie.
+              </div>
+            )}
+            {(form.trivia||[]).map((fact, i) => (
+              <div key={i} style={{ display:"flex", gap:8, marginBottom:8, alignItems:"flex-start" }}>
+                <span style={{ fontSize:"0.8rem", marginTop:10, color:"var(--gold)", flexShrink:0 }}>💡</span>
+                <textarea className="form-textarea"
+                  value={fact}
+                  onChange={e => { const t=[...(form.trivia||[])]; t[i]=e.target.value; set("trivia",t); }}
+                  style={{ minHeight:60, flex:1, fontSize:"0.82rem", lineHeight:1.6 }}
+                  placeholder={`Fun fact #${i+1}… e.g. "This film was shot in just 30 days in Puri."`} />
+                <button type="button"
+                  onClick={() => set("trivia", (form.trivia||[]).filter((_,j)=>j!==i))}
+                  style={{ background:"none", border:"none", color:"rgba(255,100,100,.6)", cursor:"pointer", fontSize:"1rem", padding:"8px 4px", flexShrink:0 }}>✕</button>
+              </div>
+            ))}
+          </div>
+
           <hr className="divider" />
           <p style={{ fontSize:"0.78rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:12 }}>Box Office</p>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
@@ -1098,7 +1130,7 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
   const [movieSearch,  setMovieSearch]  = useState("");
   const [showMovieDrop,setShowMovieDrop]= useState(false);
 
-  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[], lyrics:"", description:"" };
+  const EMPTY_SF = { url:"", title:"", singer:"", singerRef:[], musicDirector:"", musicDirectorRef:[], lyricist:"", lyricistRef:[] };
   const [sf, setSf] = useState(() => initial ? {
     url:             initial.url            || (initial.ytId ? `https://youtu.be/${initial.ytId}` : ""),
     title:           initial.title          || "",
@@ -1108,8 +1140,6 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
     musicDirectorRef:initial.musicDirectorRef || [],
     lyricist:        initial.lyricist       || "",
     lyricistRef:     initial.lyricistRef    || [],
-    lyrics:          initial.lyrics         || "",
-    description:     initial.description   || "",
   } : EMPTY_SF);
 
   const filteredMovies = (movies||[]).filter(m =>
@@ -1130,9 +1160,7 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
       title:sf.title.trim(), singer:sf.singer.trim(), singerRef:sf.singerRef,
       musicDirector:sf.musicDirector.trim(), musicDirectorRef:sf.musicDirectorRef,
       lyricist:sf.lyricist.trim(), lyricistRef:sf.lyricistRef,
-      ytId, url:sf.url, thumbnailUrl:ytId?`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`:"",
-      lyrics:sf.lyrics.trim(),
-      description:sf.description.trim(),
+      ytId, url:sf.url, thumbnailUrl:ytId?`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`:""
     } });
   };
 
@@ -1207,24 +1235,6 @@ function SongForm({ onSave, onCancel, saving, movies, preselectedMovieId, initia
             onChange={(name, refs) => setSf(f=>({...f, lyricist:name, lyricistRef:refs}))} />
         </div>
       </div>
-      <div className="form-group" style={{ marginTop:12 }}>
-        <label className="form-label">Description <span style={{ fontSize:"0.68rem", color:"var(--muted)", fontWeight:400 }}>(optional — theme, mood, background)</span></label>
-        <textarea className="form-textarea"
-          value={sf.description}
-          onChange={e=>setSf(f=>({...f,description:e.target.value}))}
-          style={{ minHeight:70, fontSize:"0.82rem", lineHeight:1.7 }}
-          placeholder="e.g. A romantic melody expressing longing and love..." />
-      </div>
-
-      <div className="form-group" style={{ marginTop:12 }}>
-        <label className="form-label">Lyrics <span style={{ fontSize:"0.68rem", color:"var(--muted)", fontWeight:400 }}>(optional — plain text or LRC format for sync)</span></label>
-        <textarea className="form-textarea"
-          value={sf.lyrics}
-          onChange={e=>setSf(f=>({...f,lyrics:e.target.value}))}
-          style={{ minHeight:160, fontFamily:"monospace", fontSize:"0.78rem", lineHeight:1.8 }}
-          placeholder={"Paste lyrics here...\n\nFor auto-scroll sync use LRC format:\n[00:12.00] Tate dekhile mun bhuli jaye\n[00:15.50] Hrudaya mora naache re"} />
-      </div>
-
       <div style={{ display:"flex", gap:10, paddingTop:16, borderTop:"1px solid var(--border)" }}>
         <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-gold" onClick={handleAdd} disabled={saving||!sf.title.trim()||!movieId}>
