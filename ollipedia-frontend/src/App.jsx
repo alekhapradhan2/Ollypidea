@@ -19,6 +19,8 @@ import ProductionProfile  from "./pages/ProductionProfile";
 import SongDetail         from "./pages/SongDetail";
 import AllSongs           from "./pages/AllSongs";
 import AboutUs            from "./pages/AboutUs";
+import ContactUs          from "./pages/ContactUs";
+import Footer             from "./components/Footer";
 import PrivacyPolicy      from "./pages/PrivacyPolicy";
 
 import Dashboard          from "./pages/Dashboard";
@@ -28,15 +30,14 @@ import CastPortal         from "./pages/CastPortal";
 import PortalMovieDetails from "./pages/PortalMovieDetails";
 import PortalCastProfile  from "./pages/PortalCastProfile";
 
-import MiniPlayer from "./components/MiniPlayer";
 import AdminPortal        from "./pages/AdminPortal";
 import AdminLogin         from "./pages/AdminLogin";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
-  const navType = useNavigationType(); // "POP"=back/forward, "PUSH"=new link
+  const navType = useNavigationType();
   useEffect(() => {
-    if (navType === "POP") return; // preserve scroll on back/forward
+    if (navType === "POP") return;
     window.scrollTo(0, 0);
   }, [pathname, navType]);
   return null;
@@ -93,7 +94,9 @@ function AppInner({ production, setProduction, castMember, setCastMember, admin,
         <Route path="/register"       element={<Register onSuccess={(p,t) => handleProdAuth(p,t)} onToast={showToast} />} />
         <Route path="/cast-register"  element={<CastRegister onSuccess={(m,t) => handleCastAuth(m,t)} onToast={showToast} />} />
         <Route path="/about"          element={<AboutUs />} />
+        <Route path="/contact"        element={<ContactUs />} />
         <Route path="/privacy"        element={<PrivacyPolicy />} />
+        <Route path="/privacy-policy"  element={<PrivacyPolicy />} />
         <Route path="/song/:movieSlug/:songIndex" element={<SongDetail />} />
         <Route path="/song/:movieSlug/:songIndex/:songSlug" element={<SongDetail />} />
 
@@ -111,6 +114,8 @@ function AppInner({ production, setProduction, castMember, setCastMember, admin,
         <Route path="/admin/*"     element={<AdminPortal admin={admin} onLogout={handleAdminLogout} onToast={showToast} />} />
       </Routes>
 
+      {!isAnyPortal && <Footer />}
+
       {showLogin && (
         <LoginModal
           onClose={() => setShowLogin(false)}
@@ -118,7 +123,6 @@ function AppInner({ production, setProduction, castMember, setCastMember, admin,
           onCastSuccess={(member, token) => { handleCastAuth(member, token); setShowLogin(false); showToast(`Welcome, ${member.name}!`); }}
         />
       )}
-      {!isAnyPortal && <MiniPlayer />}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </>
   );

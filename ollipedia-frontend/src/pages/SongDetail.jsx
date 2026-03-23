@@ -1,6 +1,6 @@
 import SEO, { songDetailSEO } from "../components/SEO";
 import { extractId, moviePath, songPath, castPath } from "../utils/slugs";
-import { setNowPlaying } from "../components/MiniPlayer";
+
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { API } from "../api/api";
@@ -575,7 +575,7 @@ export default function SongDetail() {
   }, [movieParam, songIdx]);
 
 
-  // Auto-switch to lyrics tab + sync MiniPlayer when song changes
+  // Auto-switch to lyrics tab when song changes
   useEffect(() => {
     if (activeSong?.lyrics?.trim()) setSidebarTab("lyrics");
     else setSidebarTab("playlist");
@@ -587,10 +587,7 @@ export default function SongDetail() {
       movieTitle: movie.title, movieId: String(movie._id),
       movieSlug: movie.slug||"", songIdx: activeIdx,
       thumb: activeSong.ytId ? `https://img.youtube.com/vi/${extractYtId(activeSong.ytId)}/mqdefault.jpg` : (movie.posterUrl||""),
-    };
-    setNowPlaying(trackData);
-    // MiniPlayer's iframe will autoplay via key change
-  }, [activeSong?.title, activeIdx]);
+    };  }, [activeSong?.title, activeIdx]);
 
   // ── Save to recently played + load know count ────────────────
   useEffect(() => {
@@ -692,9 +689,7 @@ export default function SongDetail() {
     const s = songs[idx];
     if (!s) return;
     setActiveSongIdx(idx);
-    navigate(songPath(movie, idx, s), { replace: true });
-    // setNowPlaying will be called by the useEffect above when activeSong changes
-  };
+    navigate(songPath(movie, idx, s), { replace: true });  };
 
   const handleRelatedSongClick = (s) => {
     const relM = allMovies.find(x => String(x._id) === s.movieId);
