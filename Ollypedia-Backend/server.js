@@ -208,6 +208,9 @@ const NewsSchema = new mongoose.Schema({
   category:   { type: String, default: "Update" },
   imageUrl:   { type: String, default: "" },
   published:  { type: Boolean, default: true },
+  sourceUrl:  { type: String, default: "" },   // link to original article
+  ytId:       { type: String, default: "" },   // YouTube video ID (for video news)
+  newsType:   { type: String, default: "article" }, // "article" | "video"
 }, { timestamps: true });
 
 const CastMemberSchema = new mongoose.Schema({
