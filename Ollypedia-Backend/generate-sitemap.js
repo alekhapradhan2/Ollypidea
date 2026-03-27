@@ -1,26 +1,17 @@
 /**
- * generate-sitemap.js — Ollypedia Backend
- *
- * Generates sitemap.xml + robots.txt with clean SEO URLs:
- *   /movie/bindusagar-2026
- *   /cast/babushaan-mohanty
- *   /song/bindusagar-2026/0/title-odia-song
- *
- * Usage:
- *   node generate-sitemap.js
- *
- * Run from the Ollypedia-Backend folder while server is running.
- * Output goes to: ../ollipedia-frontend/public/
+ * generate-sitemap.js — UPDATED SEO VERSION
  */
 
-import fs   from "fs";
+import fs from "fs";
 import path from "path";
 
 const API_URL    = process.env.API_URL    || "http://localhost:4000/api";
 const SITE_URL   = process.env.SITE_URL   || "https://ollypedia.in";
 const OUTPUT_DIR = process.env.OUTPUT_DIR || "../ollipedia-frontend/public";
 
-// ── Slug helpers — matches src/utils/slugs.js exactly ─────────────
+// =====================
+// 🧠 HELPERS
+// =====================
 function toSlug(str = "") {
   return String(str)
     .toLowerCase()
@@ -44,8 +35,8 @@ function castSlug(c) {
 }
 
 function buildSongUrl(movie, songIndex, song) {
-  const ms   = movieSlug(movie);
-  const idx  = typeof songIndex === "number" && !isNaN(songIndex) ? songIndex : 0;
+  const ms = movieSlug(movie);
+  const idx = songIndex || 0;
   const slug = song.title ? `/${toSlug(song.title)}-odia-song` : "";
   return `/song/${ms}/${idx}${slug}`;
 }
@@ -66,129 +57,126 @@ function xmlEscape(s = "") {
 
 function urlEntry({ loc, lastmod, priority = "0.7", changefreq = "weekly" }) {
   const date = lastmod
-    ? new Date(lastmod).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  return [
-    "  <url>",
-    `    <loc>${SITE_URL}${xmlEscape(loc)}</loc>`,
-    `    <lastmod>${date}</lastmod>`,
-    `    <changefreq>${changefreq}</changefreq>`,
-    `    <priority>${priority}</priority>`,
-    "  </url>",
-  ].join("\n");
+    ? new Date(lastmod).toISOString().split("T")[0]
+    : new Date().toISOString().split("T")[0];
+
+  return `
+  <url>
+    <loc>${SITE_URL}${xmlEscape(loc)}</loc>
+    <lastmod>${date}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`;
 }
 
+// =====================
+// 🚀 GENERATE
+// =====================
 async function generate() {
-  console.log("Generating sitemap for", SITE_URL, "...\n");
+  console.log("🚀 Generating sitemap...\n");
 
-  const [movies, castList] = await Promise.all([
-    fetchJSON(`${API_URL}/movies`).catch(() => {
-      console.warn("Could not fetch movies — is the server running?");
-      return [];
-    }),
-    fetchJSON(`${API_URL}/cast`).catch(() => {
-      console.warn("Could not fetch cast");
-      return [];
-    }),
+  const [movies, castList, newsList] = await Promise.all([
+    fetchJSON(`${API_URL}/movies`).catch(() => []),
+    fetchJSON(`${API_URL}/cast`).catch(() => []),
+    fetchJSON(`${API_URL}/news`).catch(() => []),
   ]);
 
-  const totalSongs = movies.reduce((a, m) => a + (m.media?.songs?.length || 0), 0);
-  console.log(`   ${movies.length} movies`);
-  console.log(`   ${castList.length} cast members`);
-  console.log(`   ${totalSongs} songs\n`);
+  const urls = new Set();
 
-  const urls = [];
+  // =====================
+  // STATIC PAGES
+  // =====================
+  [
+    { loc: "/", priority: "1.0", changefreq: "daily" },
+    { loc: "/movies", priority: "0.9" },
+    { loc: "/cast", priority: "0.8" },
+    { loc: "/songs", priority: "0.8" },
+    { loc: "/news", priority: "0.8" },
+    { loc: "/about", priority: "0.5" },
+    { loc: "/contact", priority: "0.5" },
+    { loc: "/privacy", priority: "0.4" },
+  ].forEach(p => urls.add(urlEntry(p)));
 
-  // Static pages
-  urls.push(urlEntry({ loc: "/",        priority: "1.0", changefreq: "daily"   }));
-  urls.push(urlEntry({ loc: "/movies",  priority: "0.9", changefreq: "daily"   }));
-  urls.push(urlEntry({ loc: "/cast",    priority: "0.8", changefreq: "weekly"  }));
-  urls.push(urlEntry({ loc: "/songs",   priority: "0.8", changefreq: "weekly"  }));
-  urls.push(urlEntry({ loc: "/news",    priority: "0.7", changefreq: "daily"   }));
-  urls.push(urlEntry({ loc: "/about",   priority: "0.4", changefreq: "monthly" }));
-  urls.push(urlEntry({ loc: "/contact", priority: "0.4", changefreq: "monthly" }));
-  urls.push(urlEntry({ loc: "/privacy", priority: "0.3", changefreq: "monthly" }));
-
-  // Movie pages
+  // =====================
+  // MOVIES
+  // =====================
   movies.forEach(m => {
-    const isHit = m.verdict && !["Upcoming", "Flop", "Disaster"].includes(m.verdict);
-    urls.push(urlEntry({
-      loc:        `/movie/${movieSlug(m)}`,
-      lastmod:    m.updatedAt || m.releaseDate,
-      priority:   isHit ? "0.8" : "0.6",
-      changefreq: m.verdict === "Upcoming" ? "weekly" : "monthly",
+    urls.add(urlEntry({
+      loc: `/movie/${movieSlug(m)}`,
+      lastmod: m.updatedAt || m.releaseDate,
+      priority: "0.9",
+      changefreq: "weekly"
     }));
   });
 
-  // Song pages
+  // =====================
+  // SONGS
+  // =====================
   movies.forEach(m => {
     (m.media?.songs || []).forEach((s, i) => {
       if (!s.title) return;
-      urls.push(urlEntry({
-        loc:        buildSongUrl(m, i, s),
-        lastmod:    m.updatedAt || m.releaseDate,
-        priority:   "0.6",
-        changefreq: "monthly",
+      urls.add(urlEntry({
+        loc: buildSongUrl(m, i, s),
+        lastmod: m.updatedAt,
+        priority: "0.7",
       }));
     });
   });
 
-  // Cast pages
+  // =====================
+  // CAST
+  // =====================
   castList.forEach(c => {
-    const filmCount = c.movies?.length || 0;
-    urls.push(urlEntry({
-      loc:        `/cast/${castSlug(c)}`,
-      lastmod:    c.updatedAt,
-      priority:   filmCount >= 5 ? "0.7" : filmCount >= 2 ? "0.6" : "0.5",
-      changefreq: "monthly",
+    urls.add(urlEntry({
+      loc: `/cast/${castSlug(c)}`,
+      lastmod: c.updatedAt,
+      priority: "0.8",
     }));
   });
 
-  // Write sitemap.xml
-  const xml = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ...urls,
-    "</urlset>",
-  ].join("\n");
+  // =====================
+  // NEWS (NEW ADDITION 🔥)
+  // =====================
+  newsList.forEach(n => {
+    urls.add(urlEntry({
+      loc: `/news/${n._id}`,
+      lastmod: n.updatedAt || n.createdAt,
+      priority: "0.7",
+      changefreq: "daily"
+    }));
+  });
+
+  // =====================
+  // WRITE SITEMAP
+  // =====================
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${[...urls].join("\n")}
+</urlset>`;
 
   if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const sitemapPath = path.join(OUTPUT_DIR, "sitemap.xml");
-  fs.writeFileSync(sitemapPath, xml, "utf8");
-  console.log(`sitemap.xml  -> ${sitemapPath}`);
-  console.log(`${urls.length} total URLs`);
+  fs.writeFileSync(path.join(OUTPUT_DIR, "sitemap.xml"), xml);
 
-  // Write robots.txt
-  const robots = [
-    "User-agent: *",
-    "Allow: /",
-    "",
-    "Disallow: /admin",
-    "Disallow: /admin/",
-    "Disallow: /dashboard",
-    "Disallow: /dashboard/",
-    "Disallow: /cast-portal",
-    "Disallow: /register",
-    "Disallow: /cast-register",
-    "",
-    `Sitemap: ${SITE_URL}/sitemap.xml`,
-  ].join("\n");
+  // =====================
+  // ROBOTS.TXT (IMPROVED)
+  // =====================
+  const robots = `
+User-agent: *
+Allow: /
 
-  const robotsPath = path.join(OUTPUT_DIR, "robots.txt");
-  fs.writeFileSync(robotsPath, robots, "utf8");
-  console.log(`robots.txt   -> ${robotsPath}`);
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /cast-portal
 
-  console.log(`\nSummary:`);
-  console.log(`  Static : 8`);
-  console.log(`  Movies : ${movies.length}`);
-  console.log(`  Songs  : ${totalSongs}`);
-  console.log(`  Cast   : ${castList.length}`);
-  console.log(`  Total  : ${urls.length}`);
-  console.log(`\nSubmit to Google: ${SITE_URL}/sitemap.xml\n`);
+Sitemap: ${SITE_URL}/sitemap.xml
+`;
+
+  fs.writeFileSync(path.join(OUTPUT_DIR, "robots.txt"), robots);
+
+  console.log("✅ Sitemap Generated Successfully");
+  console.log(`Total URLs: ${urls.size}`);
 }
 
-generate().catch(e => {
-  console.error("Error:", e.message);
-  process.exit(1);
-});
+// =====================
+generate().catch(console.error);

@@ -295,7 +295,7 @@ async function scrapeMovies() {
 
   console.log("→ Opening BMS listing…");
   await page.goto(
-    "https://in.bookmyshow.com/explore/movies-bhubaneswar?languages=oriya",
+    "https://in.bookmyshow.com/explore/upcoming-movies-bhubaneswar?languages=oriya",
     { waitUntil: "networkidle2", timeout: 40000 }
   );
   await delay(5000);
