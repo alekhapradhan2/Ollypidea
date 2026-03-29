@@ -40,7 +40,7 @@ const CSS = `
 /* ══════════════════════════════════════
    NEWS DETAIL PAGE
 ══════════════════════════════════════ */
-.nd-root { padding: 0 0 72px; }
+.nd-root { padding: 58px 0 72px; }
 
 /* ── Back bar ── */
 .nd-back-bar {

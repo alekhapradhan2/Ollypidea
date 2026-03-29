@@ -3,15 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-   <title>Ollypedia – Odia Movie Database | Ollywood Films, Cast & News</title>
+    <title>Ollypedia – Odia Movie Database | Ollywood Films, Cast &amp; News</title>
     <meta name="description" content="Ollypedia — The complete Odia film encyclopedia. Movies, cast, songs, trailers and more." />
     <meta name="keywords" content="Odia film, Ollywood, Odia cinema, Odia movies, Odia actors, Odia songs" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
     <link rel="canonical" href="https://ollypedia.in/" />
     <meta property="og:type"        content="website" />
     <meta property="og:title"       content="Ollypedia — Odia Film Encyclopedia" />
     <meta property="og:description" content="The complete Odia film encyclopedia — movies, cast, songs and more." />
     <meta property="og:image"       content="https://ollypedia.in/og-default.jpg" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:url"         content="https://ollypedia.in/" />
     <meta property="og:site_name"   content="Ollypedia" />
     <meta property="og:locale"      content="en_IN" />
@@ -25,15 +27,33 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://img.youtube.com" />
-    <link rel="dns-prefetch" href="https://Ollypedia-backend.onrender.com" />
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Ollypedia","url":"https://ollypedia.in","description":"The complete Odia film encyclopedia","inLanguage":"en-IN","potentialAction":{"@type":"SearchAction","target":{"@type":"EntryPoint","urlTemplate":"https://ollypedia.in/movies?q={search_term_string}"},"query-input":"required name=search_term_string"}}</script>
-
-    <!-- Google AdSense — loads on every page automatically -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5823659147566885"
-      crossorigin="anonymous"></script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Ollypedia",
+      "url": "https://ollypedia.in",
+      "description": "The complete Odia film encyclopedia",
+      "inLanguage": "en-IN",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://ollypedia.in/movies?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <!-- Google AdSense -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5823659147566885" crossorigin="anonymous"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <!--
+      IMPORTANT: entry point changed from main.jsx to entry-client.jsx
+      entry-client.jsx hydrates SSR pages and creates root for SPA
+    -->
+    <script type="module" src="/src/entry-client.jsx"></script>
   </body>
 </html>
