@@ -123,10 +123,16 @@ const CastSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const ReviewSchema = new mongoose.Schema({
-  user:   { type: String, default: "Anonymous" },
-  rating: Number,
-  text:   String,
-  date:   String,
+  user:    { type: String, default: "Anonymous" },
+  rating:  Number,
+  text:    String,
+  date:    String,
+  likes:   { type: Number, default: 0 },
+  replies: [{
+    user: { type: String, default: "Anonymous" },
+    text: { type: String, default: "" },
+    date: { type: String, default: "" },
+  }],
 });
 
 const SongSchema = new mongoose.Schema({
@@ -212,6 +218,42 @@ const NewsSchema = new mongoose.Schema({
   ytId:       { type: String, default: "" },   // YouTube video ID (for video news)
   newsType:   { type: String, default: "article" }, // "article" | "video"
 }, { timestamps: true });
+
+// ── Blog / Article Schema ────────────────────────────────────────
+const BlogSchema = new mongoose.Schema({
+  title:      { type: String, required: true, trim: true },
+  slug:       { type: String, required: true, unique: true, trim: true },
+  excerpt:    { type: String, default: "" },        // 1–2 sentence teaser
+  content:    { type: String, required: true },     // full article HTML/text
+  category:   { type: String, default: "General" }, // "Movie Review","Top 10","Actor Spotlight","News","General"
+  tags:       [{ type: String }],                   // ["Odia 2025","Babushaan","Action"]
+  coverImage: { type: String, default: "" },
+  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie" }, // optional link
+  movieTitle: { type: String, default: "" },
+  author:     { type: String, default: "Ollypedia Team" },
+  published:  { type: Boolean, default: false },
+  featured:   { type: Boolean, default: false },
+  views:      { type: Number, default: 0 },
+  readTime:   { type: Number, default: 5 },         // minutes
+  seoTitle:   { type: String, default: "" },
+  seoDesc:    { type: String, default: "" },
+  reviews:    [ReviewSchema],
+}, { timestamps: true });
+
+// Auto-generate slug from title
+BlogSchema.pre("validate", function(next) {
+  if (this.isNew && !this.slug && this.title) {
+    this.slug = this.title.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").trim()
+      + "-" + Date.now().toString(36);
+  }
+  if (!this.readTime && this.content) {
+    this.readTime = Math.max(1, Math.ceil(this.content.split(/\s+/).length / 200));
+  }
+  next();
+});
+
+const Blog = mongoose.model("Blog", BlogSchema);
 
 const CastMemberSchema = new mongoose.Schema({
   name:      { type: String, required: true },
@@ -1420,6 +1462,176 @@ app.delete("/api/admin/news/:id", adminAuth, async (req, res) => {
 
 
 // ════════════════════════════════════════════════════════════════
+// BLOG / ARTICLE ROUTES
+// ════════════════════════════════════════════════════════════════
+
+// GET /api/blog — list published posts (paginated)
+app.get("/api/blog", async (req, res) => {
+  try {
+    const page     = parseInt(req.query.page||"1",10);
+    const limit    = parseInt(req.query.limit||"12",10);
+    const cat      = req.query.category || "";
+    const tag      = req.query.tag      || "";
+    const featured = req.query.featured === "true";
+    const q        = req.query.q || "";
+
+    const filter = { published: true };
+    if (cat)      filter.category = cat;
+    if (tag)      filter.tags     = tag;
+    if (featured) filter.featured = true;
+    if (q)        filter.$or = [
+      { title:   { $regex: q, $options: "i" } },
+      { content: { $regex: q, $options: "i" } },
+      { tags:    { $regex: q, $options: "i" } },
+    ];
+
+    const total = await Blog.countDocuments(filter);
+    const posts = await Blog.find(filter, "title slug excerpt category tags coverImage movieTitle author views readTime featured createdAt seoTitle seoDesc")
+      .sort({ featured:-1, createdAt:-1 })
+      .skip((page-1)*limit).limit(limit).lean();
+    res.json({ posts, total, page, pages: Math.ceil(total/limit) });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// GET /api/blog/:slug — single post (increments views)
+app.get("/api/blog/:slug", async (req, res) => {
+  try {
+    const post = await Blog.findOneAndUpdate(
+      { slug: req.params.slug, published: true },
+      { $inc: { views: 1 } },
+      { new: true }
+    ).lean();
+    if (!post) return res.status(404).json({ error:"Not found" });
+    res.json(post);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// ── Admin Blog Routes ─────────────────────────────────────────────
+// GET /api/admin/blog
+app.get("/api/admin/blog", adminAuth, async (req, res) => {
+  try {
+    const posts = await Blog.find().sort({ createdAt:-1 }).lean();
+    res.json(posts);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// POST /api/admin/blog
+app.post("/api/admin/blog", adminAuth, async (req, res) => {
+  try {
+    const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,author,published,featured,seoTitle,seoDesc } = req.body;
+    if (!title?.trim() || !content?.trim()) return res.status(400).json({ error:"Title and content required" });
+    const slug = title.toLowerCase().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").trim()
+      + "-" + Date.now().toString(36);
+    const readTime = Math.max(1, Math.ceil((content||"").split(/\s+/).length/200));
+    const post = await Blog.create({
+      title:title.trim(), slug, excerpt:excerpt||"", content:content.trim(),
+      category:category||"General", tags:Array.isArray(tags)?tags:(tags||"").split(",").map(t=>t.trim()).filter(Boolean),
+      coverImage:coverImage||"", movieId:movieId||undefined, movieTitle:movieTitle||"",
+      author:author||"Ollypedia Team", published:!!published, featured:!!featured, readTime,
+      seoTitle:seoTitle||title, seoDesc:seoDesc||excerpt||"",
+    });
+    res.status(201).json(post);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// PATCH /api/admin/blog/:id
+app.patch("/api/admin/blog/:id", adminAuth, async (req, res) => {
+  try {
+    const allowed = ["title","excerpt","content","category","tags","coverImage","movieId","movieTitle","author","published","featured","seoTitle","seoDesc"];
+    const update = {};
+    for (const k of allowed) if (req.body[k] !== undefined) update[k] = req.body[k];
+    if (update.content) update.readTime = Math.max(1, Math.ceil(update.content.split(/\s+/).length/200));
+    if (update.tags && !Array.isArray(update.tags)) update.tags = update.tags.split(",").map(t=>t.trim()).filter(Boolean);
+    const post = await Blog.findByIdAndUpdate(req.params.id, update, { new:true });
+    if (!post) return res.status(404).json({ error:"Not found" });
+    res.json(post);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// DELETE /api/admin/blog/:id
+app.delete("/api/admin/blog/:id", adminAuth, async (req, res) => {
+  try {
+    await Blog.findByIdAndDelete(req.params.id);
+    res.json({ message:"Deleted" });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// ── Blog Reviews ──────────────────────────────────────────────────
+// POST /api/blog/:id/reviews
+app.post("/api/blog/:id/reviews", async (req, res) => {
+  try {
+    const { user, text, rating } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: "Review text required" });
+    const post = await Blog.findByIdAndUpdate(
+      req.params.id,
+      { $push: { reviews: { user: user || "Anonymous", text: text.trim(), rating: Number(rating) || 5, date: new Date().toISOString().split("T")[0], likes: 0, replies: [] } } },
+      { new: true }
+    ).lean();
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json(post.reviews);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/blog/:id/reviews/:idx/like
+app.post("/api/blog/:id/reviews/:idx/like", async (req, res) => {
+  try {
+    const post = await Blog.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    const idx = parseInt(req.params.idx, 10);
+    if (!post.reviews[idx]) return res.status(404).json({ error: "Review not found" });
+    post.reviews[idx].likes = (post.reviews[idx].likes || 0) + 1;
+    await post.save();
+    res.json({ likes: post.reviews[idx].likes });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/blog/:id/reviews/:idx/reply
+app.post("/api/blog/:id/reviews/:idx/reply", async (req, res) => {
+  try {
+    const { user, text, date } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: "Reply text required" });
+    const post = await Blog.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    const idx = parseInt(req.params.idx, 10);
+    if (!post.reviews[idx]) return res.status(404).json({ error: "Review not found" });
+    post.reviews[idx].replies.push({ user: user || "Anonymous", text: text.trim(), date: date || new Date().toISOString().split("T")[0] });
+    await post.save();
+    res.json(post.reviews[idx].replies);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Review Likes & Replies ────────────────────────────────────────
+// POST /api/movies/:id/reviews/:reviewIdx/like
+app.post("/api/movies/:id/reviews/:reviewIdx/like", async (req, res) => {
+  try {
+    const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
+    const idx   = parseInt(req.params.reviewIdx, 10);
+    const movie = await Movie.findOne(query);
+    if (!movie || !movie.reviews[idx]) return res.status(404).json({ error:"Not found" });
+    movie.reviews[idx].likes = (movie.reviews[idx].likes||0) + 1;
+    await movie.save();
+    res.json({ likes: movie.reviews[idx].likes });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// POST /api/movies/:id/reviews/:reviewIdx/reply
+app.post("/api/movies/:id/reviews/:reviewIdx/reply", async (req, res) => {
+  try {
+    const { user, text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error:"Text required" });
+    const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
+    const idx   = parseInt(req.params.reviewIdx, 10);
+    const movie = await Movie.findOne(query);
+    if (!movie || !movie.reviews[idx]) return res.status(404).json({ error:"Not found" });
+    const reply = { user:user?.trim()||"Anonymous", text:text.trim(), date:new Date().toISOString().split("T")[0] };
+    if (!movie.reviews[idx].replies) movie.reviews[idx].replies = [];
+    movie.reviews[idx].replies.push(reply);
+    await movie.save();
+    res.json(movie.reviews[idx].replies);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════
 // CONTACT / ENQUIRY ROUTES
 // ════════════════════════════════════════════════════════════════
 
@@ -1570,6 +1782,78 @@ app.get("/sitemap-cast.xml", async (req, res) => {
     });
   } catch {}
   res.type("application/xml").send(xml + "</urlset>");
+});
+
+
+// ── AI Article Generator (uses server-side fetch → no CORS) ─────────────────
+// ── AI Article Generator — powered by Groq (free, ~2-3s per article) ────────
+// Sign up free at https://console.groq.com → API Keys → Create Key
+// Add to .env:  GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxx
+app.post("/api/admin/generate-article", adminAuth, async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt?.trim()) return res.status(400).json({ error: "Prompt required" });
+
+  const groqKey = process.env.GROQ_API_KEY || "";
+  if (!groqKey) {
+    return res.status(500).json({
+      error: "GROQ_API_KEY not set in .env. Get a free key at https://console.groq.com",
+    });
+  }
+
+  // Model options (all free on Groq):
+  //   llama-3.1-8b-instant  — fastest, great quality  ← default
+  //   llama3-70b-8192       — slower but highest quality
+  //   gemma2-9b-it          — good alternative
+  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${groqKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert Odia cinema journalist. Write detailed, accurate, SEO-friendly blog articles about Odia (Ollywood) movies. Always write in flowing paragraphs. Never use bullet points or section headers. Never include fake facts.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens:  1200,
+        temperature: 0.75,
+        top_p:       0.9,
+      }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      const errMsg  = errData?.error?.message || `Groq API error (${response.status})`;
+
+      // Friendly messages for common Groq errors
+      if (response.status === 401) {
+        return res.status(500).json({ error: "Invalid GROQ_API_KEY. Check your key at console.groq.com" });
+      }
+      if (response.status === 429) {
+        return res.status(500).json({ error: "Groq rate limit hit. Wait a few seconds and try again." });
+      }
+      return res.status(500).json({ error: errMsg });
+    }
+
+    const data = await response.json();
+    const text  = (data.choices?.[0]?.message?.content || "").trim();
+    if (!text) return res.status(500).json({ error: "Groq returned an empty response. Try again." });
+
+    res.json({ text });
+
+  } catch (err) {
+    res.status(500).json({ error: "Generation failed: " + err.message });
+  }
 });
 
 // ── Serve Vite frontend build (Render.com deployment) ──────────────

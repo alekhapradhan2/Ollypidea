@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { Routes, Route, useLocation, useNavigationType } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { setToken, setCastToken, setAdminToken } from "./api/api";
 
 import Navbar from "./components/Navbar";
@@ -18,6 +19,8 @@ import ProductionProfile from "./pages/ProductionProfile";
 import SongDetail from "./pages/SongDetail";
 import AllSongs from "./pages/AllSongs";
 import AboutUs from "./pages/AboutUs";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/Blogpost";
 import ContactUs from "./pages/ContactUs";
 import Footer from "./components/Footer";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
@@ -190,6 +193,9 @@ function AppInner({
           }
         />
         <Route path="/about" element={<AboutUs />} />
+        {/* ✅ NEW: Blog routes */}
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/contact" element={<ContactUs />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -313,13 +319,15 @@ export default function App() {
   }, []);
 
   return (
-    <AppInner
-      production={production}
-      setProduction={setProduction}
-      castMember={castMember}
-      setCastMember={setCastMember}
-      admin={admin}
-      setAdmin={setAdmin}
-    />
+    <HelmetProvider>
+      <AppInner
+        production={production}
+        setProduction={setProduction}
+        castMember={castMember}
+        setCastMember={setCastMember}
+        admin={admin}
+        setAdmin={setAdmin}
+      />
+    </HelmetProvider>
   );
 }

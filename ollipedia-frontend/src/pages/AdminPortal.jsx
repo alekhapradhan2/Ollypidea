@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import BlogGenerator from "./BlogGenerator";
 import { API, getAdminToken } from "../api/api";
 
 // ════════════════════════════════════════════════════════════════
@@ -2304,6 +2305,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["cast","🎭","Cast & Crew"],
             ["productions","🎥","Productions"],
             ["news","📰","News"],
+            ["blog","✍️","Blog"],
             ["enquiries","✉️","Enquiries"],
             ["settings","⚙️","Settings"],
           ].map(([key,icon,label]) => {
@@ -2871,6 +2873,11 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   </div>
                 );
               })()}
+
+              {/* ── BLOG ── */}
+              {tab==="blog" && (
+                <BlogGenerator movies={movies} onToast={onToast} />
+              )}
 
               {/* ── ENQUIRIES ── */}
               {tab==="enquiries" && (

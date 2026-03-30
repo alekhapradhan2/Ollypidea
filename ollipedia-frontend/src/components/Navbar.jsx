@@ -326,6 +326,7 @@ const LINKS = [
   { to:"/cast",   label:"Cast",   icon:"👥" },
   { to:"/news",   label:"News",   icon:"📰" },
   { to:"/songs",  label:"Songs",  icon:"🎵" },
+  { to:"/blog",   label:"Blog",   icon:"✍️" },
 ];
 
 export default function Navbar({ admin, onAdminLogout }) {

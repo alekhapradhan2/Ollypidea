@@ -604,6 +604,7 @@ function HeroSkeleton() {
 const _cache = {
   movies: null,   // null = not fetched yet, [] = fetched but empty
   news:   null,
+  blog:   null,
   ts:     0,      // timestamp of last fetch (for optional TTL)
 };
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — re-fetch if stale
@@ -627,6 +628,7 @@ export default function Home({ production }) {
   const [moviesReady, setMoviesReady] = useState(() => _cache.movies !== null);
   const [recentPlayed, setRecentPlayed] = useState(() => readRecentPlayed());
   const [news,        setNews]        = useState(() => _cache.news   || []);
+  const [blogPosts,   setBlogPosts]   = useState(() => _cache.blog   || []);
   const [heroIdx,     setHeroIdx]     = useState(0);
   const timerRef = useRef(null);
 
@@ -666,6 +668,29 @@ export default function Home({ production }) {
     const id = typeof requestIdleCallback !== "undefined"
       ? requestIdleCallback(load, { timeout: 2000 })
       : setTimeout(load, 200);
+    return () => (typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id) : clearTimeout(id));
+  }, [moviesReady]);
+
+  // ── Phase 2b: blog posts (deferred, after news) ────────────────
+  useEffect(() => {
+    if (!moviesReady) return;
+    if (_cache.blog !== null) { setBlogPosts(_cache.blog); return; }
+
+    const load = () => {
+      const apiBase = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+      fetch(`${apiBase}/api/blog?limit=4`)
+        .then(r => r.json())
+        .then(data => {
+          const posts = data.posts || data || [];
+          _cache.blog = posts;
+          setBlogPosts(posts);
+        })
+        .catch(() => {});
+    };
+
+    const id = typeof requestIdleCallback !== "undefined"
+      ? requestIdleCallback(load, { timeout: 3000 })
+      : setTimeout(load, 400);
     return () => (typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id) : clearTimeout(id));
   }, [moviesReady]);
 
@@ -900,6 +925,50 @@ export default function Home({ production }) {
         {news.length > 0 && (
           <Row title="📰 Latest News" viewAll="/news" gap={14} cardRatio="136/250" cardWidth={250}>
             {news.map(n => <NewsCard key={n._id} n={n} onClick={() => navigate(`/news/${n._id}`)} />)}
+          </Row>
+        )}
+
+        {/* ── Blog Posts ── */}
+        {blogPosts.length > 0 && (
+          <Row title="✍️ From the Blog" viewAll="/blog" gap={16} cardRatio="16/9" cardWidth={280}>
+            {blogPosts.map(post => (
+              <div
+                key={post._id}
+                onClick={() => navigate(`/blog/${post.slug}`)}
+                style={{
+                  flexShrink: 0, width: 280, borderRadius: 12, overflow: "hidden",
+                  background: "#1a1a1a", border: "1px solid rgba(255,255,255,.08)",
+                  cursor: "pointer", transition: "border-color .2s, transform .2s",
+                  display: "flex", flexDirection: "column",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(201,151,58,.4)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"; e.currentTarget.style.transform = "none"; }}
+              >
+                {post.coverImage
+                  ? <img src={post.coverImage} alt={post.title} loading="lazy"
+                      style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", background: "#252525", flexShrink: 0 }}
+                      onError={e => e.target.style.display = "none"} />
+                  : <div style={{ width: "100%", aspectRatio: "16/9", background: "linear-gradient(135deg,#1a1200,#0f0f0f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2rem", flexShrink: 0 }}>✍️</div>
+                }
+                <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                  <div style={{ fontSize: ".68rem", fontWeight: 700, color: "#c9973a", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                    {post.category || "Article"}
+                  </div>
+                  <div style={{ fontSize: ".9rem", fontWeight: 700, color: "#f1f1f1", lineHeight: 1.35 }}>
+                    {post.title}
+                  </div>
+                  {post.excerpt && (
+                    <div style={{ fontSize: ".76rem", color: "rgba(255,255,255,.45)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {post.excerpt}
+                    </div>
+                  )}
+                  <div style={{ fontSize: ".68rem", color: "rgba(255,255,255,.3)", marginTop: "auto", paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 8 }}>
+                    {post.readTime && <span>⏱ {post.readTime} min</span>}
+                    {post.views > 0 && <span>👁 {post.views.toLocaleString()}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
           </Row>
         )}
 

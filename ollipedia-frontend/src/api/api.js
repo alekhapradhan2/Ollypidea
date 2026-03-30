@@ -130,6 +130,16 @@ export const API = {
   // ── Admin stats
   adminStats: () => get("/admin/stats", _adminToken),
 
+  // ── Blog (public)
+  getBlogPosts:  (params = "") => get(`/blog${params ? `?${params}` : ""}`),
+  getBlogPost:   (slug)        => get(`/blog/${slug}`),
+
+  // ── Admin — blog
+  adminGetBlogPosts:  ()           => get("/admin/blog", _adminToken),
+  adminCreateBlog:    (body)       => post("/admin/blog", body, _adminToken),
+  adminUpdateBlog:    (id, body)   => patch(`/admin/blog/${id}`, body, _adminToken),
+  adminDeleteBlog:    (id)         => del(`/admin/blog/${id}`, _adminToken),
+
   // ── Contact / Enquiries
   submitContact:        (body) => post("/contact", body),
   adminGetEnquiries:    ()     => get("/admin/enquiries", _adminToken),

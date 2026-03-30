@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { renderToString } from "react-dom/server";
 import { StaticRouter } from "react-router-dom/server.mjs";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import { useLocation, useNavigate, Link, useParams, Routes, Route, useNavigationType } from "react-router-dom";
+import { useLocation, useNavigate, Link, useParams, useSearchParams, Routes, Route, useNavigationType } from "react-router-dom";
 const BASE = "http://localhost:4000/api";
 let _token = (() => {
   try {
@@ -136,6 +136,14 @@ const API = {
   deleteSong: (movieId, idx) => del(`/admin/movies/${movieId}/songs/${idx}`, _adminToken),
   // ── Admin stats
   adminStats: () => get("/admin/stats", _adminToken),
+  // ── Blog (public)
+  getBlogPosts: (params = "") => get(`/blog${params ? `?${params}` : ""}`),
+  getBlogPost: (slug) => get(`/blog/${slug}`),
+  // ── Admin — blog
+  adminGetBlogPosts: () => get("/admin/blog", _adminToken),
+  adminCreateBlog: (body) => post("/admin/blog", body, _adminToken),
+  adminUpdateBlog: (id, body) => patch(`/admin/blog/${id}`, body, _adminToken),
+  adminDeleteBlog: (id) => del(`/admin/blog/${id}`, _adminToken),
   // ── Contact / Enquiries
   submitContact: (body) => post("/contact", body),
   adminGetEnquiries: () => get("/admin/enquiries", _adminToken),
@@ -144,14 +152,14 @@ const API = {
   adminDeleteEnquiry: (id) => del(`/admin/enquiries/${id}`, _adminToken)
 };
 const isOid$2 = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
-function slugify(text = "") {
+function slugify$1(text = "") {
   return String(text).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
 }
 function moviePath(movie) {
   if (!movie) return "/movies";
   if (movie.slug) return `/movie/${movie.slug}`;
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  const base = slugify(movie.title || "movie");
+  const base = slugify$1(movie.title || "movie");
   const slug = year ? `${base}-${year}` : base;
   return `/movie/${slug}`;
 }
@@ -164,18 +172,18 @@ const extractId = extractMovieParam;
 function castPath(person) {
   if (!person) return "/cast";
   const id = person._id ? String(person._id) : "";
-  const name = slugify(person.name || "");
+  const name = slugify$1(person.name || "");
   if (name) return `/cast/${id}/${name}`;
   return `/cast/${id}`;
 }
 function songPath(movie, songIndex, song) {
   const movieSlug = (movie == null ? void 0 : movie.slug) || (() => {
     const year = (movie == null ? void 0 : movie.releaseDate) ? new Date(movie.releaseDate).getFullYear() : "";
-    const base = slugify((movie == null ? void 0 : movie.title) || "movie");
+    const base = slugify$1((movie == null ? void 0 : movie.title) || "movie");
     return year ? `${base}-${year}` : base;
   })();
   const idx = songIndex ?? 0;
-  const songSlug = (song == null ? void 0 : song.title) ? `-${slugify(song.title)}` : "";
+  const songSlug = (song == null ? void 0 : song.title) ? `-${slugify$1(song.title)}` : "";
   return `/song/${movieSlug}/${idx}${songSlug}`;
 }
 const _cache$1 = { movies: null, cast: null, songs: null };
@@ -346,7 +354,7 @@ function NavSearch({ onClose }) {
     ] })
   ] });
 }
-const CSS$8 = `
+const CSS$a = `
 /* ── Shell ── */
 .navbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
@@ -471,7 +479,8 @@ const LINKS = [
   { to: "/movies", label: "Movies", icon: "🎬" },
   { to: "/cast", label: "Cast", icon: "👥" },
   { to: "/news", label: "News", icon: "📰" },
-  { to: "/songs", label: "Songs", icon: "🎵" }
+  { to: "/songs", label: "Songs", icon: "🎵" },
+  { to: "/blog", label: "Blog", icon: "✍️" }
 ];
 function Navbar({ admin, onAdminLogout }) {
   const location = useLocation();
@@ -489,7 +498,7 @@ function Navbar({ admin, onAdminLogout }) {
   const lnk = (p) => location.pathname === p ? "nb-link active" : "nb-link";
   const dlnk = (p) => location.pathname === p ? "nb-dl active" : "nb-dl";
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$8 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$a }),
     /* @__PURE__ */ jsxs("nav", { className: "navbar", children: [
       /* @__PURE__ */ jsxs(Link, { to: "/", className: "nb-brand", children: [
         "OLLY",
@@ -1344,6 +1353,7 @@ const _cache = {
   movies: null,
   // null = not fetched yet, [] = fetched but empty
   news: null,
+  blog: null,
   ts: 0
   // timestamp of last fetch (for optional TTL)
 };
@@ -1361,6 +1371,7 @@ function Home$1({ production }) {
   const [moviesReady, setMoviesReady] = useState(() => _cache.movies !== null);
   const [recentPlayed, setRecentPlayed] = useState(() => readRecentPlayed());
   const [news, setNews] = useState(() => _cache.news || []);
+  const [blogPosts, setBlogPosts] = useState(() => _cache.blog || []);
   const [heroIdx, setHeroIdx] = useState(0);
   const timerRef = useRef(null);
   useEffect(() => {
@@ -1386,6 +1397,24 @@ function Home$1({ production }) {
     }).catch(() => {
     });
     const id = typeof requestIdleCallback !== "undefined" ? requestIdleCallback(load, { timeout: 2e3 }) : setTimeout(load, 200);
+    return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id) : clearTimeout(id);
+  }, [moviesReady]);
+  useEffect(() => {
+    if (!moviesReady) return;
+    if (_cache.blog !== null) {
+      setBlogPosts(_cache.blog);
+      return;
+    }
+    const load = () => {
+      const apiBase = "http://localhost:4000".replace(/\/$/, "");
+      fetch(`${apiBase}/api/blog?limit=4`).then((r) => r.json()).then((data) => {
+        const posts = data.posts || data || [];
+        _cache.blog = posts;
+        setBlogPosts(posts);
+      }).catch(() => {
+      });
+    };
+    const id = typeof requestIdleCallback !== "undefined" ? requestIdleCallback(load, { timeout: 3e3 }) : setTimeout(load, 400);
     return () => typeof requestIdleCallback !== "undefined" ? cancelIdleCallback(id) : clearTimeout(id);
   }, [moviesReady]);
   const srt = useCallback((arr) => [...arr].sort((a, b) => {
@@ -1546,6 +1575,61 @@ function Home$1({ production }) {
       (!moviesReady || thisMonth.length > 0) && /* @__PURE__ */ jsx(Row, { title: "🗓 This Month", badge: "New", loading: !moviesReady, children: thisMonth.map((m) => /* @__PURE__ */ jsx(MovieCard$2, { movie: m, onClick: () => navigate(moviePath(m)) }, m._id)) }),
       withTrailer.length > 0 && /* @__PURE__ */ jsx(Row, { title: "🎬 Latest Trailers", gap: 16, cardRatio: "16/9", cardWidth: 265, children: withTrailer.map((m) => /* @__PURE__ */ jsx(TrailerCard$1, { movie: m, onClick: () => navigate(`/movie/${m._id}`, { state: { scrollTo: "trailer" } }) }, m._id)) }),
       news.length > 0 && /* @__PURE__ */ jsx(Row, { title: "📰 Latest News", viewAll: "/news", gap: 14, cardRatio: "136/250", cardWidth: 250, children: news.map((n) => /* @__PURE__ */ jsx(NewsCard$2, { n, onClick: () => navigate(`/news/${n._id}`) }, n._id)) }),
+      blogPosts.length > 0 && /* @__PURE__ */ jsx(Row, { title: "✍️ From the Blog", viewAll: "/blog", gap: 16, cardRatio: "16/9", cardWidth: 280, children: blogPosts.map((post2) => /* @__PURE__ */ jsxs(
+        "div",
+        {
+          onClick: () => navigate(`/blog/${post2.slug}`),
+          style: {
+            flexShrink: 0,
+            width: 280,
+            borderRadius: 12,
+            overflow: "hidden",
+            background: "#1a1a1a",
+            border: "1px solid rgba(255,255,255,.08)",
+            cursor: "pointer",
+            transition: "border-color .2s, transform .2s",
+            display: "flex",
+            flexDirection: "column"
+          },
+          onMouseEnter: (e) => {
+            e.currentTarget.style.borderColor = "rgba(201,151,58,.4)";
+            e.currentTarget.style.transform = "translateY(-3px)";
+          },
+          onMouseLeave: (e) => {
+            e.currentTarget.style.borderColor = "rgba(255,255,255,.08)";
+            e.currentTarget.style.transform = "none";
+          },
+          children: [
+            post2.coverImage ? /* @__PURE__ */ jsx(
+              "img",
+              {
+                src: post2.coverImage,
+                alt: post2.title,
+                loading: "lazy",
+                style: { width: "100%", aspectRatio: "16/9", objectFit: "cover", background: "#252525", flexShrink: 0 },
+                onError: (e) => e.target.style.display = "none"
+              }
+            ) : /* @__PURE__ */ jsx("div", { style: { width: "100%", aspectRatio: "16/9", background: "linear-gradient(135deg,#1a1200,#0f0f0f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2rem", flexShrink: 0 }, children: "✍️" }),
+            /* @__PURE__ */ jsxs("div", { style: { padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }, children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: ".68rem", fontWeight: 700, color: "#c9973a", textTransform: "uppercase", letterSpacing: ".06em" }, children: post2.category || "Article" }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: ".9rem", fontWeight: 700, color: "#f1f1f1", lineHeight: 1.35 }, children: post2.title }),
+              post2.excerpt && /* @__PURE__ */ jsx("div", { style: { fontSize: ".76rem", color: "rgba(255,255,255,.45)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }, children: post2.excerpt }),
+              /* @__PURE__ */ jsxs("div", { style: { fontSize: ".68rem", color: "rgba(255,255,255,.3)", marginTop: "auto", paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 8 }, children: [
+                post2.readTime && /* @__PURE__ */ jsxs("span", { children: [
+                  "⏱ ",
+                  post2.readTime,
+                  " min"
+                ] }),
+                post2.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
+                  "👁 ",
+                  post2.views.toLocaleString()
+                ] })
+              ] })
+            ] })
+          ]
+        },
+        post2._id
+      )) }),
       recentPlayed.length > 0 && /* @__PURE__ */ jsx(Row, { title: "🕐 Recently Played", viewAll: "/songs", gap: 14, cardRatio: "1/1", cardWidth: 150, children: recentPlayed.slice(0, 12).map((s, i) => {
         const thumb = s.thumb || (s.ytId ? `https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg` : null);
         return /* @__PURE__ */ jsxs(
@@ -1668,7 +1752,7 @@ const obsImg$2 = (el, cb) => {
     _io$2._cbs.delete(el);
   };
 };
-const CSS$7 = `
+const CSS$9 = `
 @keyframes mv-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
 
 .mv-root { min-height:100vh; background:#0f0f0f; padding-top:58px; color:#f1f1f1; }
@@ -2008,7 +2092,7 @@ function Movies() {
   ];
   return /* @__PURE__ */ jsxs("div", { className: "mv-root", children: [
     /* @__PURE__ */ jsx(SEO, { ...staticSEO.movies }),
-    /* @__PURE__ */ jsx("style", { children: CSS$7 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$9 }),
     /* @__PURE__ */ jsxs("div", { className: "mv-hdr", children: [
       /* @__PURE__ */ jsxs("div", { className: "mv-srow", children: [
         /* @__PURE__ */ jsxs("div", { className: "mv-sbox", children: [
@@ -4112,7 +4196,7 @@ function MovieDetails({ production, onToast, portalMode }) {
     ] }) })
   ] });
 }
-const CSS$6 = `
+const CSS$8 = `
 @keyframes cpulse{0%,100%{opacity:1}50%{opacity:.35}}
 .cc{flex-shrink:0;width:140px;cursor:pointer;transition:transform .25s cubic-bezier(.34,1.56,.64,1);contain:layout style;}
 @media(min-width:480px){.cc{width:152px;}}
@@ -4295,7 +4379,7 @@ function Cast() {
   }), [cast]);
   return /* @__PURE__ */ jsxs("div", { className: "cast-root", children: [
     /* @__PURE__ */ jsx(SEO, { ...staticSEO.cast }),
-    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$8 }),
     /* @__PURE__ */ jsxs("div", { className: "cast-header", children: [
       /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }, children: [
         /* @__PURE__ */ jsx("h1", { className: "cast-title", children: "Cast & Crew" }),
@@ -4489,7 +4573,7 @@ function NewsCard$1({ news, onClick }) {
     ] })
   ] });
 }
-function Skeleton() {
+function Skeleton$1() {
   return /* @__PURE__ */ jsxs("div", { className: "home-root", style: { paddingTop: 60 }, children: [
     /* @__PURE__ */ jsx("div", { className: "skeleton", style: { width: "100%", height: 480 } }),
     /* @__PURE__ */ jsx("div", { style: { padding: "40px 0" }, children: [1, 2, 3].map((i) => /* @__PURE__ */ jsxs("div", { className: "home-section", children: [
@@ -4522,7 +4606,7 @@ function CastProfile({ portalMode }) {
       setLoading(false);
     });
   }, [id]);
-  if (loading) return /* @__PURE__ */ jsx(Skeleton, {});
+  if (loading) return /* @__PURE__ */ jsx(Skeleton$1, {});
   if (error || !person) return /* @__PURE__ */ jsxs("div", { className: "page empty-state", children: [
     /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 16 }, children: "🎭" }),
     /* @__PURE__ */ jsx("h3", { children: "Person not found" }),
@@ -4866,7 +4950,7 @@ const CAT_META$1 = {
 const cm = (c) => CAT_META$1[c] || CAT_META$1.Other;
 const fmtShort = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const fmtLong = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-const CSS$5 = `
+const CSS$7 = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
 .np { --gold:#c9973a; --border:rgba(255,255,255,.08); --muted:#888; font-family:'DM Sans',sans-serif; padding:0 0 80px; }
@@ -5159,7 +5243,7 @@ function News() {
   });
   const goTo = (id) => navigate(`/news/${id}`);
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$5 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$7 }),
     /* @__PURE__ */ jsxs("div", { className: "np", children: [
       /* @__PURE__ */ jsx(SEO, { ...staticSEO.news }),
       /* @__PURE__ */ jsx("div", { className: "np-mast", children: /* @__PURE__ */ jsx("div", { className: "np-mast-inner", children: /* @__PURE__ */ jsxs("div", { className: "np-mast-row", children: [
@@ -5278,7 +5362,7 @@ const verdictColor$1 = (v) => {
   if (["flop", "disaster"].includes(l)) return "var(--red)";
   return "var(--gold)";
 };
-const CSS$4 = `
+const CSS$6 = `
 /* ══════════════════════════════════════
    NEWS DETAIL PAGE
 ══════════════════════════════════════ */
@@ -5457,7 +5541,7 @@ function NewsDetail() {
     }
   };
   if (loading) return /* @__PURE__ */ jsxs("div", { className: "nd-root", children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$4 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
     /* @__PURE__ */ jsx("div", { className: "nd-back-bar", children: /* @__PURE__ */ jsx("button", { className: "nd-back", onClick: () => navigate("/news"), children: "← All News" }) }),
     /* @__PURE__ */ jsx("div", { className: "nd-hero-wrap", children: /* @__PURE__ */ jsx("div", { className: "skeleton nd-skeleton-hero" }) }),
     /* @__PURE__ */ jsxs("div", { className: "nd-article", children: [
@@ -5468,7 +5552,7 @@ function NewsDetail() {
     ] })
   ] });
   if (error || !data) return /* @__PURE__ */ jsxs("div", { className: "nd-root", children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$4 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
     /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "80px 24px" }, children: [
       /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 16 }, children: "📭" }),
       /* @__PURE__ */ jsx("h2", { style: { marginBottom: 8 }, children: "Article not found" }),
@@ -5483,7 +5567,7 @@ function NewsDetail() {
   const m = catMeta(data.category);
   const paragraphs = (data.content || "").split("\n").filter(Boolean);
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$4 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
     /* @__PURE__ */ jsxs("div", { className: "nd-root", children: [
       data && /* @__PURE__ */ jsx(SEO, { ...newsItemSEO(data) }),
       /* @__PURE__ */ jsx("div", { className: "nd-back-bar", children: /* @__PURE__ */ jsx("button", { className: "nd-back", onClick: () => navigate(-1), children: "← Back" }) }),
@@ -5774,7 +5858,7 @@ const extractYtId$4 = (input) => {
 const ytThumb$2 = (id) => id ? `https://img.youtube.com/vi/${extractYtId$4(id) || id}/mqdefault.jpg` : null;
 const fmtDate$2 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
 const firstToken = (str) => (str || "").split(/[,&\/]/)[0].trim().toLowerCase();
-const CSS$3 = `
+const CSS$5 = `
 /* ─ Song detail page ─ */
 .sd-root { min-height:100vh; background:var(--bg); padding-top:58px; }
 .sd-hero {
@@ -6475,7 +6559,7 @@ function SongDetail() {
   const byMusicDirector = activeSong.musicDirector ? allSongs.filter((s) => !s.isCurrent && s.ytId && s.musicDirector && firstToken(s.musicDirector) === firstToken(activeSong.musicDirector)) : [];
   const byLyricist = activeSong.lyricist ? allSongs.filter((s) => !s.isCurrent && s.ytId && s.lyricist && firstToken(s.lyricist) === firstToken(activeSong.lyricist)) : [];
   return /* @__PURE__ */ jsxs("div", { className: "sd-root", children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$3 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$5 }),
     /* @__PURE__ */ jsx(SEO, { ...songDetailSEO({ ...activeSong, songIndex: activeIdx }, movie) }),
     /* @__PURE__ */ jsxs("div", { className: "sd-hero", children: [
       bannerImg && /* @__PURE__ */ jsx("div", { className: "sd-hero-bg", style: { backgroundImage: `url(${bannerImg})` } }),
@@ -6936,7 +7020,7 @@ const obsImg = (el, cb) => {
     _io._cbs.delete(el);
   };
 };
-const CSS$2 = `
+const CSS$4 = `
 @keyframes yt-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
 
 /* ── Root
@@ -7561,7 +7645,7 @@ function AllSongs() {
   const handleClick = useCallback((s) => {
     const idx = typeof s.songIndex === "number" && !isNaN(s.songIndex) ? s.songIndex : 0;
     const movieSlug = s._slug ? s._slug.replace(/^\/movie\//, "") : s.movieId;
-    navigate(`/song/${movieSlug}/${idx}/${slugify(s.title || "")}-odia-song`);
+    navigate(`/song/${movieSlug}/${idx}/${slugify$1(s.title || "")}-odia-song`);
   }, [navigate]);
   const shownF = filtered.slice(0, page * PER_PAGE);
   const hasMore = shownF.length < filtered.length;
@@ -7577,7 +7661,7 @@ function AllSongs() {
   };
   return /* @__PURE__ */ jsxs("div", { className: "yt-root", children: [
     /* @__PURE__ */ jsx(SEO, { ...staticSEO.songs }),
-    /* @__PURE__ */ jsx("style", { children: CSS$2 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$4 }),
     /* @__PURE__ */ jsxs("div", { className: "yt-header", children: [
       /* @__PURE__ */ jsxs("div", { className: "yt-srow", children: [
         /* @__PURE__ */ jsxs("div", { className: "yt-sbox", children: [
@@ -7689,7 +7773,7 @@ function AllSongs() {
     ] })
   ] });
 }
-const CSS$1 = `
+const CSS$3 = `
 .about-root {
   max-width: 860px;
   margin: 0 auto;
@@ -7765,7 +7849,7 @@ function AboutUs() {
       /* @__PURE__ */ jsx("title", { children: "About Us — Ollypedia | Odia Cinema Encyclopedia" }),
       /* @__PURE__ */ jsx("meta", { name: "description", content: "Learn about Ollypedia — your complete encyclopedia of Odia cinema. Our mission, story and how to contribute." })
     ] }),
-    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$3 }),
     /* @__PURE__ */ jsxs("div", { className: "about-root", children: [
       /* @__PURE__ */ jsx("button", { className: "policy-back", onClick: () => navigate(-1), children: "← Back" }),
       /* @__PURE__ */ jsxs("div", { className: "about-hero-box", children: [
@@ -7840,6 +7924,993 @@ function AboutUs() {
             "Visit our ",
             /* @__PURE__ */ jsx("a", { href: "/contact", style: { color: "var(--gold)" }, children: "Contact page" }),
             " to send us a message directly."
+          ] })
+        ] })
+      ] })
+    ] })
+  ] });
+}
+const CSS$2 = `
+@keyframes bl-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
+
+.bl-root { min-height:100vh; background:#0f0f0f; padding-top:58px; color:#f1f1f1; }
+
+/* Hero */
+.bl-hero {
+  padding:52px 20px 36px;
+  text-align:center;
+  background:linear-gradient(180deg,rgba(201,151,58,.08) 0%,transparent 100%);
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.bl-hero-title {
+  font-family:'Cinzel',serif;
+  font-size:clamp(1.6rem,4vw,2.6rem);
+  font-weight:900;
+  color:#c9973a;
+  letter-spacing:.06em;
+  margin:0 0 10px;
+}
+.bl-hero-sub {
+  font-size:.92rem;
+  color:rgba(255,255,255,.45);
+  max-width:520px;
+  margin:0 auto 22px;
+  line-height:1.6;
+}
+
+/* Search */
+.bl-sbox {
+  display:flex; align-items:center; max-width:480px; margin:0 auto;
+  background:#1e1e1e; border:1.5px solid rgba(255,255,255,.1);
+  border-radius:24px; padding:0 16px; gap:8px; transition:border-color .18s;
+}
+.bl-sbox:focus-within { border-color:rgba(201,151,58,.6); }
+.bl-sbox input { flex:1; background:none; border:none; outline:none; color:#f1f1f1; font-size:.86rem; padding:10px 0; }
+.bl-sbox input::placeholder { color:rgba(255,255,255,.28); }
+
+/* Category chips */
+.bl-cats {
+  display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+  padding:18px 20px 0;
+}
+.bl-cat {
+  padding:5px 14px; border-radius:20px; border:1px solid rgba(255,255,255,.13);
+  background:#1e1e1e; color:rgba(255,255,255,.65); font-size:.75rem;
+  font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.bl-cat:hover { background:#2a2a2a; color:#fff; }
+.bl-cat.on { background:rgba(201,151,58,.15); color:#c9973a; border-color:rgba(201,151,58,.4); }
+
+/* Content area */
+.bl-content { max-width:1200px; margin:0 auto; padding:32px 16px 80px; }
+@media(min-width:600px){ .bl-content { padding:32px 24px 80px; } }
+@media(min-width:960px){ .bl-content { padding:36px 32px 80px; } }
+
+/* Featured card */
+.bl-featured {
+  display:grid; grid-template-columns:1fr;
+  background:#1a1a1a; border-radius:14px; overflow:hidden;
+  border:1px solid rgba(255,255,255,.09); margin-bottom:36px;
+  cursor:pointer; transition:border-color .2s, transform .2s;
+}
+@media(min-width:700px){
+  .bl-featured { grid-template-columns:1.4fr 1fr; }
+}
+.bl-featured:hover { border-color:rgba(201,151,58,.4); transform:translateY(-2px); }
+.bl-feat-img {
+  width:100%; aspect-ratio:16/9; object-fit:cover;
+  background:#252525;
+}
+@media(min-width:700px){ .bl-feat-img { aspect-ratio:auto; min-height:260px; } }
+.bl-feat-body { padding:24px 22px; display:flex; flex-direction:column; justify-content:center; gap:10px; }
+.bl-feat-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  background:rgba(201,151,58,.14); color:#c9973a;
+  border:1px solid rgba(201,151,58,.3); border-radius:20px;
+  padding:3px 10px; font-size:.7rem; font-weight:700;
+  width:fit-content;
+}
+.bl-feat-title { font-size:clamp(1rem,2.5vw,1.35rem); font-weight:800; color:#fff; line-height:1.4; margin:0; }
+.bl-feat-excerpt { font-size:.83rem; color:rgba(255,255,255,.55); line-height:1.65; margin:0; }
+.bl-feat-meta { font-size:.73rem; color:rgba(255,255,255,.35); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+/* Grid */
+.bl-grid {
+  display:grid; gap:20px;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+}
+
+/* Card */
+.bl-card {
+  background:#1a1a1a; border-radius:12px; overflow:hidden;
+  border:1px solid rgba(255,255,255,.08); cursor:pointer;
+  transition:border-color .2s, transform .2s; display:flex; flex-direction:column;
+}
+.bl-card:hover { border-color:rgba(201,151,58,.35); transform:translateY(-3px); }
+.bl-card-img { width:100%; aspect-ratio:16/9; object-fit:cover; background:#252525; flex-shrink:0; }
+.bl-card-body { padding:16px; display:flex; flex-direction:column; gap:8px; flex:1; }
+.bl-card-cat {
+  font-size:.68rem; font-weight:700; color:#c9973a;
+  text-transform:uppercase; letter-spacing:.06em;
+}
+.bl-card-title { font-size:.92rem; font-weight:700; color:#f1f1f1; line-height:1.4; margin:0; }
+.bl-card-excerpt { font-size:.78rem; color:rgba(255,255,255,.48); line-height:1.6; margin:0; flex:1; }
+.bl-card-meta { font-size:.7rem; color:rgba(255,255,255,.3); display:flex; gap:8px; align-items:center; margin-top:auto; padding-top:8px; border-top:1px solid rgba(255,255,255,.06); }
+
+/* Skeleton */
+.bl-skel { background:#1a1a1a; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,.07); }
+.bl-skel-img { width:100%; aspect-ratio:16/9; background:#252525; animation:bl-pulse 1.4s ease infinite; }
+.bl-skel-body { padding:16px; display:flex; flex-direction:column; gap:10px; }
+.bl-skel-line { height:12px; border-radius:6px; background:#252525; animation:bl-pulse 1.4s ease infinite; }
+
+/* Empty */
+.bl-empty { text-align:center; padding:80px 20px; color:rgba(255,255,255,.3); }
+.bl-empty-icon { font-size:2.8rem; margin-bottom:12px; }
+.bl-empty-text { font-size:.9rem; }
+
+/* Load more */
+.bl-more {
+  display:block; margin:36px auto 0; padding:11px 32px;
+  background:transparent; border:1.5px solid rgba(201,151,58,.4);
+  border-radius:24px; color:#c9973a; font-size:.85rem; font-weight:700;
+  cursor:pointer; transition:all .2s;
+}
+.bl-more:hover { background:rgba(201,151,58,.1); border-color:#c9973a; }
+`;
+const CATEGORIES$2 = ["All", "Movie Review", "Top 10", "Actor Spotlight", "News", "Upcoming", "General"];
+function Skeleton() {
+  return /* @__PURE__ */ jsxs("div", { className: "bl-skel", children: [
+    /* @__PURE__ */ jsx("div", { className: "bl-skel-img" }),
+    /* @__PURE__ */ jsxs("div", { className: "bl-skel-body", children: [
+      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "40%" } }),
+      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "90%" } }),
+      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "75%" } }),
+      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "30%", marginTop: 4 } })
+    ] })
+  ] });
+}
+function formatDate$1(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return "";
+  }
+}
+function Blog() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [posts, setPosts] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState(searchParams.get("q") || "");
+  const [cat, setCat] = useState(searchParams.get("cat") || "All");
+  const PER_PAGE2 = 12;
+  const fetchPosts = useCallback(async (pg = 1, reset = true) => {
+    if (reset) {
+      setLoading(true);
+      setPosts([]);
+    } else setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ page: pg, limit: PER_PAGE2 });
+      if (search.trim()) params.set("q", search.trim());
+      if (cat && cat !== "All") params.set("category", cat);
+      const apiBase = "http://localhost:4000".replace(/\/$/, "");
+      const res = await fetch(
+        `${apiBase}/api/blog?${params}`
+      );
+      const data = await res.json();
+      const list = data.posts || data || [];
+      setPosts((p) => reset ? list : [...p, ...list]);
+      setTotal(data.total || list.length);
+      setPage(pg);
+    } catch {
+      if (reset) setPosts([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [search, cat]);
+  useEffect(() => {
+    fetchPosts(1, true);
+  }, [fetchPosts]);
+  useEffect(() => {
+    const p = {};
+    if (search) p.q = search;
+    if (cat && cat !== "All") p.cat = cat;
+    setSearchParams(p, { replace: true });
+  }, [search, cat]);
+  const handleSearch = (e) => {
+    if (e.key === "Enter") fetchPosts(1, true);
+  };
+  const featured = posts[0];
+  const rest = posts.slice(1);
+  const hasMore = posts.length < total;
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("style", { children: CSS$2 }),
+    /* @__PURE__ */ jsxs(Helmet, { children: [
+      /* @__PURE__ */ jsx("title", { children: "Ollywood Blog – Odia Movie Articles, Reviews & News | OllyPedia" }),
+      /* @__PURE__ */ jsx("meta", { name: "description", content: "Explore Odia movie reviews, top 10 lists, actor spotlights, and the latest Ollywood news on OllyPedia's blog." })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "bl-root", children: [
+      /* @__PURE__ */ jsxs("div", { className: "bl-hero", children: [
+        /* @__PURE__ */ jsx("h1", { className: "bl-hero-title", children: "✍️ Ollywood Blog" }),
+        /* @__PURE__ */ jsx("p", { className: "bl-hero-sub", children: "Movie reviews, top lists, actor spotlights, and the latest from Odia cinema." }),
+        /* @__PURE__ */ jsxs("div", { className: "bl-sbox", children: [
+          /* @__PURE__ */ jsx("span", { style: { color: "rgba(255,255,255,.35)", fontSize: ".9rem" }, children: "🔍" }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              placeholder: "Search articles…",
+              value: search,
+              onChange: (e) => setSearch(e.target.value),
+              onKeyDown: handleSearch
+            }
+          ),
+          search && /* @__PURE__ */ jsx(
+            "button",
+            {
+              onClick: () => {
+                setSearch("");
+              },
+              style: { background: "none", border: "none", color: "rgba(255,255,255,.4)", cursor: "pointer", fontSize: ".85rem" },
+              children: "✕"
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "bl-cats", children: CATEGORIES$2.map((c) => /* @__PURE__ */ jsx(
+        "button",
+        {
+          className: `bl-cat${cat === c ? " on" : ""}`,
+          onClick: () => setCat(c),
+          children: c
+        },
+        c
+      )) }),
+      /* @__PURE__ */ jsx("div", { className: "bl-content", children: loading ? /* @__PURE__ */ jsx("div", { className: "bl-grid", children: Array.from({ length: 8 }).map((_, i) => /* @__PURE__ */ jsx(Skeleton, {}, i)) }) : posts.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "bl-empty", children: [
+        /* @__PURE__ */ jsx("div", { className: "bl-empty-icon", children: "📭" }),
+        /* @__PURE__ */ jsx("div", { className: "bl-empty-text", children: "No articles found. Check back soon!" })
+      ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+        featured && page === 1 && !search && cat === "All" && /* @__PURE__ */ jsxs(
+          "div",
+          {
+            className: "bl-featured",
+            onClick: () => navigate(`/blog/${featured.slug}`),
+            children: [
+              featured.coverImage ? /* @__PURE__ */ jsx(
+                "img",
+                {
+                  src: featured.coverImage,
+                  alt: featured.title,
+                  className: "bl-feat-img",
+                  onError: (e) => e.target.style.display = "none"
+                }
+              ) : /* @__PURE__ */ jsx("div", { className: "bl-feat-img", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }, children: "🎬" }),
+              /* @__PURE__ */ jsxs("div", { className: "bl-feat-body", children: [
+                /* @__PURE__ */ jsx("span", { className: "bl-feat-badge", children: "⭐ Featured" }),
+                /* @__PURE__ */ jsx("h2", { className: "bl-feat-title", children: featured.title }),
+                /* @__PURE__ */ jsx("p", { className: "bl-feat-excerpt", children: featured.excerpt }),
+                /* @__PURE__ */ jsxs("div", { className: "bl-feat-meta", children: [
+                  /* @__PURE__ */ jsxs("span", { children: [
+                    "📅 ",
+                    formatDate$1(featured.createdAt)
+                  ] }),
+                  featured.readTime && /* @__PURE__ */ jsxs("span", { children: [
+                    "⏱ ",
+                    featured.readTime,
+                    " min read"
+                  ] }),
+                  featured.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
+                    "👁 ",
+                    featured.views.toLocaleString(),
+                    " views"
+                  ] })
+                ] })
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsx("div", { className: "bl-grid", children: (featured && page === 1 && !search && cat === "All" ? rest : posts).map((post2) => /* @__PURE__ */ jsxs(
+          "div",
+          {
+            className: "bl-card",
+            onClick: () => navigate(`/blog/${post2.slug}`),
+            children: [
+              post2.coverImage ? /* @__PURE__ */ jsx(
+                "img",
+                {
+                  src: post2.coverImage,
+                  alt: post2.title,
+                  className: "bl-card-img",
+                  loading: "lazy",
+                  onError: (e) => e.target.style.display = "none"
+                }
+              ) : /* @__PURE__ */ jsx("div", { className: "bl-card-img", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2rem" }, children: "🎬" }),
+              /* @__PURE__ */ jsxs("div", { className: "bl-card-body", children: [
+                /* @__PURE__ */ jsx("div", { className: "bl-card-cat", children: post2.category || "Article" }),
+                /* @__PURE__ */ jsx("h3", { className: "bl-card-title", children: post2.title }),
+                /* @__PURE__ */ jsx("p", { className: "bl-card-excerpt", children: post2.excerpt }),
+                /* @__PURE__ */ jsxs("div", { className: "bl-card-meta", children: [
+                  /* @__PURE__ */ jsxs("span", { children: [
+                    "📅 ",
+                    formatDate$1(post2.createdAt)
+                  ] }),
+                  post2.readTime && /* @__PURE__ */ jsxs("span", { children: [
+                    "⏱ ",
+                    post2.readTime,
+                    " min"
+                  ] }),
+                  post2.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
+                    "👁 ",
+                    post2.views.toLocaleString()
+                  ] })
+                ] })
+              ] })
+            ]
+          },
+          post2._id
+        )) }),
+        hasMore && /* @__PURE__ */ jsx(
+          "button",
+          {
+            className: "bl-more",
+            onClick: () => fetchPosts(page + 1, false),
+            disabled: loadingMore,
+            children: loadingMore ? "Loading…" : `Load More Articles (${total - posts.length} remaining)`
+          }
+        )
+      ] }) })
+    ] })
+  ] });
+}
+const CSS$1 = `
+@keyframes bp-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
+
+.bp-root { min-height:100vh; background:#0f0f0f; padding-top:58px; color:#f1f1f1; }
+
+/* Hero banner */
+.bp-banner {
+  position:relative; width:100%; max-height:420px; overflow:hidden;
+  display:flex; align-items:flex-end;
+}
+.bp-banner-img { width:100%; height:420px; object-fit:cover; filter:brightness(.45); }
+.bp-banner-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(0deg,rgba(15,15,15,1) 0%,rgba(15,15,15,.5) 50%,rgba(15,15,15,.1) 100%);
+}
+.bp-banner-content {
+  position:absolute; bottom:0; left:0; right:0;
+  padding:24px clamp(16px,4vw,56px) 32px;
+  max-width:860px;
+}
+
+/* No banner fallback */
+.bp-nobanner {
+  background:linear-gradient(180deg,rgba(201,151,58,.07) 0%,transparent 100%);
+  border-bottom:1px solid rgba(255,255,255,.07);
+  padding:40px clamp(16px,4vw,56px) 32px;
+  max-width:860px; margin:0 auto;
+}
+
+.bp-cat {
+  display:inline-flex; align-items:center; gap:5px;
+  background:rgba(201,151,58,.15); color:#c9973a;
+  border:1px solid rgba(201,151,58,.3); border-radius:20px;
+  padding:3px 11px; font-size:.7rem; font-weight:700;
+  margin-bottom:12px; cursor:pointer; transition:background .15s;
+}
+.bp-cat:hover { background:rgba(201,151,58,.25); }
+
+.bp-title {
+  font-size:clamp(1.3rem,3.5vw,2rem); font-weight:900;
+  color:#fff; line-height:1.3; margin:0 0 12px;
+}
+
+.bp-meta {
+  display:flex; flex-wrap:wrap; gap:12px; align-items:center;
+  font-size:.75rem; color:rgba(255,255,255,.45);
+}
+.bp-meta-dot { opacity:.35; }
+
+/* Layout */
+.bp-layout {
+  max-width:1100px; margin:0 auto;
+  display:grid; grid-template-columns:1fr;
+  gap:32px; padding:32px 16px 80px;
+}
+@media(min-width:600px){ .bp-layout { padding:36px 24px 80px; } }
+@media(min-width:960px){
+  .bp-layout { grid-template-columns:1fr 320px; padding:40px 32px 80px; }
+}
+
+/* Article body */
+.bp-article {
+  font-size:.95rem; color:rgba(255,255,255,.82);
+  line-height:1.85; white-space:pre-wrap;
+  word-break:break-word;
+}
+.bp-article p { margin:0 0 1.2em; }
+
+/* Tags */
+.bp-tags { display:flex; flex-wrap:wrap; gap:8px; margin-top:28px; }
+.bp-tag {
+  padding:4px 12px; border-radius:16px; font-size:.72rem; font-weight:600;
+  background:#1e1e1e; border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.55); cursor:pointer; transition:all .15s;
+}
+.bp-tag:hover { border-color:rgba(201,151,58,.4); color:#c9973a; }
+
+/* Divider */
+.bp-divider { border:none; border-top:1px solid rgba(255,255,255,.08); margin:32px 0; }
+
+/* Rating & Review section */
+.bp-reviews-head {
+  font-size:1rem; font-weight:800; color:#f1f1f1; margin:0 0 18px;
+  display:flex; align-items:center; gap:8px;
+}
+.bp-rating-row {
+  display:flex; align-items:center; gap:10px; margin-bottom:24px;
+  flex-wrap:wrap;
+}
+.bp-stars { display:flex; gap:4px; }
+.bp-star {
+  font-size:1.6rem; cursor:pointer; transition:transform .12s;
+  line-height:1; user-select:none;
+}
+.bp-star:hover { transform:scale(1.18); }
+.bp-rating-label { font-size:.82rem; color:rgba(255,255,255,.45); }
+
+/* Review form */
+.bp-form { display:flex; flex-direction:column; gap:12px; }
+.bp-input {
+  padding:10px 14px; background:#1e1e1e; border:1.5px solid rgba(255,255,255,.1);
+  border-radius:8px; color:#f1f1f1; font-size:.85rem; outline:none;
+  transition:border-color .18s; font-family:inherit;
+}
+.bp-input:focus { border-color:rgba(201,151,58,.5); }
+.bp-input::placeholder { color:rgba(255,255,255,.28); }
+.bp-textarea { resize:vertical; min-height:90px; }
+.bp-submit {
+  padding:10px 22px; background:#c9973a; border:none; border-radius:8px;
+  color:#000; font-weight:700; font-size:.85rem; cursor:pointer;
+  transition:background .15s; align-self:flex-start;
+}
+.bp-submit:hover { background:#e0aa44; }
+.bp-submit:disabled { background:#555; color:#888; cursor:not-allowed; }
+
+/* Review cards */
+.bp-review-card {
+  background:#1a1a1a; border:1px solid rgba(255,255,255,.07);
+  border-radius:10px; padding:16px; margin-bottom:14px;
+}
+.bp-rv-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; flex-wrap:wrap; gap:6px; }
+.bp-rv-name { font-weight:700; font-size:.88rem; color:#f1f1f1; }
+.bp-rv-stars { color:#c9973a; font-size:.85rem; }
+.bp-rv-date { font-size:.7rem; color:rgba(255,255,255,.3); }
+.bp-rv-text { font-size:.83rem; color:rgba(255,255,255,.65); line-height:1.65; }
+.bp-rv-actions { display:flex; gap:14px; margin-top:10px; align-items:center; }
+.bp-rv-like {
+  background:none; border:none; color:rgba(255,255,255,.4);
+  font-size:.75rem; cursor:pointer; padding:0; transition:color .15s;
+  display:flex; align-items:center; gap:4px;
+}
+.bp-rv-like:hover { color:#c9973a; }
+.bp-rv-reply-btn {
+  background:none; border:none; color:rgba(255,255,255,.4);
+  font-size:.75rem; cursor:pointer; padding:0; transition:color .15s;
+}
+.bp-rv-reply-btn:hover { color:#f1f1f1; }
+
+/* Replies */
+.bp-replies { margin-top:12px; padding-left:16px; border-left:2px solid rgba(255,255,255,.07); }
+.bp-reply { padding:8px 0; font-size:.78rem; color:rgba(255,255,255,.55); line-height:1.55; }
+.bp-reply-name { font-weight:700; color:rgba(255,255,255,.75); margin-right:6px; }
+.bp-reply-form { display:flex; gap:8px; margin-top:8px; }
+.bp-reply-input {
+  flex:1; padding:7px 12px; background:#252525;
+  border:1px solid rgba(255,255,255,.1); border-radius:6px;
+  color:#f1f1f1; font-size:.78rem; outline:none; font-family:inherit;
+}
+.bp-reply-input:focus { border-color:rgba(201,151,58,.4); }
+.bp-reply-submit {
+  padding:7px 14px; background:rgba(201,151,58,.2); border:1px solid rgba(201,151,58,.3);
+  border-radius:6px; color:#c9973a; font-size:.75rem; font-weight:700; cursor:pointer;
+  transition:background .15s;
+}
+.bp-reply-submit:hover { background:rgba(201,151,58,.35); }
+
+/* Sidebar */
+.bp-sidebar { display:flex; flex-direction:column; gap:20px; }
+.bp-sidebar-box {
+  background:#1a1a1a; border:1px solid rgba(255,255,255,.08);
+  border-radius:12px; padding:18px; overflow:hidden;
+}
+.bp-sidebar-title { font-size:.82rem; font-weight:800; color:#c9973a; text-transform:uppercase; letter-spacing:.07em; margin:0 0 14px; }
+.bp-rel-item {
+  display:flex; gap:10px; align-items:flex-start; padding:9px 0;
+  border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer;
+  transition:opacity .15s;
+}
+.bp-rel-item:last-child { border-bottom:none; padding-bottom:0; }
+.bp-rel-item:hover { opacity:.75; }
+.bp-rel-thumb { width:52px; height:34px; object-fit:cover; border-radius:5px; background:#252525; flex-shrink:0; }
+.bp-rel-title { font-size:.78rem; font-weight:600; color:#f1f1f1; line-height:1.4; }
+.bp-rel-meta { font-size:.68rem; color:rgba(255,255,255,.3); margin-top:3px; }
+
+/* Skeleton */
+.bp-skel-banner { width:100%; height:320px; background:#1a1a1a; animation:bp-pulse 1.4s ease infinite; }
+.bp-skel-line { height:14px; border-radius:7px; background:#1e1e1e; animation:bp-pulse 1.4s ease infinite; margin-bottom:12px; }
+
+/* Back btn */
+.bp-back {
+  display:inline-flex; align-items:center; gap:6px;
+  background:none; border:none; color:rgba(255,255,255,.5);
+  font-size:.8rem; cursor:pointer; padding:0;
+  transition:color .15s; margin-bottom:16px;
+}
+.bp-back:hover { color:#f1f1f1; }
+
+/* Overall rating badge */
+.bp-overall {
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(201,151,58,.12); border:1px solid rgba(201,151,58,.3);
+  border-radius:10px; padding:8px 16px; margin-bottom:20px;
+}
+.bp-overall-num { font-size:1.5rem; font-weight:900; color:#c9973a; }
+.bp-overall-label { font-size:.75rem; color:rgba(255,255,255,.45); line-height:1.4; }
+`;
+function StarRating({ value, onChange }) {
+  const [hover, setHover] = useState(0);
+  return /* @__PURE__ */ jsx("div", { className: "bp-stars", children: [1, 2, 3, 4, 5].map((s) => /* @__PURE__ */ jsx(
+    "span",
+    {
+      className: "bp-star",
+      style: { color: s <= (hover || value) ? "#c9973a" : "rgba(255,255,255,.2)" },
+      onMouseEnter: () => setHover(s),
+      onMouseLeave: () => setHover(0),
+      onClick: () => onChange(s),
+      children: "★"
+    },
+    s
+  )) });
+}
+function formatDate(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  } catch {
+    return "";
+  }
+}
+function averageRating(reviews) {
+  if (!(reviews == null ? void 0 : reviews.length)) return 0;
+  const valid = reviews.filter((r) => r.rating > 0);
+  if (!valid.length) return 0;
+  return (valid.reduce((s, r) => s + r.rating, 0) / valid.length).toFixed(1);
+}
+function BlogPost() {
+  var _a;
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  const [post2, setPost] = useState(null);
+  const [related, setRelated] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [reviewName, setReviewName] = useState("");
+  const [reviewText, setReviewText] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [replies, setReplies] = useState({});
+  const API_BASE2 = "http://localhost:4000".replace(/\/$/, "");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setPost(null);
+      setNotFound(false);
+      try {
+        const res = await fetch(`${API_BASE2}/api/blog/${slug}`);
+        if (!res.ok) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) setPost(data);
+      } catch {
+        if (!cancelled) setNotFound(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+  useEffect(() => {
+    if (!post2) return;
+    (async () => {
+      try {
+        const cat = post2.category || "";
+        const res = await fetch(`${API_BASE2}/api/blog?limit=5${cat ? `&category=${encodeURIComponent(cat)}` : ""}`);
+        const data = await res.json();
+        const list = (data.posts || data || []).filter((p) => p.slug !== slug).slice(0, 4);
+        setRelated(list);
+      } catch {
+        setRelated([]);
+      }
+    })();
+  }, [post2]);
+  const submitReview = async () => {
+    if (!reviewName.trim() || !reviewText.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE2}/api/blog/${post2._id}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: reviewName.trim(), text: reviewText.trim(), rating: reviewRating })
+      });
+      if (res.ok) {
+        setSubmitted(true);
+        setReviewName("");
+        setReviewText("");
+        setReviewRating(5);
+        const updated = await fetch(`${API_BASE2}/api/blog/${slug}`);
+        if (updated.ok) setPost(await updated.json());
+      }
+    } catch {
+    }
+    setSubmitting(false);
+  };
+  const likeReview = async (idx) => {
+    try {
+      const res = await fetch(`${API_BASE2}/api/blog/${post2._id}/reviews/${idx}/like`, { method: "POST" });
+      if (res.ok) {
+        const { likes } = await res.json();
+        setPost((p) => {
+          const reviews = [...p.reviews || []];
+          reviews[idx] = { ...reviews[idx], likes };
+          return { ...p, reviews };
+        });
+      }
+    } catch {
+    }
+  };
+  const submitReply = async (idx) => {
+    var _a2, _b;
+    const r = replies[idx] || {};
+    if (!((_a2 = r.text) == null ? void 0 : _a2.trim()) || !((_b = r.name) == null ? void 0 : _b.trim())) return;
+    try {
+      const res = await fetch(`${API_BASE2}/api/blog/${post2._id}/reviews/${idx}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: r.name.trim(), text: r.text.trim(), date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] })
+      });
+      if (res.ok) {
+        const replyList = await res.json();
+        setPost((p) => {
+          const reviews = [...p.reviews || []];
+          reviews[idx] = { ...reviews[idx], replies: replyList };
+          return { ...p, reviews };
+        });
+        setReplies((prev) => ({ ...prev, [idx]: { ...prev[idx], text: "", open: false } }));
+      }
+    } catch {
+    }
+  };
+  const toggleReply = (idx) => setReplies((prev) => {
+    var _a2;
+    return { ...prev, [idx]: { ...prev[idx] || {}, open: !((_a2 = prev[idx]) == null ? void 0 : _a2.open) } };
+  });
+  const avg = averageRating(post2 == null ? void 0 : post2.reviews);
+  const reviewCount = ((post2 == null ? void 0 : post2.reviews) || []).length;
+  if (loading) return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
+    /* @__PURE__ */ jsxs("div", { className: "bp-root", children: [
+      /* @__PURE__ */ jsx("div", { className: "bp-skel-banner" }),
+      /* @__PURE__ */ jsx("div", { style: { maxWidth: 860, margin: "32px auto", padding: "0 20px" }, children: [90, 70, 100, 60, 85, 50].map((w, i) => /* @__PURE__ */ jsx("div", { className: "bp-skel-line", style: { width: `${w}%` } }, i)) })
+    ] })
+  ] });
+  if (notFound) return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
+    /* @__PURE__ */ jsxs("div", { className: "bp-root", style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }, children: [
+      /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem" }, children: "📭" }),
+      /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", color: "rgba(255,255,255,.5)" }, children: "Article not found." }),
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          onClick: () => navigate("/blog"),
+          style: { padding: "9px 22px", background: "#c9973a", border: "none", borderRadius: 8, color: "#000", fontWeight: 700, cursor: "pointer" },
+          children: "← Back to Blog"
+        }
+      )
+    ] })
+  ] });
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
+    /* @__PURE__ */ jsxs(Helmet, { children: [
+      /* @__PURE__ */ jsxs("title", { children: [
+        post2.seoTitle || post2.title,
+        " | OllyPedia Blog"
+      ] }),
+      /* @__PURE__ */ jsx("meta", { name: "description", content: post2.seoDesc || post2.excerpt }),
+      /* @__PURE__ */ jsx("meta", { property: "og:title", content: post2.seoTitle || post2.title }),
+      /* @__PURE__ */ jsx("meta", { property: "og:description", content: post2.seoDesc || post2.excerpt }),
+      post2.coverImage && /* @__PURE__ */ jsx("meta", { property: "og:image", content: post2.coverImage })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "bp-root", children: [
+      post2.coverImage ? /* @__PURE__ */ jsxs("div", { className: "bp-banner", children: [
+        /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "bp-banner-img", onError: (e) => e.target.style.display = "none" }),
+        /* @__PURE__ */ jsx("div", { className: "bp-banner-overlay" }),
+        /* @__PURE__ */ jsxs("div", { className: "bp-banner-content", children: [
+          /* @__PURE__ */ jsx("button", { className: "bp-back", onClick: () => navigate("/blog"), children: "← Back to Blog" }),
+          /* @__PURE__ */ jsx("button", { className: "bp-cat", onClick: () => navigate(`/blog?cat=${encodeURIComponent(post2.category || "")}`), children: post2.category || "Article" }),
+          /* @__PURE__ */ jsx("h1", { className: "bp-title", children: post2.title }),
+          /* @__PURE__ */ jsxs("div", { className: "bp-meta", children: [
+            post2.author && /* @__PURE__ */ jsxs("span", { children: [
+              "✍️ ",
+              post2.author
+            ] }),
+            /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+            /* @__PURE__ */ jsxs("span", { children: [
+              "📅 ",
+              formatDate(post2.createdAt)
+            ] }),
+            post2.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
+              /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+              /* @__PURE__ */ jsxs("span", { children: [
+                "⏱ ",
+                post2.readTime,
+                " min read"
+              ] })
+            ] }),
+            post2.views > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+              /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+              /* @__PURE__ */ jsxs("span", { children: [
+                "👁 ",
+                post2.views.toLocaleString(),
+                " views"
+              ] })
+            ] }),
+            avg > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+              /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+              /* @__PURE__ */ jsxs("span", { children: [
+                "⭐ ",
+                avg,
+                " (",
+                reviewCount,
+                " reviews)"
+              ] })
+            ] })
+          ] })
+        ] })
+      ] }) : /* @__PURE__ */ jsxs("div", { className: "bp-nobanner", children: [
+        /* @__PURE__ */ jsx("button", { className: "bp-back", onClick: () => navigate("/blog"), children: "← Back to Blog" }),
+        /* @__PURE__ */ jsx("button", { className: "bp-cat", onClick: () => navigate(`/blog?cat=${encodeURIComponent(post2.category || "")}`), children: post2.category || "Article" }),
+        /* @__PURE__ */ jsx("h1", { className: "bp-title", children: post2.title }),
+        /* @__PURE__ */ jsxs("div", { className: "bp-meta", children: [
+          post2.author && /* @__PURE__ */ jsxs("span", { children: [
+            "✍️ ",
+            post2.author
+          ] }),
+          /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+          /* @__PURE__ */ jsxs("span", { children: [
+            "📅 ",
+            formatDate(post2.createdAt)
+          ] }),
+          post2.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+            /* @__PURE__ */ jsxs("span", { children: [
+              "⏱ ",
+              post2.readTime,
+              " min read"
+            ] })
+          ] }),
+          post2.views > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
+            /* @__PURE__ */ jsxs("span", { children: [
+              "👁 ",
+              post2.views.toLocaleString(),
+              " views"
+            ] })
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "bp-layout", children: [
+        /* @__PURE__ */ jsxs("div", { children: [
+          /* @__PURE__ */ jsx("div", { className: "bp-article", children: (post2.content || "").split(/\n\n+/).map((para, i) => /* @__PURE__ */ jsx("p", { children: para }, i)) }),
+          ((_a = post2.tags) == null ? void 0 : _a.length) > 0 && /* @__PURE__ */ jsx("div", { className: "bp-tags", children: post2.tags.map((tag) => /* @__PURE__ */ jsxs(
+            "span",
+            {
+              className: "bp-tag",
+              onClick: () => navigate(`/blog?q=${encodeURIComponent(tag)}`),
+              children: [
+                "#",
+                tag
+              ]
+            },
+            tag
+          )) }),
+          /* @__PURE__ */ jsx("hr", { className: "bp-divider" }),
+          /* @__PURE__ */ jsxs("div", { children: [
+            /* @__PURE__ */ jsxs("div", { className: "bp-reviews-head", children: [
+              "⭐ Reviews & Ratings",
+              reviewCount > 0 && /* @__PURE__ */ jsxs("span", { style: { fontSize: ".78rem", color: "rgba(255,255,255,.4)", fontWeight: 400 }, children: [
+                "(",
+                reviewCount,
+                ")"
+              ] })
+            ] }),
+            avg > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-overall", children: [
+              /* @__PURE__ */ jsx("div", { className: "bp-overall-num", children: avg }),
+              /* @__PURE__ */ jsxs("div", { children: [
+                /* @__PURE__ */ jsxs("div", { style: { color: "#c9973a", fontSize: ".9rem" }, children: [
+                  "★".repeat(Math.round(avg)),
+                  "☆".repeat(5 - Math.round(avg))
+                ] }),
+                /* @__PURE__ */ jsxs("div", { className: "bp-overall-label", children: [
+                  "avg from ",
+                  reviewCount,
+                  " review",
+                  reviewCount !== 1 ? "s" : ""
+                ] })
+              ] })
+            ] }),
+            (post2.reviews || []).map((rv, idx) => {
+              var _a2, _b, _c, _d;
+              return /* @__PURE__ */ jsxs("div", { className: "bp-review-card", children: [
+                /* @__PURE__ */ jsxs("div", { className: "bp-rv-header", children: [
+                  /* @__PURE__ */ jsxs("div", { children: [
+                    /* @__PURE__ */ jsxs("div", { className: "bp-rv-name", children: [
+                      "👤 ",
+                      rv.user || "Anonymous"
+                    ] }),
+                    rv.rating > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-rv-stars", children: [
+                      "★".repeat(rv.rating),
+                      "☆".repeat(5 - rv.rating),
+                      /* @__PURE__ */ jsxs("span", { style: { color: "rgba(255,255,255,.35)", fontSize: ".7rem", marginLeft: 5 }, children: [
+                        "(",
+                        rv.rating,
+                        "/5)"
+                      ] })
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ jsx("div", { className: "bp-rv-date", children: rv.date || "" })
+                ] }),
+                /* @__PURE__ */ jsx("div", { className: "bp-rv-text", children: rv.text }),
+                /* @__PURE__ */ jsxs("div", { className: "bp-rv-actions", children: [
+                  /* @__PURE__ */ jsxs("button", { className: "bp-rv-like", onClick: () => likeReview(idx), children: [
+                    "👍 ",
+                    rv.likes > 0 ? rv.likes : "Like"
+                  ] }),
+                  /* @__PURE__ */ jsx("button", { className: "bp-rv-reply-btn", onClick: () => toggleReply(idx), children: "💬 Reply" })
+                ] }),
+                ((_a2 = rv.replies) == null ? void 0 : _a2.length) > 0 && /* @__PURE__ */ jsx("div", { className: "bp-replies", children: rv.replies.map((rep, ri) => /* @__PURE__ */ jsxs("div", { className: "bp-reply", children: [
+                  /* @__PURE__ */ jsxs("span", { className: "bp-reply-name", children: [
+                    rep.user || "Anonymous",
+                    ":"
+                  ] }),
+                  rep.text
+                ] }, ri)) }),
+                ((_b = replies[idx]) == null ? void 0 : _b.open) && /* @__PURE__ */ jsxs("div", { className: "bp-reply-form", style: { marginTop: 10 }, children: [
+                  /* @__PURE__ */ jsx(
+                    "input",
+                    {
+                      className: "bp-reply-input",
+                      placeholder: "Your name",
+                      style: { maxWidth: 110 },
+                      value: ((_c = replies[idx]) == null ? void 0 : _c.name) || "",
+                      onChange: (e) => setReplies((p) => ({ ...p, [idx]: { ...p[idx], name: e.target.value } }))
+                    }
+                  ),
+                  /* @__PURE__ */ jsx(
+                    "input",
+                    {
+                      className: "bp-reply-input",
+                      placeholder: "Write a reply…",
+                      value: ((_d = replies[idx]) == null ? void 0 : _d.text) || "",
+                      onChange: (e) => setReplies((p) => ({ ...p, [idx]: { ...p[idx], text: e.target.value } })),
+                      onKeyDown: (e) => e.key === "Enter" && submitReply(idx)
+                    }
+                  ),
+                  /* @__PURE__ */ jsx("button", { className: "bp-reply-submit", onClick: () => submitReply(idx), children: "Send" })
+                ] })
+              ] }, idx);
+            }),
+            /* @__PURE__ */ jsx("hr", { className: "bp-divider" }),
+            /* @__PURE__ */ jsx("div", { style: { marginBottom: 12, fontWeight: 700, fontSize: ".88rem", color: "#f1f1f1" }, children: "✏️ Write a Review" }),
+            submitted ? /* @__PURE__ */ jsx("div", { style: { padding: "16px", background: "rgba(40,160,80,.1)", border: "1px solid rgba(40,160,80,.3)", borderRadius: 8, color: "#5de08a", fontSize: ".85rem" }, children: "✅ Thanks for your review! It's been submitted." }) : /* @__PURE__ */ jsxs("div", { className: "bp-form", children: [
+              /* @__PURE__ */ jsxs("div", { className: "bp-rating-row", children: [
+                /* @__PURE__ */ jsx(StarRating, { value: reviewRating, onChange: setReviewRating }),
+                /* @__PURE__ */ jsx("span", { className: "bp-rating-label", children: ["", "Poor", "Fair", "Good", "Great", "Excellent"][reviewRating] })
+              ] }),
+              /* @__PURE__ */ jsx(
+                "input",
+                {
+                  className: "bp-input",
+                  placeholder: "Your name",
+                  value: reviewName,
+                  onChange: (e) => setReviewName(e.target.value)
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                "textarea",
+                {
+                  className: "bp-input bp-textarea",
+                  placeholder: "Share your thoughts about this movie…",
+                  value: reviewText,
+                  onChange: (e) => setReviewText(e.target.value)
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  className: "bp-submit",
+                  onClick: submitReview,
+                  disabled: submitting || !reviewName.trim() || !reviewText.trim(),
+                  children: submitting ? "Submitting…" : "Submit Review"
+                }
+              )
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("aside", { className: "bp-sidebar", children: [
+          /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-title", children: "Share" }),
+            /* @__PURE__ */ jsx("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" }, children: [
+              ["🐦 Twitter", `https://twitter.com/intent/tweet?text=${encodeURIComponent(post2.title)}&url=${encodeURIComponent(window.location.href)}`],
+              ["📘 Facebook", `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`],
+              ["🔗 Copy Link", null]
+            ].map(([label, url]) => /* @__PURE__ */ jsx(
+              "button",
+              {
+                onClick: () => {
+                  if (url) window.open(url, "_blank");
+                  else navigator.clipboard.writeText(window.location.href);
+                },
+                style: {
+                  padding: "6px 13px",
+                  background: "#252525",
+                  border: "1px solid rgba(255,255,255,.1)",
+                  borderRadius: 7,
+                  color: "rgba(255,255,255,.7)",
+                  fontSize: ".74rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all .15s"
+                },
+                children: label
+              },
+              label
+            )) })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-title", children: "Article Info" }),
+            /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+              ["📅 Published", formatDate(post2.createdAt)],
+              ["✍️ Author", post2.author || "OllyPedia Editorial"],
+              ["🏷 Category", post2.category || "General"],
+              ["⏱ Read Time", `${post2.readTime || 3} min`],
+              ["👁 Views", (post2.views || 0).toLocaleString()],
+              avg > 0 ? ["⭐ Rating", `${avg}/5`] : null
+            ].filter(Boolean).map(([k, v]) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: ".78rem" }, children: [
+              /* @__PURE__ */ jsx("span", { style: { color: "rgba(255,255,255,.4)" }, children: k }),
+              /* @__PURE__ */ jsx("span", { style: { color: "#f1f1f1", fontWeight: 600 }, children: v })
+            ] }, k)) })
+          ] }),
+          related.length > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-title", children: "Related Articles" }),
+            related.map((rel) => /* @__PURE__ */ jsxs("div", { className: "bp-rel-item", onClick: () => navigate(`/blog/${rel.slug}`), children: [
+              rel.coverImage ? /* @__PURE__ */ jsx("img", { src: rel.coverImage, alt: rel.title, className: "bp-rel-thumb", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bp-rel-thumb", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }, children: "🎬" }),
+              /* @__PURE__ */ jsxs("div", { children: [
+                /* @__PURE__ */ jsx("div", { className: "bp-rel-title", children: rel.title }),
+                /* @__PURE__ */ jsx("div", { className: "bp-rel-meta", children: formatDate(rel.createdAt) })
+              ] })
+            ] }, rel._id))
           ] })
         ] })
       ] })
@@ -8539,7 +9610,7 @@ function MovieCard({ movie }) {
     ] })
   ] });
 }
-function MovieRow({ title, movies, viewAllPath }) {
+function MovieRow$1({ title, movies, viewAllPath }) {
   const navigate = useNavigate();
   const rowRef = useRef(null);
   const scroll = (d) => {
@@ -8775,17 +9846,17 @@ function Home({ production }) {
       /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => navigate("/dashboard/add-movie"), children: "+ Add Movie" })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "home-sections", children: [
-      thisWeek.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "🔥 Releasing This Week", movies: thisWeek }),
-      thisMonth.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "🗓 This Month", movies: thisMonth }),
-      lastWeek.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "📅 Last Week", movies: lastWeek }),
-      lastMonth.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "📆 Last Month", movies: lastMonth }),
-      inTheatres.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "🎭 Now in Theatres", movies: inTheatres }),
+      thisWeek.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "🔥 Releasing This Week", movies: thisWeek }),
+      thisMonth.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "🗓 This Month", movies: thisMonth }),
+      lastWeek.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "📅 Last Week", movies: lastWeek }),
+      lastMonth.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "📆 Last Month", movies: lastMonth }),
+      inTheatres.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "🎭 Now in Theatres", movies: inTheatres }),
       /* @__PURE__ */ jsx(TrailersRow, { movies: allMovies }),
       /* @__PURE__ */ jsx(NewsRow, { news }),
       /* @__PURE__ */ jsx(SongsRow, { movies: allMovies }),
-      highRated.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "⭐ Top Rated", movies: highRated }),
-      upcoming.length > 0 && /* @__PURE__ */ jsx(MovieRow, { title: "🚀 Upcoming Movies", movies: upcoming, viewAllPath: "/movies" }),
-      /* @__PURE__ */ jsx(MovieRow, { title: "🎬 All Movies", movies: allMovies, viewAllPath: "/movies" }),
+      highRated.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "⭐ Top Rated", movies: highRated }),
+      upcoming.length > 0 && /* @__PURE__ */ jsx(MovieRow$1, { title: "🚀 Upcoming Movies", movies: upcoming, viewAllPath: "/movies" }),
+      /* @__PURE__ */ jsx(MovieRow$1, { title: "🎬 All Movies", movies: allMovies, viewAllPath: "/movies" }),
       movies.length === 0 && /* @__PURE__ */ jsxs("div", { className: "home-empty", children: [
         /* @__PURE__ */ jsx("div", { style: { fontSize: "4rem", marginBottom: 16 }, children: "🎬" }),
         /* @__PURE__ */ jsx("h2", { children: "No movies yet" }),
@@ -10043,6 +11114,432 @@ function PortalCastProfile({ production }) {
       /* @__PURE__ */ jsx("span", {})
     ] }),
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
+  ] });
+}
+const API_BASE = "http://localhost:4000".replace(/\/$/, "") + "/api";
+function slugify(str) {
+  return String(str || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
+}
+function buildPrompt(movie) {
+  var _a;
+  const cast = (movie.cast || []).slice(0, 5).map((c) => `${c.name}${c.role ? ` as ${c.role}` : ""}`).join(", ");
+  const songs = (((_a = movie.media) == null ? void 0 : _a.songs) || []).slice(0, 3).map((s) => s.title).filter(Boolean).join(", ");
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
+  const genre = (movie.genre || []).join(", ") || "Odia";
+  return `Write a high-quality, unique, SEO-optimized article about the Odia movie "${movie.title}" (${year}).
+
+Requirements:
+- Minimum 1000 words
+- Use simple, engaging language
+- Do NOT copy from any source
+- Make it feel like an original blog-style article
+
+Structure your article around these 6 parts (write flowing paragraphs, NO section headers, NO bullet points):
+1. Introduction of the movie (release year: ${year}, genre: ${genre}, its importance in Ollywood)
+2. Story summary (short, no spoilers)
+3. Cast details: ${cast || "the lead cast"}
+4. Highlights: music${songs ? ` (songs: ${songs})` : ""}, direction${movie.director ? ` by ${movie.director}` : ""}, cinematography
+5. Why people should watch this movie
+6. One or two interesting facts about the movie
+
+Context:
+- Director: ${movie.director || "not specified"}
+- Producer: ${movie.producer || "not specified"}
+- Synopsis: ${movie.synopsis || "not available"}
+- Verdict: ${movie.verdict || "Upcoming"}
+- Language: ${movie.language || "Odia"}
+
+Tone: Informative, engaging, SEO-friendly, human-like. Not robotic.
+IMPORTANT: Return ONLY the article text. No headings. No markdown. No labels. No preamble. Just the article.`;
+}
+async function generateArticle(movie) {
+  const token = getAdminToken();
+  if (!token) throw new Error("Not logged in as admin. Please log in again.");
+  const response = await fetch(`${API_BASE}/admin/generate-article`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ prompt: buildPrompt(movie) })
+  });
+  if (!response.ok) {
+    let errorMessage = `Server error (${response.status})`;
+    try {
+      const errData = await response.json();
+      errorMessage = errData.error || errorMessage;
+    } catch {
+      errorMessage = await response.text() || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+  const data = await response.json();
+  const text = (data.text || "").trim();
+  if (!text) throw new Error("AI returned an empty response. Try again.");
+  return text;
+}
+async function publishArticle(movie, article) {
+  const token = getAdminToken();
+  if (!token) throw new Error("Not logged in as admin.");
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const genre = (movie.genre || []).join(", ") || "Odia Film";
+  const title = `${movie.title}${year ? ` (${year})` : ""} – ${genre} Odia Movie Review & Story`;
+  const slug = slugify(`${movie.title}${year ? `-${year}` : ""}-odia-movie`);
+  const excerpt = article.slice(0, 200).trim() + "…";
+  const readTime = Math.ceil(article.split(/\s+/).length / 200);
+  const res = await fetch(`${API_BASE}/admin/blog`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      title,
+      slug,
+      content: article,
+      excerpt,
+      category: "Movie Review",
+      tags: [movie.title, "Ollywood", "Odia Movie", ...movie.genre || []],
+      coverImage: movie.posterUrl || movie.thumbnailUrl || "",
+      movieTitle: movie.title,
+      author: "OllyPedia Editorial",
+      readTime,
+      seoTitle: title,
+      seoDesc: excerpt,
+      published: true
+    })
+  });
+  if (!res.ok) {
+    let errorMessage = `Publish failed (${res.status})`;
+    try {
+      const errData = await res.json();
+      errorMessage = errData.error || errorMessage;
+    } catch {
+    }
+    throw new Error(errorMessage);
+  }
+}
+function MovieRow({ movie, isPublished, onPublished, onToast }) {
+  const [status, setStatus] = useState(isPublished ? "done" : "idle");
+  const [article, setArticle] = useState("");
+  const [preview, setPreview] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
+  const busy = status === "generating" || status === "publishing";
+  const handleGenerate = async () => {
+    setStatus("generating");
+    setArticle("");
+    setErrMsg("");
+    setPreview(false);
+    try {
+      const text = await generateArticle(movie);
+      setArticle(text);
+      setStatus("idle");
+    } catch (err) {
+      setStatus("error");
+      setErrMsg(err.message);
+      onToast("❌ " + err.message, "error");
+    }
+  };
+  const handlePublish = async () => {
+    if (!article.trim()) return;
+    setStatus("publishing");
+    setErrMsg("");
+    try {
+      await publishArticle(movie, article);
+      setStatus("done");
+      onPublished(movie._id);
+      onToast(`✅ Published: "${movie.title}"`, "success");
+    } catch (err) {
+      setStatus("error");
+      setErrMsg(err.message);
+      onToast("❌ " + err.message, "error");
+    }
+  };
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "TBA";
+  const btn = (variant, disabled) => ({
+    padding: "5px 13px",
+    borderRadius: 6,
+    border: "none",
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    opacity: disabled ? 0.55 : 1,
+    background: variant === "gold" ? "var(--gold)" : variant === "green" ? "#28a050" : variant === "red" ? "#a02828" : "var(--bg3)",
+    color: variant === "gold" || variant === "green" || variant === "red" ? "#fff" : "var(--text)"
+  });
+  return /* @__PURE__ */ jsxs("div", { children: [
+    /* @__PURE__ */ jsxs("div", { style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 14,
+      padding: "14px 18px",
+      borderBottom: "1px solid var(--border)",
+      background: status === "done" ? "rgba(40,160,80,0.06)" : status === "error" ? "rgba(160,40,40,0.06)" : "transparent"
+    }, children: [
+      movie.posterUrl || movie.thumbnailUrl ? /* @__PURE__ */ jsx(
+        "img",
+        {
+          src: movie.posterUrl || movie.thumbnailUrl,
+          alt: movie.title,
+          style: {
+            width: 38,
+            height: 54,
+            objectFit: "cover",
+            borderRadius: 4,
+            flexShrink: 0,
+            border: "1px solid var(--border)",
+            background: "var(--bg3)"
+          },
+          onError: (e) => e.target.style.opacity = "0"
+        }
+      ) : /* @__PURE__ */ jsx("div", { style: {
+        width: 38,
+        height: 54,
+        borderRadius: 4,
+        flexShrink: 0,
+        border: "1px solid var(--border)",
+        background: "var(--bg3)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "1.2rem"
+      }, children: "🎬" }),
+      /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+        /* @__PURE__ */ jsx("div", { style: {
+          fontWeight: 700,
+          fontSize: "0.93rem",
+          color: "var(--text)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis"
+        }, children: movie.title }),
+        /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }, children: [
+          year,
+          " · ",
+          (movie.genre || []).join(", ") || "Odia",
+          " · ",
+          movie.verdict || "Upcoming"
+        ] }),
+        status === "error" && errMsg && /* @__PURE__ */ jsxs("div", { style: {
+          fontSize: "0.72rem",
+          color: "#f77",
+          marginTop: 4,
+          background: "rgba(220,50,50,0.12)",
+          padding: "3px 8px",
+          borderRadius: 4
+        }, children: [
+          "⚠️ ",
+          errMsg
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx("div", { style: { display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }, children: status === "done" ? /* @__PURE__ */ jsx("span", { style: { fontSize: "0.78rem", color: "#28a050", fontWeight: 700 }, children: "✅ Published" }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("button", { style: btn("gold", busy), onClick: handleGenerate, disabled: busy, children: status === "generating" ? "⏳ Generating…" : article ? "🔄 Regenerate" : "✨ Generate" }),
+        article && /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx("button", { style: btn("ghost", busy), onClick: () => setPreview((p) => !p), disabled: busy, children: preview ? "Hide" : "Preview" }),
+          /* @__PURE__ */ jsx("button", { style: btn("green", busy), onClick: handlePublish, disabled: busy, children: status === "publishing" ? "⏳ Publishing…" : "🚀 Publish" })
+        ] }),
+        status === "error" && /* @__PURE__ */ jsx("button", { style: btn("red", false), onClick: handleGenerate, children: "🔁 Retry" })
+      ] }) })
+    ] }),
+    article && preview && /* @__PURE__ */ jsx("div", { style: {
+      margin: "0 18px 12px 70px",
+      padding: 12,
+      background: "var(--bg3)",
+      borderRadius: 6,
+      fontSize: "0.78rem",
+      color: "var(--text)",
+      lineHeight: 1.75,
+      whiteSpace: "pre-wrap",
+      maxHeight: 220,
+      overflowY: "auto",
+      border: "1px solid var(--border)"
+    }, children: article })
+  ] });
+}
+function BlogGenerator({ movies = [], onToast }) {
+  const [published, setPublished] = useState(/* @__PURE__ */ new Set());
+  const [generating, setGenerating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [bulkProgress, setBulkProgress] = useState(null);
+  const markPublished = (id) => setPublished((prev) => /* @__PURE__ */ new Set([...prev, id]));
+  const filtered = movies.filter(
+    (m) => m.title.toLowerCase().includes(search.toLowerCase())
+  );
+  const unpublished = filtered.filter((m) => !published.has(m._id));
+  const done = filtered.filter((m) => published.has(m._id));
+  const bulkGenerate = async () => {
+    const targets = movies.filter((m) => !published.has(m._id));
+    if (!targets.length) return;
+    setGenerating(true);
+    setBulkProgress({ done: 0, total: targets.length });
+    for (let i = 0; i < targets.length; i++) {
+      const movie = targets[i];
+      try {
+        const text = await generateArticle(movie);
+        await publishArticle(movie, text);
+        markPublished(movie._id);
+      } catch {
+      }
+      setBulkProgress({ done: i + 1, total: targets.length });
+      await new Promise((r) => setTimeout(r, 1e3));
+    }
+    setGenerating(false);
+    setBulkProgress(null);
+    onToast("✅ Bulk generation complete!", "success");
+  };
+  return /* @__PURE__ */ jsxs("div", { style: { padding: "24px 28px" }, children: [
+    /* @__PURE__ */ jsxs("div", { style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      marginBottom: 16,
+      flexWrap: "wrap"
+    }, children: [
+      /* @__PURE__ */ jsxs("div", { style: { fontSize: "1.1rem", fontWeight: 800, color: "var(--gold)", flex: 1 }, children: [
+        "✨ AI Blog Generator",
+        /* @__PURE__ */ jsx("span", { style: {
+          fontSize: "0.65rem",
+          fontWeight: 500,
+          marginLeft: 10,
+          color: "var(--muted)",
+          fontFamily: "monospace"
+        }, children: API_BASE })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 18, fontSize: "0.82rem", color: "var(--muted)" }, children: [
+        /* @__PURE__ */ jsxs("span", { children: [
+          "🎬 ",
+          /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: movies.length }),
+          " total"
+        ] }),
+        /* @__PURE__ */ jsxs("span", { children: [
+          "✅ ",
+          /* @__PURE__ */ jsx("b", { style: { color: "#28a050" }, children: published.size }),
+          " published"
+        ] }),
+        /* @__PURE__ */ jsxs("span", { children: [
+          "⏳ ",
+          /* @__PURE__ */ jsx("b", { style: { color: "var(--gold)" }, children: movies.length - published.size }),
+          " pending"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx(
+        "input",
+        {
+          style: {
+            padding: "7px 12px",
+            borderRadius: 7,
+            border: "1px solid var(--border)",
+            background: "var(--bg2)",
+            color: "var(--text)",
+            fontSize: "0.85rem",
+            width: 200
+          },
+          placeholder: "Search movies…",
+          value: search,
+          onChange: (e) => setSearch(e.target.value)
+        }
+      ),
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          onClick: bulkGenerate,
+          disabled: generating,
+          style: {
+            padding: "7px 16px",
+            borderRadius: 7,
+            border: "none",
+            cursor: generating ? "not-allowed" : "pointer",
+            fontSize: "0.82rem",
+            fontWeight: 700,
+            background: generating ? "var(--bg3)" : "var(--gold)",
+            color: generating ? "var(--muted)" : "#000"
+          },
+          children: generating ? "⏳ Generating All…" : "🚀 Generate All"
+        }
+      )
+    ] }),
+    bulkProgress && /* @__PURE__ */ jsxs("div", { style: {
+      marginBottom: 14,
+      padding: "10px 14px",
+      background: "rgba(201,151,58,0.1)",
+      borderRadius: 8,
+      border: "1px solid rgba(201,151,58,0.3)",
+      fontSize: "0.84rem",
+      color: "var(--gold)",
+      fontWeight: 600
+    }, children: [
+      "⏳ ",
+      bulkProgress.done,
+      " / ",
+      bulkProgress.total,
+      " complete",
+      /* @__PURE__ */ jsx("div", { style: { marginTop: 8, height: 6, background: "var(--bg3)", borderRadius: 4, overflow: "hidden" }, children: /* @__PURE__ */ jsx("div", { style: {
+        height: "100%",
+        borderRadius: 4,
+        background: "var(--gold)",
+        transition: "width 0.4s",
+        width: `${bulkProgress.done / bulkProgress.total * 100}%`
+      } }) })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: {
+      marginBottom: 14,
+      padding: "8px 14px",
+      borderRadius: 7,
+      background: "rgba(255,255,255,0.03)",
+      border: "1px solid var(--border)",
+      fontSize: "0.74rem",
+      color: "var(--muted)",
+      lineHeight: 1.7
+    }, children: [
+      "💡 ",
+      /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: "Ollama must be running." }),
+      " ",
+      "If you see a 500 error, open Command Prompt and run:",
+      " ",
+      /* @__PURE__ */ jsx("code", { style: { background: "var(--bg3)", padding: "1px 6px", borderRadius: 3, fontSize: "0.72rem" }, children: "ollama pull llama3.2" }),
+      " ",
+      "— model downloads once (~2 GB), then generation works instantly."
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: {
+      background: "var(--bg2)",
+      borderRadius: 10,
+      border: "1px solid var(--border)",
+      overflow: "hidden"
+    }, children: [
+      filtered.length === 0 && /* @__PURE__ */ jsx("div", { style: {
+        padding: 40,
+        textAlign: "center",
+        color: "var(--muted)",
+        fontSize: "0.9rem"
+      }, children: search ? "No movies match your search." : "No movies found." }),
+      unpublished.map((movie) => /* @__PURE__ */ jsx(
+        MovieRow,
+        {
+          movie,
+          isPublished: false,
+          onPublished: markPublished,
+          onToast
+        },
+        movie._id
+      )),
+      done.map((movie) => /* @__PURE__ */ jsx(
+        MovieRow,
+        {
+          movie,
+          isPublished: true,
+          onPublished: markPublished,
+          onToast
+        },
+        movie._id
+      )),
+      unpublished.length === 0 && done.length > 0 && !search && /* @__PURE__ */ jsx("div", { style: {
+        padding: 16,
+        textAlign: "center",
+        color: "#28a050",
+        fontSize: "0.85rem",
+        fontWeight: 600
+      }, children: "🎉 All movies have published articles!" })
+    ] })
   ] });
 }
 const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
@@ -12400,6 +13897,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
         ["cast", "🎭", "Cast & Crew"],
         ["productions", "🎥", "Productions"],
         ["news", "📰", "News"],
+        ["blog", "✍️", "Blog"],
         ["enquiries", "✉️", "Enquiries"],
         ["settings", "⚙️", "Settings"]
       ].map(([key, icon, label]) => {
@@ -13079,6 +14577,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
             ] })
           ] });
         })(),
+        tab === "blog" && /* @__PURE__ */ jsx(BlogGenerator, { movies, onToast }),
         tab === "enquiries" && /* @__PURE__ */ jsx(
           EnquiriesPanel,
           {
@@ -13454,6 +14953,8 @@ function AppInner({
         }
       ),
       /* @__PURE__ */ jsx(Route, { path: "/about", element: /* @__PURE__ */ jsx(AboutUs, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/blog", element: /* @__PURE__ */ jsx(Blog, {}) }),
+      /* @__PURE__ */ jsx(Route, { path: "/blog/:slug", element: /* @__PURE__ */ jsx(BlogPost, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "/contact", element: /* @__PURE__ */ jsx(ContactUs, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "/privacy", element: /* @__PURE__ */ jsx(PrivacyPolicy, {}) }),
       /* @__PURE__ */ jsx(Route, { path: "/privacy-policy", element: /* @__PURE__ */ jsx(PrivacyPolicy, {}) }),
@@ -13592,7 +15093,7 @@ function App() {
     } catch {
     }
   }, []);
-  return /* @__PURE__ */ jsx(
+  return /* @__PURE__ */ jsx(HelmetProvider, { children: /* @__PURE__ */ jsx(
     AppInner,
     {
       production,
@@ -13602,7 +15103,7 @@ function App() {
       admin,
       setAdmin
     }
-  );
+  ) });
 }
 function render(url, helmetContext) {
   return renderToString(
