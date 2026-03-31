@@ -390,6 +390,227 @@ function AddSongModal({ movieId, onAdded, onClose }) {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  OVERVIEW BLOG SECTION — inline in overview tab
+// ═══════════════════════════════════════════════════════════
+const BLOG_API = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "") + "/api";
+
+const OBS_CSS = `
+@keyframes obs-fade { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+.obs-wrap { margin-bottom: 28px; }
+.obs-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.obs-label {
+  font-size: .65rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .14em; color: rgba(255,255,255,.4);
+  display: flex; align-items: center; gap: 8px;
+}
+.obs-label::before {
+  content: ''; width: 14px; height: 2px;
+  background: var(--gold,#c9973a); border-radius: 2px; display: block;
+}
+.obs-view-all {
+  font-size: .68rem; font-weight: 700; color: var(--gold,#c9973a);
+  background: none; border: none; cursor: pointer; padding: 0;
+  display: flex; align-items: center; gap: 4px; transition: opacity .15s;
+}
+.obs-view-all:hover { opacity: .75; }
+
+/* Featured horizontal card */
+.obs-feature {
+  display: flex; border-radius: 12px; overflow: hidden;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+  cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s;
+  margin-bottom: 10px; animation: obs-fade .35s ease both;
+}
+.obs-feature:hover {
+  border-color: rgba(201,151,58,.42);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 36px rgba(0,0,0,.4);
+}
+.obs-feature-img-wrap {
+  flex-shrink: 0; width: 160px; position: relative; overflow: hidden;
+}
+@media (max-width: 560px) { .obs-feature-img-wrap { width: 110px; } }
+.obs-feature-img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .35s;
+}
+.obs-feature:hover .obs-feature-img { transform: scale(1.05); }
+.obs-feature-img-ph {
+  width: 100%; height: 100%; min-height: 100px;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+  display: flex; align-items: center; justify-content: center; font-size: 2rem;
+}
+.obs-feature-body {
+  flex: 1; padding: 14px 16px; display: flex; flex-direction: column;
+  justify-content: center; gap: 6px; min-width: 0;
+}
+.obs-feature-badge {
+  display: inline-block; font-size: .58rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .08em;
+  background: rgba(201,151,58,.9); color: #000;
+  padding: 2px 7px; border-radius: 3px; width: fit-content;
+}
+.obs-feature-title {
+  font-size: .92rem; font-weight: 700; color: #f1f1f1; line-height: 1.38;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.obs-feature-excerpt {
+  font-size: .74rem; color: rgba(255,255,255,.46); line-height: 1.58;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.obs-feature-meta {
+  font-size: .64rem; color: rgba(255,255,255,.28);
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.obs-feature-cta {
+  font-size: .68rem; font-weight: 700; color: var(--gold,#c9973a);
+  display: flex; align-items: center; gap: 4px;
+}
+
+/* Small list items */
+.obs-list { display: flex; flex-direction: column; gap: 8px; }
+.obs-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-radius: 9px; background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06); cursor: pointer;
+  transition: background .15s, border-color .15s, transform .15s;
+  animation: obs-fade .32s ease both;
+}
+.obs-item:hover {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(201,151,58,.25);
+  transform: translateX(3px);
+}
+.obs-item-num {
+  font-size: .68rem; font-weight: 900; color: rgba(201,151,58,.4);
+  width: 18px; flex-shrink: 0; text-align: center; font-variant-numeric: tabular-nums;
+}
+.obs-item-img-wrap {
+  flex-shrink: 0; width: 52px; height: 36px; border-radius: 5px;
+  overflow: hidden; background: #1a1a1a;
+}
+.obs-item-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.obs-item-img-ph {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+.obs-item-body { flex: 1; min-width: 0; }
+.obs-item-cat {
+  font-size: .58rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--gold,#c9973a); margin-bottom: 2px;
+}
+.obs-item-title {
+  font-size: .78rem; font-weight: 600; color: #f1f1f1; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.obs-item-meta { font-size: .62rem; color: rgba(255,255,255,.26); margin-top: 2px; }
+.obs-item-arrow {
+  font-size: .7rem; color: rgba(255,255,255,.15); flex-shrink: 0;
+  transition: color .15s, transform .15s;
+}
+.obs-item:hover .obs-item-arrow { color: var(--gold,#c9973a); transform: translateX(2px); }
+
+/* Empty / loading */
+.obs-empty {
+  padding: 24px 0; text-align: center; color: rgba(255,255,255,.22);
+  font-size: .8rem;
+}
+`;
+
+function OverviewBlogSection({ movieTitle, onNavigate }) {
+  const [posts,   setPosts]   = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!movieTitle) return;
+    fetch(`${BLOG_API}/blog?q=${encodeURIComponent(movieTitle)}&limit=6`)
+      .then(r => r.json())
+      .then(data => {
+        const list = (data.posts || data || []).filter(p =>
+          p.movieTitle === movieTitle || (p.title || "").includes(movieTitle)
+        );
+        setPosts(list);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [movieTitle]);
+
+  if (loading || posts.length === 0) return null;
+
+  const [feature, ...rest] = posts;
+  const fmtD = d => d ? new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "";
+
+  return (
+    <div className="obs-wrap">
+      <style>{OBS_CSS}</style>
+
+      <div className="obs-header">
+        <div className="obs-label">✍️ Articles about this film</div>
+        <button className="obs-view-all" onClick={() => onNavigate("/blog")}>
+          All articles →
+        </button>
+      </div>
+
+      {/* Featured article */}
+      <div className="obs-feature" onClick={() => onNavigate(`/blog/${feature.slug}`)}>
+        <div className="obs-feature-img-wrap">
+          {feature.coverImage
+            ? <img src={feature.coverImage} alt={feature.title} className="obs-feature-img" loading="lazy" onError={e => e.target.style.display="none"} />
+            : <div className="obs-feature-img-ph">✍️</div>
+          }
+        </div>
+        <div className="obs-feature-body">
+          <span className="obs-feature-badge">{feature.category || "Article"}</span>
+          <div className="obs-feature-title">{feature.title}</div>
+          {feature.excerpt && <div className="obs-feature-excerpt">{feature.excerpt}</div>}
+          <div className="obs-feature-meta">
+            <span>📅 {fmtD(feature.createdAt)}</span>
+            {feature.readTime && <span>⏱ {feature.readTime} min</span>}
+            {feature.views > 0 && <span>👁 {feature.views.toLocaleString()}</span>}
+          </div>
+          <div className="obs-feature-cta">Read full article →</div>
+        </div>
+      </div>
+
+      {/* Numbered list of the rest */}
+      {rest.length > 0 && (
+        <div className="obs-list">
+          {rest.map((post, i) => (
+            <div
+              key={post._id}
+              className="obs-item"
+              style={{ animationDelay: `${(i + 1) * 55}ms` }}
+              onClick={() => onNavigate(`/blog/${post.slug}`)}
+            >
+              <div className="obs-item-num">0{i + 2}</div>
+              <div className="obs-item-img-wrap">
+                {post.coverImage
+                  ? <img src={post.coverImage} alt={post.title} className="obs-item-img" loading="lazy" onError={e => e.target.style.display="none"} />
+                  : <div className="obs-item-img-ph">✍️</div>
+                }
+              </div>
+              <div className="obs-item-body">
+                <div className="obs-item-cat">{post.category || "Article"}</div>
+                <div className="obs-item-title">{post.title}</div>
+                <div className="obs-item-meta">
+                  {fmtD(post.createdAt)}{post.readTime ? ` · ${post.readTime} min read` : ""}
+                </div>
+              </div>
+              <div className="obs-item-arrow">›</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 //  MAIN
 // ═══════════════════════════════════════════════════════════
 export default function MovieDetails({ production, onToast, portalMode }) {
@@ -1445,6 +1666,9 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 </div>
               </div>
             )}
+
+            {/* ── Blog Articles ── */}
+            <OverviewBlogSection movieTitle={movie.title} onNavigate={navigate} />
 
             {isOwner && (
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", paddingTop:16, borderTop:"1px solid rgba(255,255,255,.07)" }}>

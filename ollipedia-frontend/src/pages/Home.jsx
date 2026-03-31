@@ -596,7 +596,630 @@ function HeroSkeleton() {
   );
 }
 
+// ─── Blog Section — Magazine / Editorial style ──────────────────────────────
+const BLOG_CSS = `
+@keyframes bsFadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:none} }
+@keyframes bsShimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+
+/* ── Wrapper ── */
+.blog-sec {
+  padding: 0;
+  contain: layout style;
+}
+
+/* ── Section header ── */
+.blog-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  gap: 12px;
+}
+.blog-sec-head-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.blog-sec-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg,rgba(201,151,58,.18),rgba(201,151,58,.06));
+  border: 1px solid rgba(201,151,58,.35);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: .63rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #c9973a;
+}
+.blog-sec-title {
+  font-size: 1.12rem;
+  font-weight: 900;
+  color: #f1f1f1;
+  margin: 0;
+  letter-spacing: -.02em;
+}
+.blog-sec-viewall {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 16px;
+  border: 1.5px solid rgba(201,151,58,.35);
+  border-radius: 20px;
+  background: transparent;
+  color: #c9973a;
+  font-size: .73rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .18s, border-color .18s, transform .18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.blog-sec-viewall:hover {
+  background: rgba(201,151,58,.12);
+  border-color: #c9973a;
+  transform: translateX(2px);
+}
+
+/* ── Magazine layout grid ── */
+.blog-mag-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .blog-mag-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (min-width: 960px) {
+  .blog-mag-grid {
+    grid-template-columns: 1.65fr 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+/* ── Featured (first) card — takes 2 rows on desktop ── */
+.blog-feat {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #111;
+  border: 1px solid rgba(255,255,255,.07);
+  transition: transform .28s cubic-bezier(.34,1.56,.64,1), border-color .2s, box-shadow .2s;
+  animation: bsFadeUp .4s ease both;
+  isolation: isolate;
+}
+@media (min-width: 960px) {
+  .blog-feat {
+    grid-row: 1 / 3;
+    grid-column: 1 / 2;
+  }
+}
+.blog-feat:hover {
+  transform: translateY(-5px);
+  border-color: rgba(201,151,58,.45);
+  box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(201,151,58,.15);
+}
+.blog-feat-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+}
+@media (min-width: 960px) {
+  .blog-feat-img-wrap {
+    aspect-ratio: auto;
+    min-height: 340px;
+    height: 100%;
+  }
+}
+.blog-feat-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .5s ease;
+}
+.blog-feat:hover .blog-feat-img { transform: scale(1.06); }
+.blog-feat-ph {
+  width: 100%;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+/* gradient overlay for text legibility */
+.blog-feat-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    0deg,
+    rgba(0,0,0,.94) 0%,
+    rgba(0,0,0,.55) 42%,
+    rgba(0,0,0,.08) 80%,
+    transparent 100%
+  );
+}
+.blog-feat-body {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.blog-feat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  font-size: .58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  padding: 3px 9px;
+  border-radius: 3px;
+}
+.blog-feat-title {
+  font-size: clamp(.96rem, 1.8vw, 1.2rem);
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.36;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.blog-feat-excerpt {
+  font-size: .74rem;
+  color: rgba(255,255,255,.58);
+  line-height: 1.6;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.blog-feat-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .62rem;
+  color: rgba(255,255,255,.38);
+  flex-wrap: wrap;
+}
+.blog-feat-meta-dot { opacity: .3; }
+.blog-feat-movie {
+  color: #c9973a;
+  font-weight: 700;
+}
+/* ── Read more pill ── */
+.blog-feat-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 6px 13px;
+  background: rgba(201,151,58,.15);
+  border: 1px solid rgba(201,151,58,.35);
+  border-radius: 16px;
+  color: #c9973a;
+  font-size: .68rem;
+  font-weight: 700;
+  width: fit-content;
+  transition: background .15s;
+}
+.blog-feat:hover .blog-feat-read {
+  background: rgba(201,151,58,.28);
+}
+
+/* ── Small side cards ── */
+.blog-side-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.07);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), border-color .2s, box-shadow .2s;
+  animation: bsFadeUp .4s ease both;
+  isolation: isolate;
+}
+.blog-side-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(201,151,58,.38);
+  box-shadow: 0 12px 32px rgba(0,0,0,.55);
+}
+.blog-side-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: #1a1a1a;
+  flex-shrink: 0;
+}
+.blog-side-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .38s;
+}
+.blog-side-card:hover .blog-side-img { transform: scale(1.07); }
+.blog-side-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+.blog-side-badge {
+  position: absolute;
+  top: 8px;
+  left: 9px;
+  font-size: .55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.blog-side-views {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  font-size: .55rem;
+  color: rgba(255,255,255,.6);
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(4px);
+  border-radius: 10px;
+  padding: 2px 7px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.blog-side-body {
+  padding: 12px 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.blog-side-title {
+  font-size: .84rem;
+  font-weight: 700;
+  color: #f1f1f1;
+  line-height: 1.38;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  transition: color .18s;
+}
+.blog-side-card:hover .blog-side-title { color: #c9973a; }
+.blog-side-excerpt {
+  font-size: .71rem;
+  color: rgba(255,255,255,.4);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+.blog-side-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .62rem;
+  color: rgba(255,255,255,.26);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+.blog-side-dot { opacity: .3; }
+.blog-side-movie {
+  color: #c9973a;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
+
+/* ── Horizontal scroll row (mobile overflow) ── */
+.blog-more-row {
+  display: flex;
+  gap: 13px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  margin-top: 16px;
+}
+.blog-more-row::-webkit-scrollbar { display: none; }
+
+/* ── Mini card (row below grid) ── */
+.blog-mini {
+  flex-shrink: 0;
+  width: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.06);
+  cursor: pointer;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  transition: transform .22s, border-color .2s;
+  animation: bsFadeUp .35s ease both;
+}
+.blog-mini:hover {
+  transform: translateY(-4px);
+  border-color: rgba(201,151,58,.32);
+}
+.blog-mini-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.blog-mini-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .35s;
+}
+.blog-mini:hover .blog-mini-img { transform: scale(1.07); }
+.blog-mini-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+.blog-mini-body {
+  padding: 9px 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.blog-mini-title {
+  font-size: .75rem;
+  font-weight: 700;
+  color: #f1f1f1;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  transition: color .15s;
+}
+.blog-mini:hover .blog-mini-title { color: #c9973a; }
+.blog-mini-meta {
+  font-size: .6rem;
+  color: rgba(255,255,255,.28);
+  margin-top: auto;
+}
+
+/* ── Skeleton ── */
+.blog-skel-feat {
+  border-radius: 14px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.blog-skel-feat-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(90deg, #1e1e1e 25%, #252525 50%, #1e1e1e 75%);
+  background-size: 400px 100%;
+  animation: bsShimmer 1.4s infinite;
+}
+@media (min-width: 960px) {
+  .blog-skel-feat-img { min-height: 340px; }
+}
+.blog-skel-body { padding: 14px 13px; display: flex; flex-direction: column; gap: 10px; }
+.blog-skel-line {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #1e1e1e 25%, #252525 50%, #1e1e1e 75%);
+  background-size: 400px 100%;
+  animation: bsShimmer 1.4s infinite;
+}
+.blog-skel-side {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.blog-skel-side-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(90deg, #1e1e1e 25%, #252525 50%, #1e1e1e 75%);
+  background-size: 400px 100%;
+  animation: bsShimmer 1.4s infinite;
+}
+
+/* ── Category badge colours ── */
+.bsc-review   { background: rgba(201,151,58,.92);  color: #000; }
+.bsc-actor    { background: rgba(167,139,232,.9);  color: #fff; }
+.bsc-music    { background: rgba(74,207,130,.9);   color: #000; }
+.bsc-top10    { background: rgba(232,200,122,.9);  color: #000; }
+.bsc-news     { background: rgba(122,170,232,.9);  color: #000; }
+.bsc-general  { background: rgba(229,121,154,.85); color: #fff; }
+.bsc-upcoming { background: rgba(94,174,232,.9);   color: #000; }
+`;
+
+function bsCatClass(cat) {
+  if (!cat) return "bsc-review";
+  const c = cat.toLowerCase();
+  if (c.includes("review"))                        return "bsc-review";
+  if (c.includes("actor") || c.includes("spot"))  return "bsc-actor";
+  if (c.includes("music") || c.includes("song"))  return "bsc-music";
+  if (c.includes("top"))                           return "bsc-top10";
+  if (c.includes("news"))                          return "bsc-news";
+  if (c.includes("upcoming"))                      return "bsc-upcoming";
+  return "bsc-general";
+}
+
+function bsFmtDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" });
+}
+
+function BlogSection({ posts, onNavigate }) {
+  if (!posts.length) return null;
+
+  const featured = posts[0];
+  const side     = posts.slice(1, 5);   // up to 4 side cards in grid
+  const mini     = posts.slice(5, 12);  // up to 7 in bottom scroll row
+
+  return (
+    <section className="home-section blog-sec">
+      <style>{BLOG_CSS}</style>
+
+      {/* ── Header ── */}
+      <div className="blog-sec-head">
+        <div className="blog-sec-head-left">
+          <span className="blog-sec-label">✍️ Editorial</span>
+          <h2 className="blog-sec-title">From the Blog</h2>
+        </div>
+        <button className="blog-sec-viewall" onClick={() => onNavigate("/blog")}>
+          All Articles →
+        </button>
+      </div>
+
+      {/* ── Magazine grid ── */}
+      <div className="blog-mag-grid">
+
+        {/* Featured card */}
+        <div
+          className="blog-feat"
+          onClick={() => onNavigate(`/blog/${featured.slug}`)}
+        >
+          <div className="blog-feat-img-wrap">
+            {featured.coverImage
+              ? <img src={featured.coverImage} alt={featured.title} className="blog-feat-img" loading="lazy" onError={e => e.target.style.display="none"} />
+              : <div className="blog-feat-ph">✍️</div>
+            }
+            <div className="blog-feat-overlay" />
+          </div>
+          <div className="blog-feat-body">
+            <span className={`blog-feat-badge ${bsCatClass(featured.category)}`}>
+              {featured.category || "Article"}
+            </span>
+            <h3 className="blog-feat-title">{featured.title}</h3>
+            {featured.excerpt && (
+              <p className="blog-feat-excerpt">{featured.excerpt}</p>
+            )}
+            <div className="blog-feat-meta">
+              <span>{bsFmtDate(featured.createdAt)}</span>
+              {featured.readTime && <>
+                <span className="blog-feat-meta-dot">·</span>
+                <span>{featured.readTime} min read</span>
+              </>}
+              {featured.views > 0 && <>
+                <span className="blog-feat-meta-dot">·</span>
+                <span>👁 {featured.views.toLocaleString()}</span>
+              </>}
+              {featured.movieTitle && <>
+                <span className="blog-feat-meta-dot">·</span>
+                <span className="blog-feat-movie">🎬 {featured.movieTitle}</span>
+              </>}
+            </div>
+            <span className="blog-feat-read">Read Article →</span>
+          </div>
+        </div>
+
+        {/* Side cards */}
+        {side.map((post, i) => (
+          <div
+            key={post._id}
+            className="blog-side-card"
+            style={{ animationDelay: `${(i + 1) * 60}ms` }}
+            onClick={() => onNavigate(`/blog/${post.slug}`)}
+          >
+            <div className="blog-side-img-wrap">
+              {post.coverImage
+                ? <img src={post.coverImage} alt={post.title} className="blog-side-img" loading="lazy" onError={e => e.target.style.display="none"} />
+                : <div className="blog-side-ph">✍️</div>
+              }
+              <span className={`blog-side-badge ${bsCatClass(post.category)}`}>
+                {post.category || "Article"}
+              </span>
+              {post.views > 0 && (
+                <span className="blog-side-views">👁 {post.views >= 1000 ? `${(post.views/1000).toFixed(1)}k` : post.views}</span>
+              )}
+            </div>
+            <div className="blog-side-body">
+              <h3 className="blog-side-title">{post.title}</h3>
+              {post.excerpt && <p className="blog-side-excerpt">{post.excerpt}</p>}
+              <div className="blog-side-meta">
+                <span>{bsFmtDate(post.createdAt)}</span>
+                {post.readTime && <>
+                  <span className="blog-side-dot">·</span>
+                  <span>{post.readTime} min</span>
+                </>}
+                {post.movieTitle && <>
+                  <span className="blog-side-dot">·</span>
+                  <span className="blog-side-movie">🎬 {post.movieTitle}</span>
+                </>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Bottom scroll row (mini cards) ── */}
+      {mini.length > 0 && (
+        <div className="blog-more-row">
+          {mini.map((post, i) => (
+            <div
+              key={post._id}
+              className="blog-mini"
+              style={{ animationDelay: `${i * 45}ms` }}
+              onClick={() => onNavigate(`/blog/${post.slug}`)}
+            >
+              <div className="blog-mini-img-wrap">
+                {post.coverImage
+                  ? <img src={post.coverImage} alt={post.title} className="blog-mini-img" loading="lazy" onError={e => e.target.style.display="none"} />
+                  : <div className="blog-mini-ph">✍️</div>
+                }
+              </div>
+              <div className="blog-mini-body">
+                <h4 className="blog-mini-title">{post.title}</h4>
+                <div className="blog-mini-meta">{bsFmtDate(post.createdAt)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
+//  MODULE-LEVEL CACHE// ═══════════════════════════════════════════════════════════════════
 //  MODULE-LEVEL CACHE — survives navigation, cleared on hard refresh
 //  This is the key fix: data is fetched ONCE and reused on every
 //  back-navigation. No spinner, no skeleton, instant restore.
@@ -678,7 +1301,7 @@ export default function Home({ production }) {
 
     const load = () => {
       const apiBase = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
-      fetch(`${apiBase}/api/blog?limit=4`)
+      fetch(`${apiBase}/api/blog?limit=12`)
         .then(r => r.json())
         .then(data => {
           const posts = data.posts || data || [];
@@ -928,48 +1551,9 @@ export default function Home({ production }) {
           </Row>
         )}
 
-        {/* ── Blog Posts ── */}
+        {/* ── Blog Articles — IMDb style ── */}
         {blogPosts.length > 0 && (
-          <Row title="✍️ From the Blog" viewAll="/blog" gap={16} cardRatio="16/9" cardWidth={280}>
-            {blogPosts.map(post => (
-              <div
-                key={post._id}
-                onClick={() => navigate(`/blog/${post.slug}`)}
-                style={{
-                  flexShrink: 0, width: 280, borderRadius: 12, overflow: "hidden",
-                  background: "#1a1a1a", border: "1px solid rgba(255,255,255,.08)",
-                  cursor: "pointer", transition: "border-color .2s, transform .2s",
-                  display: "flex", flexDirection: "column",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(201,151,58,.4)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"; e.currentTarget.style.transform = "none"; }}
-              >
-                {post.coverImage
-                  ? <img src={post.coverImage} alt={post.title} loading="lazy"
-                      style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", background: "#252525", flexShrink: 0 }}
-                      onError={e => e.target.style.display = "none"} />
-                  : <div style={{ width: "100%", aspectRatio: "16/9", background: "linear-gradient(135deg,#1a1200,#0f0f0f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2rem", flexShrink: 0 }}>✍️</div>
-                }
-                <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
-                  <div style={{ fontSize: ".68rem", fontWeight: 700, color: "#c9973a", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                    {post.category || "Article"}
-                  </div>
-                  <div style={{ fontSize: ".9rem", fontWeight: 700, color: "#f1f1f1", lineHeight: 1.35 }}>
-                    {post.title}
-                  </div>
-                  {post.excerpt && (
-                    <div style={{ fontSize: ".76rem", color: "rgba(255,255,255,.45)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {post.excerpt}
-                    </div>
-                  )}
-                  <div style={{ fontSize: ".68rem", color: "rgba(255,255,255,.3)", marginTop: "auto", paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 8 }}>
-                    {post.readTime && <span>⏱ {post.readTime} min</span>}
-                    {post.views > 0 && <span>👁 {post.views.toLocaleString()}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </Row>
+          <BlogSection posts={blogPosts} onNavigate={navigate} />
         )}
 
         {/* ── Recently Played ── */}
