@@ -1300,7 +1300,8 @@ export default function Home({ production }) {
     if (_cache.blog !== null) { setBlogPosts(_cache.blog); return; }
 
     const load = () => {
-      const apiBase = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+      const _rawBase = (import.meta.env.VITE_API_URL ?? "http://localhost:4000/api");
+      const apiBase = _rawBase.replace(/\/$/, "").replace(/\/api$/, "");
       fetch(`${apiBase}/api/blog?limit=12`)
         .then(r => r.json())
         .then(data => {
@@ -1623,4 +1624,4 @@ export default function Home({ production }) {
       </div>
     </div>
   );
-} 
+}
