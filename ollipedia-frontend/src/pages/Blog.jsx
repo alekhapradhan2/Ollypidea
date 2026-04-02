@@ -2,7 +2,10 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+// Uses the same env var as api.js — VITE_API_URL already includes /api
+// e.g. "https://ollipedia-backend.onrender.com/api"
+// So we must NOT append /api again here.
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:4000/api").replace(/\/$/, "");
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
@@ -17,6 +20,7 @@ const CSS = `
   --gold:#c9973a; --gold2:#e0b86a;
   --bg:#080808; --bg2:#0f0f0f; --bg3:#161616; --bg4:#1d1d1d; --bg5:#252525;
   --border:rgba(255,255,255,.07); --border2:rgba(255,255,255,.13);
+  
   --muted:rgba(255,255,255,.38); --text:#f0efe8;
 }
 *{box-sizing:border-box;}
@@ -217,7 +221,7 @@ export default function Blog() {
       const p=new URLSearchParams({page:pg,limit:PER});
       if(search.trim()) p.set("q",search.trim());
       if(cat&&cat!=="All") p.set("category",cat);
-      const r=await fetch(`${API_BASE}/api/blog?${p}`);
+      const r=await fetch(`${API_BASE}/blog?${p}`);
       const d=await r.json();
       let list=d.posts||d||[];
       if(sort==="popular") list=[...list].sort((a,b)=>(b.views||0)-(a.views||0));

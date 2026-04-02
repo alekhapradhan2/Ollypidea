@@ -354,7 +354,7 @@ function NavSearch({ onClose }) {
     ] })
   ] });
 }
-const CSS$a = `
+const CSS$b = `
 /* ── Shell ── */
 .navbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
@@ -498,7 +498,7 @@ function Navbar({ admin, onAdminLogout }) {
   const lnk = (p) => location.pathname === p ? "nb-link active" : "nb-link";
   const dlnk = (p) => location.pathname === p ? "nb-dl active" : "nb-dl";
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$a }),
+    /* @__PURE__ */ jsx("style", { children: CSS$b }),
     /* @__PURE__ */ jsxs("nav", { className: "navbar", children: [
       /* @__PURE__ */ jsxs(Link, { to: "/", className: "nb-brand", children: [
         "OLLY",
@@ -802,7 +802,7 @@ const heroImage$1 = (m) => {
   var _a, _b;
   return m.thumbnailUrl || ytThumb$4((_b = (_a = m.media) == null ? void 0 : _a.trailer) == null ? void 0 : _b.ytId) || m.posterUrl || null;
 };
-const fmtDate$5 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+const fmtDate$6 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
 const _now = /* @__PURE__ */ new Date();
 const RECENT_CUTOFF = new Date(_now.getFullYear() - 3, _now.getMonth(), _now.getDate());
 const withinDays$1 = (d, p, f) => {
@@ -958,7 +958,7 @@ const MovieCard$2 = React.memo(function MovieCard2({ movie, onClick }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { style: { padding: "9px 2px 0" }, children: [
       /* @__PURE__ */ jsx("p", { className: "hcard-title", children: movie.title }),
-      /* @__PURE__ */ jsx("p", { style: { margin: "3px 0 0", fontSize: ".67rem", color: "var(--muted)" }, children: movie.releaseDate ? fmtDate$5(movie.releaseDate) : "TBA" }),
+      /* @__PURE__ */ jsx("p", { style: { margin: "3px 0 0", fontSize: ".67rem", color: "var(--muted)" }, children: movie.releaseDate ? fmtDate$6(movie.releaseDate) : "TBA" }),
       movie.director && /* @__PURE__ */ jsxs("p", { style: { margin: "2px 0 0", fontSize: ".63rem", color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: 0.75 }, children: [
         "🎥 ",
         movie.director
@@ -977,7 +977,7 @@ const TrailerCard$1 = React.memo(function TrailerCard2({ movie, onClick }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { style: { padding: "9px 2px 0" }, children: [
       /* @__PURE__ */ jsx("p", { className: "tcard-title", children: movie.title }),
-      movie.releaseDate && /* @__PURE__ */ jsx("p", { style: { margin: "3px 0 0", fontSize: ".67rem", color: "var(--muted)" }, children: fmtDate$5(movie.releaseDate) })
+      movie.releaseDate && /* @__PURE__ */ jsx("p", { style: { margin: "3px 0 0", fontSize: ".67rem", color: "var(--muted)" }, children: fmtDate$6(movie.releaseDate) })
     ] })
   ] });
 });
@@ -1286,7 +1286,7 @@ function HeroSlide$1({ movie, active, dots, strip }) {
           /* @__PURE__ */ jsxs("div", { className: "hh-meta", children: [
             movie.releaseDate && /* @__PURE__ */ jsxs("span", { children: [
               "🗓 ",
-              fmtDate$5(movie.releaseDate)
+              fmtDate$6(movie.releaseDate)
             ] }),
             movie.director && /* @__PURE__ */ jsxs("span", { children: [
               "🎬 ",
@@ -1349,6 +1349,610 @@ function HeroSkeleton() {
     /* @__PURE__ */ jsx("div", { style: { position: "absolute", bottom: 16, left: "clamp(16px,4vw,52px)", display: "flex", gap: 6 }, children: [1, 0, 0, 0].map((active, i) => /* @__PURE__ */ jsx("div", { style: { width: active ? 24 : 7, height: 7, borderRadius: active ? 4 : "50%", background: "rgba(255,255,255,.18)", animation: "homepulse 1.5s ease-in-out infinite", animationDelay: `${i * 0.08}s` } }, i)) })
   ] });
 }
+const BLOG_CSS = `
+@keyframes bsFadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:none} }
+@keyframes bsShimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+
+/* ── Wrapper ── */
+.blog-sec {
+  padding: 0;
+  contain: layout style;
+}
+
+/* ── Section header ── */
+.blog-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  gap: 12px;
+}
+.blog-sec-head-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.blog-sec-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: linear-gradient(135deg,rgba(201,151,58,.18),rgba(201,151,58,.06));
+  border: 1px solid rgba(201,151,58,.35);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: .63rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #c9973a;
+}
+.blog-sec-title {
+  font-size: 1.12rem;
+  font-weight: 900;
+  color: #f1f1f1;
+  margin: 0;
+  letter-spacing: -.02em;
+}
+.blog-sec-viewall {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 16px;
+  border: 1.5px solid rgba(201,151,58,.35);
+  border-radius: 20px;
+  background: transparent;
+  color: #c9973a;
+  font-size: .73rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .18s, border-color .18s, transform .18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.blog-sec-viewall:hover {
+  background: rgba(201,151,58,.12);
+  border-color: #c9973a;
+  transform: translateX(2px);
+}
+
+/* ── Magazine layout grid ── */
+.blog-mag-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .blog-mag-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (min-width: 960px) {
+  .blog-mag-grid {
+    grid-template-columns: 1.65fr 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+/* ── Featured (first) card — takes 2 rows on desktop ── */
+.blog-feat {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #111;
+  border: 1px solid rgba(255,255,255,.07);
+  transition: transform .28s cubic-bezier(.34,1.56,.64,1), border-color .2s, box-shadow .2s;
+  animation: bsFadeUp .4s ease both;
+  isolation: isolate;
+}
+@media (min-width: 960px) {
+  .blog-feat {
+    grid-row: 1 / 3;
+    grid-column: 1 / 2;
+  }
+}
+.blog-feat:hover {
+  transform: translateY(-5px);
+  border-color: rgba(201,151,58,.45);
+  box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(201,151,58,.15);
+}
+.blog-feat-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+}
+@media (min-width: 960px) {
+  .blog-feat-img-wrap {
+    aspect-ratio: auto;
+    min-height: 340px;
+    height: 100%;
+  }
+}
+.blog-feat-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform .5s ease;
+}
+.blog-feat:hover .blog-feat-img { transform: scale(1.06); }
+.blog-feat-ph {
+  width: 100%;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+/* gradient overlay for text legibility */
+.blog-feat-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    0deg,
+    rgba(0,0,0,.94) 0%,
+    rgba(0,0,0,.55) 42%,
+    rgba(0,0,0,.08) 80%,
+    transparent 100%
+  );
+}
+.blog-feat-body {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.blog-feat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  font-size: .58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  padding: 3px 9px;
+  border-radius: 3px;
+}
+.blog-feat-title {
+  font-size: clamp(.96rem, 1.8vw, 1.2rem);
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.36;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.blog-feat-excerpt {
+  font-size: .74rem;
+  color: rgba(255,255,255,.58);
+  line-height: 1.6;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.blog-feat-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .62rem;
+  color: rgba(255,255,255,.38);
+  flex-wrap: wrap;
+}
+.blog-feat-meta-dot { opacity: .3; }
+.blog-feat-movie {
+  color: #c9973a;
+  font-weight: 700;
+}
+/* ── Read more pill ── */
+.blog-feat-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 6px 13px;
+  background: rgba(201,151,58,.15);
+  border: 1px solid rgba(201,151,58,.35);
+  border-radius: 16px;
+  color: #c9973a;
+  font-size: .68rem;
+  font-weight: 700;
+  width: fit-content;
+  transition: background .15s;
+}
+.blog-feat:hover .blog-feat-read {
+  background: rgba(201,151,58,.28);
+}
+
+/* ── Small side cards ── */
+.blog-side-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.07);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), border-color .2s, box-shadow .2s;
+  animation: bsFadeUp .4s ease both;
+  isolation: isolate;
+}
+.blog-side-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(201,151,58,.38);
+  box-shadow: 0 12px 32px rgba(0,0,0,.55);
+}
+.blog-side-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: #1a1a1a;
+  flex-shrink: 0;
+}
+.blog-side-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .38s;
+}
+.blog-side-card:hover .blog-side-img { transform: scale(1.07); }
+.blog-side-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+.blog-side-badge {
+  position: absolute;
+  top: 8px;
+  left: 9px;
+  font-size: .55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+.blog-side-views {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  font-size: .55rem;
+  color: rgba(255,255,255,.6);
+  background: rgba(0,0,0,.65);
+  backdrop-filter: blur(4px);
+  border-radius: 10px;
+  padding: 2px 7px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.blog-side-body {
+  padding: 12px 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.blog-side-title {
+  font-size: .84rem;
+  font-weight: 700;
+  color: #f1f1f1;
+  line-height: 1.38;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  transition: color .18s;
+}
+.blog-side-card:hover .blog-side-title { color: #c9973a; }
+.blog-side-excerpt {
+  font-size: .71rem;
+  color: rgba(255,255,255,.4);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+.blog-side-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .62rem;
+  color: rgba(255,255,255,.26);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+.blog-side-dot { opacity: .3; }
+.blog-side-movie {
+  color: #c9973a;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
+
+/* ── Horizontal scroll row (mobile overflow) ── */
+.blog-more-row {
+  display: flex;
+  gap: 13px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  margin-top: 16px;
+}
+.blog-more-row::-webkit-scrollbar { display: none; }
+
+/* ── Mini card (row below grid) ── */
+.blog-mini {
+  flex-shrink: 0;
+  width: 200px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.06);
+  cursor: pointer;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  transition: transform .22s, border-color .2s;
+  animation: bsFadeUp .35s ease both;
+}
+.blog-mini:hover {
+  transform: translateY(-4px);
+  border-color: rgba(201,151,58,.32);
+}
+.blog-mini-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.blog-mini-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .35s;
+}
+.blog-mini:hover .blog-mini-img { transform: scale(1.07); }
+.blog-mini-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+.blog-mini-body {
+  padding: 9px 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.blog-mini-title {
+  font-size: .75rem;
+  font-weight: 700;
+  color: #f1f1f1;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  transition: color .15s;
+}
+.blog-mini:hover .blog-mini-title { color: #c9973a; }
+.blog-mini-meta {
+  font-size: .6rem;
+  color: rgba(255,255,255,.28);
+  margin-top: auto;
+}
+
+/* ── Skeleton ── */
+.blog-skel-feat {
+  border-radius: 14px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.blog-skel-feat-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(90deg, #1e1e1e 25%, #252525 50%, #1e1e1e 75%);
+  background-size: 400px 100%;
+  animation: bsShimmer 1.4s infinite;
+}
+@media (min-width: 960px) {
+  .blog-skel-feat-img { min-height: 340px; }
+}
+.blog-skel-body { padding: 14px 13px; display: flex; flex-direction: column; gap: 10px; }
+.blog-skel-line {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #1e1e1e 25%, #252525 50%, #1e1e1e 75%);
+  background-size: 400px 100%;
+  animation: bsShimmer 1.4s infinite;
+}
+.blog-skel-side {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #161616;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.blog-skel-side-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: linear-gradient(90deg, #1e1e1e 25%, #252525 50%, #1e1e1e 75%);
+  background-size: 400px 100%;
+  animation: bsShimmer 1.4s infinite;
+}
+
+/* ── Category badge colours ── */
+.bsc-review   { background: rgba(201,151,58,.92);  color: #000; }
+.bsc-actor    { background: rgba(167,139,232,.9);  color: #fff; }
+.bsc-music    { background: rgba(74,207,130,.9);   color: #000; }
+.bsc-top10    { background: rgba(232,200,122,.9);  color: #000; }
+.bsc-news     { background: rgba(122,170,232,.9);  color: #000; }
+.bsc-general  { background: rgba(229,121,154,.85); color: #fff; }
+.bsc-upcoming { background: rgba(94,174,232,.9);   color: #000; }
+`;
+function bsCatClass(cat) {
+  if (!cat) return "bsc-review";
+  const c = cat.toLowerCase();
+  if (c.includes("review")) return "bsc-review";
+  if (c.includes("actor") || c.includes("spot")) return "bsc-actor";
+  if (c.includes("music") || c.includes("song")) return "bsc-music";
+  if (c.includes("top")) return "bsc-top10";
+  if (c.includes("news")) return "bsc-news";
+  if (c.includes("upcoming")) return "bsc-upcoming";
+  return "bsc-general";
+}
+function bsFmtDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+function BlogSection({ posts, onNavigate }) {
+  if (!posts.length) return null;
+  const featured = posts[0];
+  const side = posts.slice(1, 5);
+  const mini = posts.slice(5, 12);
+  return /* @__PURE__ */ jsxs("section", { className: "home-section blog-sec", children: [
+    /* @__PURE__ */ jsx("style", { children: BLOG_CSS }),
+    /* @__PURE__ */ jsxs("div", { className: "blog-sec-head", children: [
+      /* @__PURE__ */ jsxs("div", { className: "blog-sec-head-left", children: [
+        /* @__PURE__ */ jsx("span", { className: "blog-sec-label", children: "✍️ Editorial" }),
+        /* @__PURE__ */ jsx("h2", { className: "blog-sec-title", children: "From the Blog" })
+      ] }),
+      /* @__PURE__ */ jsx("button", { className: "blog-sec-viewall", onClick: () => onNavigate("/blog"), children: "All Articles →" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "blog-mag-grid", children: [
+      /* @__PURE__ */ jsxs(
+        "div",
+        {
+          className: "blog-feat",
+          onClick: () => onNavigate(`/blog/${featured.slug}`),
+          children: [
+            /* @__PURE__ */ jsxs("div", { className: "blog-feat-img-wrap", children: [
+              featured.coverImage ? /* @__PURE__ */ jsx("img", { src: featured.coverImage, alt: featured.title, className: "blog-feat-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "blog-feat-ph", children: "✍️" }),
+              /* @__PURE__ */ jsx("div", { className: "blog-feat-overlay" })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { className: "blog-feat-body", children: [
+              /* @__PURE__ */ jsx("span", { className: `blog-feat-badge ${bsCatClass(featured.category)}`, children: featured.category || "Article" }),
+              /* @__PURE__ */ jsx("h3", { className: "blog-feat-title", children: featured.title }),
+              featured.excerpt && /* @__PURE__ */ jsx("p", { className: "blog-feat-excerpt", children: featured.excerpt }),
+              /* @__PURE__ */ jsxs("div", { className: "blog-feat-meta", children: [
+                /* @__PURE__ */ jsx("span", { children: bsFmtDate(featured.createdAt) }),
+                featured.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx("span", { className: "blog-feat-meta-dot", children: "·" }),
+                  /* @__PURE__ */ jsxs("span", { children: [
+                    featured.readTime,
+                    " min read"
+                  ] })
+                ] }),
+                featured.views > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx("span", { className: "blog-feat-meta-dot", children: "·" }),
+                  /* @__PURE__ */ jsxs("span", { children: [
+                    "👁 ",
+                    featured.views.toLocaleString()
+                  ] })
+                ] }),
+                featured.movieTitle && /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx("span", { className: "blog-feat-meta-dot", children: "·" }),
+                  /* @__PURE__ */ jsxs("span", { className: "blog-feat-movie", children: [
+                    "🎬 ",
+                    featured.movieTitle
+                  ] })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsx("span", { className: "blog-feat-read", children: "Read Article →" })
+            ] })
+          ]
+        }
+      ),
+      side.map((post2, i) => /* @__PURE__ */ jsxs(
+        "div",
+        {
+          className: "blog-side-card",
+          style: { animationDelay: `${(i + 1) * 60}ms` },
+          onClick: () => onNavigate(`/blog/${post2.slug}`),
+          children: [
+            /* @__PURE__ */ jsxs("div", { className: "blog-side-img-wrap", children: [
+              post2.coverImage ? /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "blog-side-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "blog-side-ph", children: "✍️" }),
+              /* @__PURE__ */ jsx("span", { className: `blog-side-badge ${bsCatClass(post2.category)}`, children: post2.category || "Article" }),
+              post2.views > 0 && /* @__PURE__ */ jsxs("span", { className: "blog-side-views", children: [
+                "👁 ",
+                post2.views >= 1e3 ? `${(post2.views / 1e3).toFixed(1)}k` : post2.views
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { className: "blog-side-body", children: [
+              /* @__PURE__ */ jsx("h3", { className: "blog-side-title", children: post2.title }),
+              post2.excerpt && /* @__PURE__ */ jsx("p", { className: "blog-side-excerpt", children: post2.excerpt }),
+              /* @__PURE__ */ jsxs("div", { className: "blog-side-meta", children: [
+                /* @__PURE__ */ jsx("span", { children: bsFmtDate(post2.createdAt) }),
+                post2.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx("span", { className: "blog-side-dot", children: "·" }),
+                  /* @__PURE__ */ jsxs("span", { children: [
+                    post2.readTime,
+                    " min"
+                  ] })
+                ] }),
+                post2.movieTitle && /* @__PURE__ */ jsxs(Fragment, { children: [
+                  /* @__PURE__ */ jsx("span", { className: "blog-side-dot", children: "·" }),
+                  /* @__PURE__ */ jsxs("span", { className: "blog-side-movie", children: [
+                    "🎬 ",
+                    post2.movieTitle
+                  ] })
+                ] })
+              ] })
+            ] })
+          ]
+        },
+        post2._id
+      ))
+    ] }),
+    mini.length > 0 && /* @__PURE__ */ jsx("div", { className: "blog-more-row", children: mini.map((post2, i) => /* @__PURE__ */ jsxs(
+      "div",
+      {
+        className: "blog-mini",
+        style: { animationDelay: `${i * 45}ms` },
+        onClick: () => onNavigate(`/blog/${post2.slug}`),
+        children: [
+          /* @__PURE__ */ jsx("div", { className: "blog-mini-img-wrap", children: post2.coverImage ? /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "blog-mini-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "blog-mini-ph", children: "✍️" }) }),
+          /* @__PURE__ */ jsxs("div", { className: "blog-mini-body", children: [
+            /* @__PURE__ */ jsx("h4", { className: "blog-mini-title", children: post2.title }),
+            /* @__PURE__ */ jsx("div", { className: "blog-mini-meta", children: bsFmtDate(post2.createdAt) })
+          ] })
+        ]
+      },
+      post2._id
+    )) })
+  ] });
+}
 const _cache = {
   movies: null,
   // null = not fetched yet, [] = fetched but empty
@@ -1407,7 +2011,7 @@ function Home$1({ production }) {
     }
     const load = () => {
       const apiBase = "http://localhost:4000".replace(/\/$/, "");
-      fetch(`${apiBase}/api/blog?limit=4`).then((r) => r.json()).then((data) => {
+      fetch(`${apiBase}/api/blog?limit=12`).then((r) => r.json()).then((data) => {
         const posts = data.posts || data || [];
         _cache.blog = posts;
         setBlogPosts(posts);
@@ -1575,61 +2179,7 @@ function Home$1({ production }) {
       (!moviesReady || thisMonth.length > 0) && /* @__PURE__ */ jsx(Row, { title: "🗓 This Month", badge: "New", loading: !moviesReady, children: thisMonth.map((m) => /* @__PURE__ */ jsx(MovieCard$2, { movie: m, onClick: () => navigate(moviePath(m)) }, m._id)) }),
       withTrailer.length > 0 && /* @__PURE__ */ jsx(Row, { title: "🎬 Latest Trailers", gap: 16, cardRatio: "16/9", cardWidth: 265, children: withTrailer.map((m) => /* @__PURE__ */ jsx(TrailerCard$1, { movie: m, onClick: () => navigate(`/movie/${m._id}`, { state: { scrollTo: "trailer" } }) }, m._id)) }),
       news.length > 0 && /* @__PURE__ */ jsx(Row, { title: "📰 Latest News", viewAll: "/news", gap: 14, cardRatio: "136/250", cardWidth: 250, children: news.map((n) => /* @__PURE__ */ jsx(NewsCard$2, { n, onClick: () => navigate(`/news/${n._id}`) }, n._id)) }),
-      blogPosts.length > 0 && /* @__PURE__ */ jsx(Row, { title: "✍️ From the Blog", viewAll: "/blog", gap: 16, cardRatio: "16/9", cardWidth: 280, children: blogPosts.map((post2) => /* @__PURE__ */ jsxs(
-        "div",
-        {
-          onClick: () => navigate(`/blog/${post2.slug}`),
-          style: {
-            flexShrink: 0,
-            width: 280,
-            borderRadius: 12,
-            overflow: "hidden",
-            background: "#1a1a1a",
-            border: "1px solid rgba(255,255,255,.08)",
-            cursor: "pointer",
-            transition: "border-color .2s, transform .2s",
-            display: "flex",
-            flexDirection: "column"
-          },
-          onMouseEnter: (e) => {
-            e.currentTarget.style.borderColor = "rgba(201,151,58,.4)";
-            e.currentTarget.style.transform = "translateY(-3px)";
-          },
-          onMouseLeave: (e) => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,.08)";
-            e.currentTarget.style.transform = "none";
-          },
-          children: [
-            post2.coverImage ? /* @__PURE__ */ jsx(
-              "img",
-              {
-                src: post2.coverImage,
-                alt: post2.title,
-                loading: "lazy",
-                style: { width: "100%", aspectRatio: "16/9", objectFit: "cover", background: "#252525", flexShrink: 0 },
-                onError: (e) => e.target.style.display = "none"
-              }
-            ) : /* @__PURE__ */ jsx("div", { style: { width: "100%", aspectRatio: "16/9", background: "linear-gradient(135deg,#1a1200,#0f0f0f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2rem", flexShrink: 0 }, children: "✍️" }),
-            /* @__PURE__ */ jsxs("div", { style: { padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }, children: [
-              /* @__PURE__ */ jsx("div", { style: { fontSize: ".68rem", fontWeight: 700, color: "#c9973a", textTransform: "uppercase", letterSpacing: ".06em" }, children: post2.category || "Article" }),
-              /* @__PURE__ */ jsx("div", { style: { fontSize: ".9rem", fontWeight: 700, color: "#f1f1f1", lineHeight: 1.35 }, children: post2.title }),
-              post2.excerpt && /* @__PURE__ */ jsx("div", { style: { fontSize: ".76rem", color: "rgba(255,255,255,.45)", lineHeight: 1.55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }, children: post2.excerpt }),
-              /* @__PURE__ */ jsxs("div", { style: { fontSize: ".68rem", color: "rgba(255,255,255,.3)", marginTop: "auto", paddingTop: 8, borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 8 }, children: [
-                post2.readTime && /* @__PURE__ */ jsxs("span", { children: [
-                  "⏱ ",
-                  post2.readTime,
-                  " min"
-                ] }),
-                post2.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
-                  "👁 ",
-                  post2.views.toLocaleString()
-                ] })
-              ] })
-            ] })
-          ]
-        },
-        post2._id
-      )) }),
+      blogPosts.length > 0 && /* @__PURE__ */ jsx(BlogSection, { posts: blogPosts, onNavigate: navigate }),
       recentPlayed.length > 0 && /* @__PURE__ */ jsx(Row, { title: "🕐 Recently Played", viewAll: "/songs", gap: 14, cardRatio: "1/1", cardWidth: 150, children: recentPlayed.slice(0, 12).map((s, i) => {
         const thumb = s.thumb || (s.ytId ? `https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg` : null);
         return /* @__PURE__ */ jsxs(
@@ -1752,7 +2302,7 @@ const obsImg$2 = (el, cb) => {
     _io$2._cbs.delete(el);
   };
 };
-const CSS$9 = `
+const CSS$a = `
 @keyframes mv-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
 
 .mv-root { min-height:100vh; background:#0f0f0f; padding-top:58px; color:#f1f1f1; }
@@ -2092,7 +2642,7 @@ function Movies() {
   ];
   return /* @__PURE__ */ jsxs("div", { className: "mv-root", children: [
     /* @__PURE__ */ jsx(SEO, { ...staticSEO.movies }),
-    /* @__PURE__ */ jsx("style", { children: CSS$9 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$a }),
     /* @__PURE__ */ jsxs("div", { className: "mv-hdr", children: [
       /* @__PURE__ */ jsxs("div", { className: "mv-srow", children: [
         /* @__PURE__ */ jsxs("div", { className: "mv-sbox", children: [
@@ -2280,9 +2830,9 @@ const VERDICT_COLOR = {
   "Disaster": "#e59595",
   "Upcoming": "#7aaae8"
 };
-const fmtDate$4 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+const fmtDate$5 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
 const GENRES$2 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
-const CATS$1 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
+const CATS$2 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const VDICT = ["Upcoming", "Average", "Hit", "Super Hit", "Blockbuster", "Flop", "Disaster"];
 const NCATS = ["Update", "Release", "Trailer", "Song", "Award", "Interview", "Other"];
 const CTYPES = ["Actor", "Actress", "Director", "Producer", "Music Director", "Cinematographer", "Choreographer", "Lyricist", "Other"];
@@ -2458,7 +3008,7 @@ function MiniMovieCard({ movie, onClick }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "home-card-info", children: [
       /* @__PURE__ */ jsx("p", { className: "home-card-title", children: movie.title }),
-      /* @__PURE__ */ jsx("p", { className: "home-card-date", children: fmtDate$4(movie.releaseDate) })
+      /* @__PURE__ */ jsx("p", { className: "home-card-date", children: fmtDate$5(movie.releaseDate) })
     ] })
   ] });
 }
@@ -2677,6 +3227,207 @@ function AddSongModal({ movieId, onAdded, onClose }) {
       /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: save, disabled: saving || !title.trim(), children: saving ? "Adding…" : "+ Add Song" })
     ] })
   ] }) });
+}
+const BLOG_API = "http://localhost:4000".replace(/\/$/, "") + "/api";
+const OBS_CSS = `
+@keyframes obs-fade { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+.obs-wrap { margin-bottom: 28px; }
+.obs-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.obs-label {
+  font-size: .65rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .14em; color: rgba(255,255,255,.4);
+  display: flex; align-items: center; gap: 8px;
+}
+.obs-label::before {
+  content: ''; width: 14px; height: 2px;
+  background: var(--gold,#c9973a); border-radius: 2px; display: block;
+}
+.obs-view-all {
+  font-size: .68rem; font-weight: 700; color: var(--gold,#c9973a);
+  background: none; border: none; cursor: pointer; padding: 0;
+  display: flex; align-items: center; gap: 4px; transition: opacity .15s;
+}
+.obs-view-all:hover { opacity: .75; }
+
+/* Featured horizontal card */
+.obs-feature {
+  display: flex; border-radius: 12px; overflow: hidden;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+  cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s;
+  margin-bottom: 10px; animation: obs-fade .35s ease both;
+}
+.obs-feature:hover {
+  border-color: rgba(201,151,58,.42);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 36px rgba(0,0,0,.4);
+}
+.obs-feature-img-wrap {
+  flex-shrink: 0; width: 160px; position: relative; overflow: hidden;
+}
+@media (max-width: 560px) { .obs-feature-img-wrap { width: 110px; } }
+.obs-feature-img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  transition: transform .35s;
+}
+.obs-feature:hover .obs-feature-img { transform: scale(1.05); }
+.obs-feature-img-ph {
+  width: 100%; height: 100%; min-height: 100px;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+  display: flex; align-items: center; justify-content: center; font-size: 2rem;
+}
+.obs-feature-body {
+  flex: 1; padding: 14px 16px; display: flex; flex-direction: column;
+  justify-content: center; gap: 6px; min-width: 0;
+}
+.obs-feature-badge {
+  display: inline-block; font-size: .58rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .08em;
+  background: rgba(201,151,58,.9); color: #000;
+  padding: 2px 7px; border-radius: 3px; width: fit-content;
+}
+.obs-feature-title {
+  font-size: .92rem; font-weight: 700; color: #f1f1f1; line-height: 1.38;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.obs-feature-excerpt {
+  font-size: .74rem; color: rgba(255,255,255,.46); line-height: 1.58;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.obs-feature-meta {
+  font-size: .64rem; color: rgba(255,255,255,.28);
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.obs-feature-cta {
+  font-size: .68rem; font-weight: 700; color: var(--gold,#c9973a);
+  display: flex; align-items: center; gap: 4px;
+}
+
+/* Small list items */
+.obs-list { display: flex; flex-direction: column; gap: 8px; }
+.obs-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-radius: 9px; background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06); cursor: pointer;
+  transition: background .15s, border-color .15s, transform .15s;
+  animation: obs-fade .32s ease both;
+}
+.obs-item:hover {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(201,151,58,.25);
+  transform: translateX(3px);
+}
+.obs-item-num {
+  font-size: .68rem; font-weight: 900; color: rgba(201,151,58,.4);
+  width: 18px; flex-shrink: 0; text-align: center; font-variant-numeric: tabular-nums;
+}
+.obs-item-img-wrap {
+  flex-shrink: 0; width: 52px; height: 36px; border-radius: 5px;
+  overflow: hidden; background: #1a1a1a;
+}
+.obs-item-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.obs-item-img-ph {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center; font-size: 1rem;
+  background: linear-gradient(135deg,#1a1200,#0d0d0d);
+}
+.obs-item-body { flex: 1; min-width: 0; }
+.obs-item-cat {
+  font-size: .58rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--gold,#c9973a); margin-bottom: 2px;
+}
+.obs-item-title {
+  font-size: .78rem; font-weight: 600; color: #f1f1f1; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.obs-item-meta { font-size: .62rem; color: rgba(255,255,255,.26); margin-top: 2px; }
+.obs-item-arrow {
+  font-size: .7rem; color: rgba(255,255,255,.15); flex-shrink: 0;
+  transition: color .15s, transform .15s;
+}
+.obs-item:hover .obs-item-arrow { color: var(--gold,#c9973a); transform: translateX(2px); }
+
+/* Empty / loading */
+.obs-empty {
+  padding: 24px 0; text-align: center; color: rgba(255,255,255,.22);
+  font-size: .8rem;
+}
+`;
+function OverviewBlogSection({ movieTitle, onNavigate }) {
+  const [posts, setPosts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    if (!movieTitle) return;
+    fetch(`${BLOG_API}/blog?q=${encodeURIComponent(movieTitle)}&limit=6`).then((r) => r.json()).then((data) => {
+      const list = (data.posts || data || []).filter(
+        (p) => p.movieTitle === movieTitle || (p.title || "").includes(movieTitle)
+      );
+      setPosts(list);
+    }).catch(() => {
+    }).finally(() => setLoading(false));
+  }, [movieTitle]);
+  if (loading || posts.length === 0) return null;
+  const [feature, ...rest] = posts;
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+  return /* @__PURE__ */ jsxs("div", { className: "obs-wrap", children: [
+    /* @__PURE__ */ jsx("style", { children: OBS_CSS }),
+    /* @__PURE__ */ jsxs("div", { className: "obs-header", children: [
+      /* @__PURE__ */ jsx("div", { className: "obs-label", children: "✍️ Articles about this film" }),
+      /* @__PURE__ */ jsx("button", { className: "obs-view-all", onClick: () => onNavigate("/blog"), children: "All articles →" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "obs-feature", onClick: () => onNavigate(`/blog/${feature.slug}`), children: [
+      /* @__PURE__ */ jsx("div", { className: "obs-feature-img-wrap", children: feature.coverImage ? /* @__PURE__ */ jsx("img", { src: feature.coverImage, alt: feature.title, className: "obs-feature-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "obs-feature-img-ph", children: "✍️" }) }),
+      /* @__PURE__ */ jsxs("div", { className: "obs-feature-body", children: [
+        /* @__PURE__ */ jsx("span", { className: "obs-feature-badge", children: feature.category || "Article" }),
+        /* @__PURE__ */ jsx("div", { className: "obs-feature-title", children: feature.title }),
+        feature.excerpt && /* @__PURE__ */ jsx("div", { className: "obs-feature-excerpt", children: feature.excerpt }),
+        /* @__PURE__ */ jsxs("div", { className: "obs-feature-meta", children: [
+          /* @__PURE__ */ jsxs("span", { children: [
+            "📅 ",
+            fmtD(feature.createdAt)
+          ] }),
+          feature.readTime && /* @__PURE__ */ jsxs("span", { children: [
+            "⏱ ",
+            feature.readTime,
+            " min"
+          ] }),
+          feature.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
+            "👁 ",
+            feature.views.toLocaleString()
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx("div", { className: "obs-feature-cta", children: "Read full article →" })
+      ] })
+    ] }),
+    rest.length > 0 && /* @__PURE__ */ jsx("div", { className: "obs-list", children: rest.map((post2, i) => /* @__PURE__ */ jsxs(
+      "div",
+      {
+        className: "obs-item",
+        style: { animationDelay: `${(i + 1) * 55}ms` },
+        onClick: () => onNavigate(`/blog/${post2.slug}`),
+        children: [
+          /* @__PURE__ */ jsxs("div", { className: "obs-item-num", children: [
+            "0",
+            i + 2
+          ] }),
+          /* @__PURE__ */ jsx("div", { className: "obs-item-img-wrap", children: post2.coverImage ? /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "obs-item-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "obs-item-img-ph", children: "✍️" }) }),
+          /* @__PURE__ */ jsxs("div", { className: "obs-item-body", children: [
+            /* @__PURE__ */ jsx("div", { className: "obs-item-cat", children: post2.category || "Article" }),
+            /* @__PURE__ */ jsx("div", { className: "obs-item-title", children: post2.title }),
+            /* @__PURE__ */ jsxs("div", { className: "obs-item-meta", children: [
+              fmtD(post2.createdAt),
+              post2.readTime ? ` · ${post2.readTime} min read` : ""
+            ] })
+          ] }),
+          /* @__PURE__ */ jsx("div", { className: "obs-item-arrow", children: "›" })
+        ]
+      },
+      post2._id
+    )) })
+  ] });
 }
 function MovieDetails({ production, onToast, portalMode }) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
@@ -3482,7 +4233,7 @@ function MovieDetails({ production, onToast, portalMode }) {
             ] }),
             (movie.releaseDate || movie.releaseTBA) && /* @__PURE__ */ jsxs("span", { children: [
               "🗓 ",
-              movie.releaseTBA ? "TBA" : fmtDate$4(movie.releaseDate)
+              movie.releaseTBA ? "TBA" : fmtDate$5(movie.releaseDate)
             ] }),
             movie.runtime && /* @__PURE__ */ jsxs("span", { children: [
               "⏱ ",
@@ -3741,6 +4492,7 @@ function MovieDetails({ production, onToast, portalMode }) {
             }
           ) })
         ] }),
+        /* @__PURE__ */ jsx(OverviewBlogSection, { movieTitle: movie.title, onNavigate: navigate }),
         isOwner && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 16, borderTop: "1px solid rgba(255,255,255,.07)" }, children: [
           /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => setEditing(true), children: "✏ Edit Details" }),
           /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => {
@@ -3770,7 +4522,7 @@ function MovieDetails({ production, onToast, portalMode }) {
         /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Category" }),
-            /* @__PURE__ */ jsx("select", { className: "form-select", value: editForm.category || "", onChange: (e) => setE("category", e.target.value), children: CATS$1.map((c) => /* @__PURE__ */ jsx("option", { children: c }, c)) })
+            /* @__PURE__ */ jsx("select", { className: "form-select", value: editForm.category || "", onChange: (e) => setE("category", e.target.value), children: CATS$2.map((c) => /* @__PURE__ */ jsx("option", { children: c }, c)) })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Release Date" }),
@@ -4196,7 +4948,7 @@ function MovieDetails({ production, onToast, portalMode }) {
     ] }) })
   ] });
 }
-const CSS$8 = `
+const CSS$9 = `
 @keyframes cpulse{0%,100%{opacity:1}50%{opacity:.35}}
 .cc{flex-shrink:0;width:140px;cursor:pointer;transition:transform .25s cubic-bezier(.34,1.56,.64,1);contain:layout style;}
 @media(min-width:480px){.cc{width:152px;}}
@@ -4379,7 +5131,7 @@ function Cast() {
   }), [cast]);
   return /* @__PURE__ */ jsxs("div", { className: "cast-root", children: [
     /* @__PURE__ */ jsx(SEO, { ...staticSEO.cast }),
-    /* @__PURE__ */ jsx("style", { children: CSS$8 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$9 }),
     /* @__PURE__ */ jsxs("div", { className: "cast-header", children: [
       /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }, children: [
         /* @__PURE__ */ jsx("h1", { className: "cast-title", children: "Cast & Crew" }),
@@ -4573,7 +5325,7 @@ function NewsCard$1({ news, onClick }) {
     ] })
   ] });
 }
-function Skeleton$1() {
+function Skeleton() {
   return /* @__PURE__ */ jsxs("div", { className: "home-root", style: { paddingTop: 60 }, children: [
     /* @__PURE__ */ jsx("div", { className: "skeleton", style: { width: "100%", height: 480 } }),
     /* @__PURE__ */ jsx("div", { style: { padding: "40px 0" }, children: [1, 2, 3].map((i) => /* @__PURE__ */ jsxs("div", { className: "home-section", children: [
@@ -4606,7 +5358,7 @@ function CastProfile({ portalMode }) {
       setLoading(false);
     });
   }, [id]);
-  if (loading) return /* @__PURE__ */ jsx(Skeleton$1, {});
+  if (loading) return /* @__PURE__ */ jsx(Skeleton, {});
   if (error || !person) return /* @__PURE__ */ jsxs("div", { className: "page empty-state", children: [
     /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 16 }, children: "🎭" }),
     /* @__PURE__ */ jsx("h3", { children: "Person not found" }),
@@ -4933,7 +5685,7 @@ function CastProfile({ portalMode }) {
     ] })
   ] });
 }
-const CATS = ["All", "Update", "Release", "Trailer", "Song", "Award", "Interview", "Review", "Event", "Announcement", "Other"];
+const CATS$1 = ["All", "Update", "Release", "Trailer", "Song", "Award", "Interview", "Review", "Event", "Announcement", "Other"];
 const PER_PAGE$1 = 24;
 const CAT_META$1 = {
   Interview: { color: "#e07b39", bg: "rgba(224,123,57,.13)", icon: "🎙️" },
@@ -4948,9 +5700,9 @@ const CAT_META$1 = {
   Other: { color: "#888", bg: "rgba(136,136,136,.1)", icon: "📰" }
 };
 const cm = (c) => CAT_META$1[c] || CAT_META$1.Other;
-const fmtShort = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmtShort$1 = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const fmtLong = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-const CSS$7 = `
+const CSS$8 = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
 .np { --gold:#c9973a; --border:rgba(255,255,255,.08); --muted:#888; font-family:'DM Sans',sans-serif; padding:0 0 80px; }
@@ -5168,7 +5920,7 @@ function NewsCard({ n, onClick }) {
             children: "Source ↗"
           }
         ),
-        /* @__PURE__ */ jsx("span", { className: "np-card-date", children: fmtShort(n.createdAt) })
+        /* @__PURE__ */ jsx("span", { className: "np-card-date", children: fmtShort$1(n.createdAt) })
       ] })
     ] })
   ] });
@@ -5243,7 +5995,7 @@ function News() {
   });
   const goTo = (id) => navigate(`/news/${id}`);
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$7 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$8 }),
     /* @__PURE__ */ jsxs("div", { className: "np", children: [
       /* @__PURE__ */ jsx(SEO, { ...staticSEO.news }),
       /* @__PURE__ */ jsx("div", { className: "np-mast", children: /* @__PURE__ */ jsx("div", { className: "np-mast-inner", children: /* @__PURE__ */ jsxs("div", { className: "np-mast-row", children: [
@@ -5280,7 +6032,7 @@ function News() {
             }
           )
         ] }),
-        /* @__PURE__ */ jsx("div", { className: "np-cats", children: CATS.filter((c) => c === "All" || catCounts[c] > 0).map((c) => /* @__PURE__ */ jsxs(
+        /* @__PURE__ */ jsx("div", { className: "np-cats", children: CATS$1.filter((c) => c === "All" || catCounts[c] > 0).map((c) => /* @__PURE__ */ jsxs(
           "button",
           {
             className: `np-cat${filter === c ? " on" : ""}`,
@@ -5353,7 +6105,7 @@ const CAT_META = {
   Other: { color: "#888", bg: "rgba(136,136,136,.1)", icon: "📰" }
 };
 const catMeta = (c) => CAT_META[c] || CAT_META.Other;
-const fmtDate$3 = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const fmtDate$4 = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 const fmtDateL = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
 const verdictColor$1 = (v) => {
   if (!v) return "var(--gold)";
@@ -5362,7 +6114,7 @@ const verdictColor$1 = (v) => {
   if (["flop", "disaster"].includes(l)) return "var(--red)";
   return "var(--gold)";
 };
-const CSS$6 = `
+const CSS$7 = `
 /* ══════════════════════════════════════
    NEWS DETAIL PAGE
 ══════════════════════════════════════ */
@@ -5487,7 +6239,7 @@ function RelCard({ n, onClick }) {
       /* @__PURE__ */ jsx("div", { className: "nd-rel-title", children: n.title }),
       /* @__PURE__ */ jsxs("div", { className: "nd-rel-foot", children: [
         /* @__PURE__ */ jsx("span", { className: "nd-rel-movie", children: n.movieTitle ? `🎬 ${n.movieTitle}` : "" }),
-        /* @__PURE__ */ jsx("span", { className: "nd-rel-date", children: fmtDate$3(n.createdAt) })
+        /* @__PURE__ */ jsx("span", { className: "nd-rel-date", children: fmtDate$4(n.createdAt) })
       ] })
     ] })
   ] });
@@ -5541,7 +6293,7 @@ function NewsDetail() {
     }
   };
   if (loading) return /* @__PURE__ */ jsxs("div", { className: "nd-root", children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$7 }),
     /* @__PURE__ */ jsx("div", { className: "nd-back-bar", children: /* @__PURE__ */ jsx("button", { className: "nd-back", onClick: () => navigate("/news"), children: "← All News" }) }),
     /* @__PURE__ */ jsx("div", { className: "nd-hero-wrap", children: /* @__PURE__ */ jsx("div", { className: "skeleton nd-skeleton-hero" }) }),
     /* @__PURE__ */ jsxs("div", { className: "nd-article", children: [
@@ -5552,7 +6304,7 @@ function NewsDetail() {
     ] })
   ] });
   if (error || !data) return /* @__PURE__ */ jsxs("div", { className: "nd-root", children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$7 }),
     /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "80px 24px" }, children: [
       /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 16 }, children: "📭" }),
       /* @__PURE__ */ jsx("h2", { style: { marginBottom: 8 }, children: "Article not found" }),
@@ -5567,7 +6319,7 @@ function NewsDetail() {
   const m = catMeta(data.category);
   const paragraphs = (data.content || "").split("\n").filter(Boolean);
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$7 }),
     /* @__PURE__ */ jsxs("div", { className: "nd-root", children: [
       data && /* @__PURE__ */ jsx(SEO, { ...newsItemSEO(data) }),
       /* @__PURE__ */ jsx("div", { className: "nd-back-bar", children: /* @__PURE__ */ jsx("button", { className: "nd-back", onClick: () => navigate(-1), children: "← Back" }) }),
@@ -5643,7 +6395,7 @@ function NewsDetail() {
               ] }),
               movie.releaseDate && /* @__PURE__ */ jsxs("div", { className: "nd-movie-release", children: [
                 "📅 ",
-                fmtDate$3(movie.releaseDate)
+                fmtDate$4(movie.releaseDate)
               ] })
             ] }),
             /* @__PURE__ */ jsx("div", { className: "nd-movie-arrow", children: "›" })
@@ -5856,9 +6608,9 @@ const extractYtId$4 = (input) => {
   return null;
 };
 const ytThumb$2 = (id) => id ? `https://img.youtube.com/vi/${extractYtId$4(id) || id}/mqdefault.jpg` : null;
-const fmtDate$2 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+const fmtDate$3 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
 const firstToken = (str) => (str || "").split(/[,&\/]/)[0].trim().toLowerCase();
-const CSS$5 = `
+const CSS$6 = `
 /* ─ Song detail page ─ */
 .sd-root { min-height:100vh; background:var(--bg); padding-top:58px; }
 .sd-hero {
@@ -6559,7 +7311,7 @@ function SongDetail() {
   const byMusicDirector = activeSong.musicDirector ? allSongs.filter((s) => !s.isCurrent && s.ytId && s.musicDirector && firstToken(s.musicDirector) === firstToken(activeSong.musicDirector)) : [];
   const byLyricist = activeSong.lyricist ? allSongs.filter((s) => !s.isCurrent && s.ytId && s.lyricist && firstToken(s.lyricist) === firstToken(activeSong.lyricist)) : [];
   return /* @__PURE__ */ jsxs("div", { className: "sd-root", children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$5 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$6 }),
     /* @__PURE__ */ jsx(SEO, { ...songDetailSEO({ ...activeSong, songIndex: activeIdx }, movie) }),
     /* @__PURE__ */ jsxs("div", { className: "sd-hero", children: [
       bannerImg && /* @__PURE__ */ jsx("div", { className: "sd-hero-bg", style: { backgroundImage: `url(${bannerImg})` } }),
@@ -6645,7 +7397,7 @@ function SongDetail() {
             ] }),
             movie.releaseDate && /* @__PURE__ */ jsxs("div", { className: "sd-meta-row", children: [
               /* @__PURE__ */ jsx("span", { className: "sd-meta-label", children: "Release" }),
-              /* @__PURE__ */ jsx("span", { className: "sd-meta-val", children: fmtDate$2(movie.releaseDate) })
+              /* @__PURE__ */ jsx("span", { className: "sd-meta-val", children: fmtDate$3(movie.releaseDate) })
             ] }),
             /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,.06)", paddingTop: 14 }, children: [
               ytId && /* @__PURE__ */ jsx(
@@ -6817,7 +7569,7 @@ function SongDetail() {
                   children: movie.title
                 }
               ),
-              movie.releaseDate && /* @__PURE__ */ jsx("div", { style: { fontSize: ".64rem", color: "var(--muted)", marginTop: 2 }, children: fmtDate$2(movie.releaseDate) })
+              movie.releaseDate && /* @__PURE__ */ jsx("div", { style: { fontSize: ".64rem", color: "var(--muted)", marginTop: 2 }, children: fmtDate$3(movie.releaseDate) })
             ] })
           ] }) }),
           /* @__PURE__ */ jsxs("div", { className: "sd-tabs", children: [
@@ -7020,7 +7772,7 @@ const obsImg = (el, cb) => {
     _io._cbs.delete(el);
   };
 };
-const CSS$4 = `
+const CSS$5 = `
 @keyframes yt-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
 
 /* ── Root
@@ -7661,7 +8413,7 @@ function AllSongs() {
   };
   return /* @__PURE__ */ jsxs("div", { className: "yt-root", children: [
     /* @__PURE__ */ jsx(SEO, { ...staticSEO.songs }),
-    /* @__PURE__ */ jsx("style", { children: CSS$4 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$5 }),
     /* @__PURE__ */ jsxs("div", { className: "yt-header", children: [
       /* @__PURE__ */ jsxs("div", { className: "yt-srow", children: [
         /* @__PURE__ */ jsxs("div", { className: "yt-sbox", children: [
@@ -7773,7 +8525,7 @@ function AllSongs() {
     ] })
   ] });
 }
-const CSS$3 = `
+const CSS$4 = `
 .about-root {
   max-width: 860px;
   margin: 0 auto;
@@ -7849,7 +8601,7 @@ function AboutUs() {
       /* @__PURE__ */ jsx("title", { children: "About Us — Ollypedia | Odia Cinema Encyclopedia" }),
       /* @__PURE__ */ jsx("meta", { name: "description", content: "Learn about Ollypedia — your complete encyclopedia of Odia cinema. Our mission, story and how to contribute." })
     ] }),
-    /* @__PURE__ */ jsx("style", { children: CSS$3 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$4 }),
     /* @__PURE__ */ jsxs("div", { className: "about-root", children: [
       /* @__PURE__ */ jsx("button", { className: "policy-back", onClick: () => navigate(-1), children: "← Back" }),
       /* @__PURE__ */ jsxs("div", { className: "about-hero-box", children: [
@@ -7930,636 +8682,818 @@ function AboutUs() {
     ] })
   ] });
 }
-const CSS$2 = `
-@keyframes bl-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
+const API_BASE$2 = "http://localhost:4000".replace(/\/$/, "");
+const CSS$3 = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 
-.bl-root { min-height:100vh; background:#0f0f0f; padding-top:58px; color:#f1f1f1; }
+@keyframes bl-up      { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:none} }
+@keyframes bl-shimmer { 0%{background-position:-600px 0} 100%{background-position:600px 0} }
+@keyframes bl-ticker  { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+@keyframes bl-dot     { 0%,100%{transform:scale(1);opacity:.6} 50%{transform:scale(1.5);opacity:1} }
+@keyframes bl-glow    { 0%,100%{box-shadow:0 0 18px rgba(201,151,58,.35)} 50%{box-shadow:0 0 36px rgba(201,151,58,.7)} }
 
-/* Hero */
-.bl-hero {
-  padding:52px 20px 36px;
-  text-align:center;
-  background:linear-gradient(180deg,rgba(201,151,58,.08) 0%,transparent 100%);
-  border-bottom:1px solid rgba(255,255,255,.07);
+:root {
+  --gold:#c9973a; --gold2:#e0b86a;
+  --bg:#080808; --bg2:#0f0f0f; --bg3:#161616; --bg4:#1d1d1d; --bg5:#252525;
+  --border:rgba(255,255,255,.07); --border2:rgba(255,255,255,.13);
+  --muted:rgba(255,255,255,.38); --text:#f0efe8;
 }
-.bl-hero-title {
-  font-family:'Cinzel',serif;
-  font-size:clamp(1.6rem,4vw,2.6rem);
-  font-weight:900;
-  color:#c9973a;
-  letter-spacing:.06em;
-  margin:0 0 10px;
-}
-.bl-hero-sub {
-  font-size:.92rem;
-  color:rgba(255,255,255,.45);
-  max-width:520px;
-  margin:0 auto 22px;
-  line-height:1.6;
-}
+*{box-sizing:border-box;}
+
+.bl-root{min-height:100vh;background:var(--bg);padding-top:58px;color:var(--text);font-family:'DM Sans',system-ui,sans-serif;}
+
+/* ── Ticker ── */
+.bl-ticker{background:var(--gold);overflow:hidden;height:30px;display:flex;align-items:center;}
+.bl-ticker-label{flex-shrink:0;background:#000;color:var(--gold);font-size:.58rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;padding:0 14px;height:100%;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.bl-ticker-ldot{width:5px;height:5px;background:var(--gold);border-radius:50%;animation:bl-dot 1.2s ease infinite;}
+.bl-ticker-track{display:flex;animation:bl-ticker 28s linear infinite;white-space:nowrap;}
+.bl-ticker-item{font-size:.68rem;font-weight:700;color:#000;padding:0 26px;display:flex;align-items:center;gap:7px;}
+.bl-ticker-dot{width:3px;height:3px;background:rgba(0,0,0,.4);border-radius:50%;}
+
+/* ── Masthead ── */
+.bl-masthead{position:relative;overflow:hidden;border-bottom:1px solid var(--border);}
+.bl-masthead::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(201,151,58,.1) 0%,transparent 70%);pointer-events:none;}
+.bl-masthead::after{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:64px 64px;pointer-events:none;mask-image:linear-gradient(180deg,transparent,rgba(0,0,0,.6) 50%,transparent);}
+.bl-masthead-inner{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:48px 20px 36px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;}
+@media(min-width:768px){.bl-masthead-inner{padding:60px 32px 44px;}}
+
+.bl-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.6rem;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);padding:5px 14px;border:1px solid rgba(201,151,58,.28);border-radius:2px;background:rgba(201,151,58,.06);}
+.bl-eyebrow-dot{width:5px;height:5px;background:var(--gold);border-radius:50%;animation:bl-dot 1.5s ease infinite;}
+
+.bl-brand{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,7vw,4.8rem);font-weight:900;line-height:.9;letter-spacing:-.025em;margin:0;background:linear-gradient(135deg,#f5e6c0 0%,var(--gold) 45%,#7a5018 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.bl-brand em{font-style:italic;font-weight:700;}
+.bl-brand-rule{width:100%;max-width:460px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),rgba(201,151,58,.25),transparent);}
+.bl-brand-sub{font-size:.75rem;color:var(--muted);letter-spacing:.16em;text-transform:uppercase;display:flex;align-items:center;gap:9px;}
+.bl-brand-sub span{opacity:.35;}
 
 /* Search */
-.bl-sbox {
-  display:flex; align-items:center; max-width:480px; margin:0 auto;
-  background:#1e1e1e; border:1.5px solid rgba(255,255,255,.1);
-  border-radius:24px; padding:0 16px; gap:8px; transition:border-color .18s;
-}
-.bl-sbox:focus-within { border-color:rgba(201,151,58,.6); }
-.bl-sbox input { flex:1; background:none; border:none; outline:none; color:#f1f1f1; font-size:.86rem; padding:10px 0; }
-.bl-sbox input::placeholder { color:rgba(255,255,255,.28); }
+.bl-srow{display:flex;align-items:stretch;max-width:520px;width:100%;border:1.5px solid var(--border2);border-radius:3px;background:var(--bg3);transition:border-color .2s,box-shadow .2s;}
+.bl-srow:focus-within{border-color:rgba(201,151,58,.5);box-shadow:0 0 0 3px rgba(201,151,58,.07);}
+.bl-sico{padding:0 14px;display:flex;align-items:center;color:var(--muted);font-size:.88rem;flex-shrink:0;}
+.bl-sinput{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.86rem;padding:12px 0;}
+.bl-sinput::placeholder{color:rgba(255,255,255,.2);}
+.bl-sclear{background:none;border:none;color:var(--muted);cursor:pointer;padding:0 10px;font-size:.78rem;}
+.bl-sbtn{padding:0 22px;background:var(--gold);border:none;color:#000;font-family:inherit;font-weight:700;font-size:.78rem;letter-spacing:.04em;cursor:pointer;transition:background .15s;border-radius:0 1px 1px 0;flex-shrink:0;}
+.bl-sbtn:hover{background:var(--gold2);}
 
-/* Category chips */
-.bl-cats {
-  display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
-  padding:18px 20px 0;
-}
-.bl-cat {
-  padding:5px 14px; border-radius:20px; border:1px solid rgba(255,255,255,.13);
-  background:#1e1e1e; color:rgba(255,255,255,.65); font-size:.75rem;
-  font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap;
-}
-.bl-cat:hover { background:#2a2a2a; color:#fff; }
-.bl-cat.on { background:rgba(201,151,58,.15); color:#c9973a; border-color:rgba(201,151,58,.4); }
+/* ── Category Nav ── */
+.bl-catnav-wrap{background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:58px;z-index:90;}
+.bl-catnav{max-width:1280px;margin:0 auto;padding:0 20px;display:flex;overflow-x:auto;scrollbar-width:none;}
+.bl-catnav::-webkit-scrollbar{display:none;}
+@media(min-width:768px){.bl-catnav{padding:0 32px;}}
+.bl-catbtn{padding:13px 18px;border:none;border-bottom:2.5px solid transparent;background:none;color:var(--muted);font-family:inherit;font-size:.74rem;font-weight:600;cursor:pointer;white-space:nowrap;letter-spacing:.04em;transition:color .15s,border-color .15s;flex-shrink:0;}
+.bl-catbtn:hover{color:var(--text);}
+.bl-catbtn.on{color:var(--gold);border-bottom-color:var(--gold);}
 
-/* Content area */
-.bl-content { max-width:1200px; margin:0 auto; padding:32px 16px 80px; }
-@media(min-width:600px){ .bl-content { padding:32px 24px 80px; } }
-@media(min-width:960px){ .bl-content { padding:36px 32px 80px; } }
+/* ── Topbar ── */
+.bl-topbar{max-width:1280px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+@media(min-width:768px){.bl-topbar{padding:16px 32px;}}
+.bl-topbar-l{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.bl-count-badge{background:rgba(201,151,58,.1);border:1px solid rgba(201,151,58,.2);border-radius:10px;padding:1px 8px;font-size:.66rem;font-weight:700;color:var(--gold);}
+.bl-sort-grp{display:flex;gap:5px;align-items:center;}
+.bl-sort-l{font-size:.68rem;color:var(--muted);}
+.bl-sortbtn{padding:5px 12px;border-radius:2px;border:1px solid var(--border2);background:var(--bg3);color:var(--muted);font-family:inherit;font-size:.7rem;font-weight:600;cursor:pointer;transition:all .15s;}
+.bl-sortbtn.on{border-color:rgba(201,151,58,.4);color:var(--gold);background:rgba(201,151,58,.08);}
 
-/* Featured card */
-.bl-featured {
-  display:grid; grid-template-columns:1fr;
-  background:#1a1a1a; border-radius:14px; overflow:hidden;
-  border:1px solid rgba(255,255,255,.09); margin-bottom:36px;
-  cursor:pointer; transition:border-color .2s, transform .2s;
-}
-@media(min-width:700px){
-  .bl-featured { grid-template-columns:1.4fr 1fr; }
-}
-.bl-featured:hover { border-color:rgba(201,151,58,.4); transform:translateY(-2px); }
-.bl-feat-img {
-  width:100%; aspect-ratio:16/9; object-fit:cover;
-  background:#252525;
-}
-@media(min-width:700px){ .bl-feat-img { aspect-ratio:auto; min-height:260px; } }
-.bl-feat-body { padding:24px 22px; display:flex; flex-direction:column; justify-content:center; gap:10px; }
-.bl-feat-badge {
-  display:inline-flex; align-items:center; gap:6px;
-  background:rgba(201,151,58,.14); color:#c9973a;
-  border:1px solid rgba(201,151,58,.3); border-radius:20px;
-  padding:3px 10px; font-size:.7rem; font-weight:700;
-  width:fit-content;
-}
-.bl-feat-title { font-size:clamp(1rem,2.5vw,1.35rem); font-weight:800; color:#fff; line-height:1.4; margin:0; }
-.bl-feat-excerpt { font-size:.83rem; color:rgba(255,255,255,.55); line-height:1.65; margin:0; }
-.bl-feat-meta { font-size:.73rem; color:rgba(255,255,255,.35); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+/* ── Main ── */
+.bl-main{max-width:1280px;margin:0 auto;padding:0 20px 80px;}
+@media(min-width:768px){.bl-main{padding:0 32px 80px;}}
 
-/* Grid */
-.bl-grid {
-  display:grid; gap:20px;
-  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
-}
+/* ── Hero grid ── */
+.bl-hero{display:grid;grid-template-columns:1fr;gap:3px;margin-bottom:36px;border-radius:5px;overflow:hidden;border:1px solid var(--border);}
+@media(min-width:700px){.bl-hero{grid-template-columns:1.65fr 1fr;}}
 
-/* Card */
-.bl-card {
-  background:#1a1a1a; border-radius:12px; overflow:hidden;
-  border:1px solid rgba(255,255,255,.08); cursor:pointer;
-  transition:border-color .2s, transform .2s; display:flex; flex-direction:column;
-}
-.bl-card:hover { border-color:rgba(201,151,58,.35); transform:translateY(-3px); }
-.bl-card-img { width:100%; aspect-ratio:16/9; object-fit:cover; background:#252525; flex-shrink:0; }
-.bl-card-body { padding:16px; display:flex; flex-direction:column; gap:8px; flex:1; }
-.bl-card-cat {
-  font-size:.68rem; font-weight:700; color:#c9973a;
-  text-transform:uppercase; letter-spacing:.06em;
-}
-.bl-card-title { font-size:.92rem; font-weight:700; color:#f1f1f1; line-height:1.4; margin:0; }
-.bl-card-excerpt { font-size:.78rem; color:rgba(255,255,255,.48); line-height:1.6; margin:0; flex:1; }
-.bl-card-meta { font-size:.7rem; color:rgba(255,255,255,.3); display:flex; gap:8px; align-items:center; margin-top:auto; padding-top:8px; border-top:1px solid rgba(255,255,255,.06); }
+.bl-hero-main{position:relative;cursor:pointer;overflow:hidden;min-height:360px;display:flex;align-items:flex-end;background:var(--bg3);animation:bl-up .5s ease both;}
+@media(min-width:700px){.bl-hero-main{min-height:460px;}}
+.bl-hero-main-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .6s ease;filter:brightness(.65);}
+.bl-hero-main:hover .bl-hero-main-img{transform:scale(1.05);}
+.bl-hero-main-grad{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.96) 0%,rgba(0,0,0,.6) 38%,transparent 72%);}
+.bl-hero-main-body{position:relative;z-index:1;padding:26px 22px;display:flex;flex-direction:column;gap:10px;}
+.bl-hero-badge{display:inline-flex;align-items:center;gap:5px;width:fit-content;font-size:.56rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;border-radius:2px;background:var(--gold);color:#000;animation:bl-glow 2.5s ease infinite;}
+.bl-hero-title{font-family:'Playfair Display',serif;font-size:clamp(1.25rem,2.8vw,1.9rem);font-weight:700;color:#fff;line-height:1.25;margin:0;}
+.bl-hero-excerpt{font-size:.78rem;color:rgba(255,255,255,.58);line-height:1.65;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.bl-hero-meta{font-size:.63rem;color:rgba(255,255,255,.36);display:flex;gap:9px;flex-wrap:wrap;align-items:center;}
+.bl-hero-read{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(201,151,58,.16);border:1px solid rgba(201,151,58,.38);border-radius:2px;color:var(--gold);font-size:.71rem;font-weight:700;width:fit-content;transition:background .15s;}
+.bl-hero-main:hover .bl-hero-read{background:rgba(201,151,58,.3);}
 
-/* Skeleton */
-.bl-skel { background:#1a1a1a; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,.07); }
-.bl-skel-img { width:100%; aspect-ratio:16/9; background:#252525; animation:bl-pulse 1.4s ease infinite; }
-.bl-skel-body { padding:16px; display:flex; flex-direction:column; gap:10px; }
-.bl-skel-line { height:12px; border-radius:6px; background:#252525; animation:bl-pulse 1.4s ease infinite; }
+.bl-hero-stack{display:flex;flex-direction:row;gap:3px;}
+@media(min-width:700px){.bl-hero-stack{flex-direction:column;}}
+.bl-hero-side{flex:1;position:relative;cursor:pointer;overflow:hidden;min-height:160px;display:flex;align-items:flex-end;background:var(--bg3);}
+.bl-hero-side-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .45s;filter:brightness(.6);}
+.bl-hero-side:hover .bl-hero-side-img{transform:scale(1.07);}
+.bl-hero-side-grad{position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.94) 0%,transparent 62%);}
+.bl-hero-side-body{position:relative;z-index:1;padding:12px 14px;}
+.bl-hero-side-cat{font-size:.55rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:4px;}
+.bl-hero-side-title{font-size:.8rem;font-weight:700;color:#fff;line-height:1.35;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;transition:color .15s;}
+.bl-hero-side:hover .bl-hero-side-title{color:var(--gold);}
+.bl-hero-side-meta{font-size:.6rem;color:rgba(255,255,255,.3);margin-top:3px;}
 
-/* Empty */
-.bl-empty { text-align:center; padding:80px 20px; color:rgba(255,255,255,.3); }
-.bl-empty-icon { font-size:2.8rem; margin-bottom:12px; }
-.bl-empty-text { font-size:.9rem; }
+/* ── Content wrap ── */
+.bl-cwrap{display:grid;grid-template-columns:1fr;gap:40px;}
+@media(min-width:1024px){.bl-cwrap{grid-template-columns:1fr 290px;gap:48px;}}
 
-/* Load more */
-.bl-more {
-  display:block; margin:36px auto 0; padding:11px 32px;
-  background:transparent; border:1.5px solid rgba(201,151,58,.4);
-  border-radius:24px; color:#c9973a; font-size:.85rem; font-weight:700;
-  cursor:pointer; transition:all .2s;
-}
-.bl-more:hover { background:rgba(201,151,58,.1); border-color:#c9973a; }
+/* ── Section title ── */
+.bl-stitle{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--muted);display:flex;align-items:center;gap:11px;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--border);}
+.bl-stitle::before{content:'';display:block;width:22px;height:2.5px;background:var(--gold);border-radius:2px;flex-shrink:0;}
+.bl-stitle-ct{margin-left:auto;font-size:.6rem;color:rgba(201,151,58,.55);font-weight:400;letter-spacing:.04em;}
+
+/* ── Article grid ── */
+.bl-grid{display:grid;gap:2px;grid-template-columns:1fr;}
+@media(min-width:500px){.bl-grid{grid-template-columns:1fr 1fr;}}
+@media(min-width:900px){.bl-grid{grid-template-columns:1fr 1fr 1fr;}}
+
+.bl-card{background:var(--bg3);cursor:pointer;display:flex;flex-direction:column;animation:bl-up .4s ease both;transition:background .18s;}
+.bl-card:hover{background:var(--bg4);}
+.bl-card-img-wrap{position:relative;overflow:hidden;aspect-ratio:16/9;background:var(--bg4);flex-shrink:0;}
+.bl-card-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .42s ease;}
+.bl-card:hover .bl-card-img{transform:scale(1.07);}
+.bl-card-img-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(135deg,#1a1200,#060606);}
+.bl-card-cat{position:absolute;top:0;left:0;font-size:.54rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;padding:4px 9px;line-height:1.5;}
+.bl-card-views{position:absolute;bottom:7px;right:8px;font-size:.57rem;color:rgba(255,255,255,.65);background:rgba(0,0,0,.62);backdrop-filter:blur(4px);border-radius:10px;padding:2px 7px;}
+.bl-card-body{padding:13px 15px 15px;display:flex;flex-direction:column;gap:6px;flex:1;border-bottom:1px solid var(--border);}
+.bl-card-title{font-size:.87rem;font-weight:700;color:var(--text);line-height:1.4;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;transition:color .15s;}
+.bl-card:hover .bl-card-title{color:var(--gold);}
+.bl-card-exc{font-size:.73rem;color:rgba(255,255,255,.4);line-height:1.6;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1;}
+.bl-card-meta{display:flex;align-items:center;gap:7px;font-size:.62rem;color:rgba(255,255,255,.25);margin-top:3px;flex-wrap:wrap;}
+.bl-card-movie{color:var(--gold);font-weight:600;margin-left:auto;}
+
+/* ── Trending sidebar ── */
+.bl-sidebar{}
+.bl-trending-list{display:flex;flex-direction:column;}
+.bl-trending-item{display:flex;gap:11px;align-items:flex-start;padding:13px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:all .15s;}
+.bl-trending-item:last-child{border-bottom:none;}
+.bl-trending-item:hover .bl-t-num{color:var(--gold);}
+.bl-trending-item:hover .bl-t-title{color:var(--gold);}
+.bl-t-num{font-family:'Playfair Display',serif;font-size:1.55rem;font-weight:900;color:rgba(255,255,255,.1);line-height:1;flex-shrink:0;width:28px;text-align:right;transition:color .15s;}
+.bl-t-thumb{width:66px;height:44px;object-fit:cover;border-radius:2px;background:var(--bg4);flex-shrink:0;}
+.bl-t-ph{width:66px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg4);border-radius:2px;font-size:1.1rem;}
+.bl-t-info{flex:1;min-width:0;}
+.bl-t-cat{font-size:.55rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);margin-bottom:3px;}
+.bl-t-title{font-size:.78rem;font-weight:700;color:var(--text);line-height:1.36;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;transition:color .15s;}
+.bl-t-meta{font-size:.6rem;color:rgba(255,255,255,.26);margin-top:3px;}
+
+/* ── Skeleton ── */
+.bl-sk{background:linear-gradient(90deg,var(--bg4) 25%,var(--bg5) 50%,var(--bg4) 75%);background-size:600px 100%;animation:bl-shimmer 1.5s infinite;border-radius:2px;}
+.bl-skel-card{background:var(--bg3);}
+
+/* ── Empty ── */
+.bl-empty{text-align:center;padding:80px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;}
+.bl-empty-ico{font-size:3rem;opacity:.35;}
+.bl-empty-t{font-family:'Playfair Display',serif;font-size:1.25rem;color:rgba(255,255,255,.38);}
+.bl-empty-s{font-size:.8rem;color:var(--muted);}
+
+/* ── Load more ── */
+.bl-lmore{text-align:center;margin-top:40px;padding-top:22px;border-top:1px solid var(--border);}
+.bl-lmore-btn{display:inline-flex;align-items:center;gap:10px;padding:11px 34px;background:transparent;border:1.5px solid rgba(201,151,58,.28);border-radius:2px;color:var(--gold);font-family:inherit;font-size:.78rem;font-weight:700;letter-spacing:.06em;cursor:pointer;transition:all .2s;}
+.bl-lmore-btn:hover{background:rgba(201,151,58,.1);border-color:var(--gold);}
+.bl-lmore-btn:disabled{opacity:.4;cursor:not-allowed;}
 `;
-const CATEGORIES$2 = ["All", "Movie Review", "Top 10", "Actor Spotlight", "News", "Upcoming", "General"];
-function Skeleton() {
-  return /* @__PURE__ */ jsxs("div", { className: "bl-skel", children: [
-    /* @__PURE__ */ jsx("div", { className: "bl-skel-img" }),
-    /* @__PURE__ */ jsxs("div", { className: "bl-skel-body", children: [
-      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "40%" } }),
-      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "90%" } }),
-      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "75%" } }),
-      /* @__PURE__ */ jsx("div", { className: "bl-skel-line", style: { width: "30%", marginTop: 4 } })
+const CATS = ["All", "Movie Review", "Top 10", "Actor Spotlight", "News", "Upcoming", "General"];
+const CAT_STYLE = {
+  "Movie Review": { bg: "rgba(201,151,58,.9)", c: "#000" },
+  "Actor Spotlight": { bg: "rgba(167,139,232,.9)", c: "#fff" },
+  "Top 10": { bg: "rgba(232,200,122,.9)", c: "#000" },
+  "News": { bg: "rgba(74,207,130,.9)", c: "#000" },
+  "Upcoming": { bg: "rgba(90,170,232,.9)", c: "#000" },
+  "General": { bg: "rgba(229,121,154,.9)", c: "#fff" }
+};
+const cs = (cat) => {
+  const s = CAT_STYLE[cat] || CAT_STYLE["Movie Review"];
+  return { background: s.bg, color: s.c };
+};
+const fd = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+const fv = (v) => !v ? "" : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : String(v);
+function SkelCard() {
+  return /* @__PURE__ */ jsxs("div", { className: "bl-skel-card", children: [
+    /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { aspectRatio: "16/9" } }),
+    /* @__PURE__ */ jsxs("div", { style: { padding: "13px 15px", display: "flex", flexDirection: "column", gap: 9 }, children: [
+      /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 9, width: "36%" } }),
+      /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 12, width: "90%" } }),
+      /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 12, width: "72%" } }),
+      /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 9, width: "26%", marginTop: 4 } })
     ] })
   ] });
 }
-function formatDate$1(iso) {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-  } catch {
-    return "";
-  }
-}
 function Blog() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [sp, setSP] = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [search, setSearch] = useState(searchParams.get("q") || "");
-  const [cat, setCat] = useState(searchParams.get("cat") || "All");
-  const PER_PAGE2 = 12;
-  const fetchPosts = useCallback(async (pg = 1, reset = true) => {
+  const [more, setMore] = useState(false);
+  const [si, setSi] = useState(sp.get("q") || "");
+  const [search, setSearch] = useState(sp.get("q") || "");
+  const [cat, setCat] = useState(sp.get("cat") || "All");
+  const [sort, setSort] = useState("newest");
+  const PER = 15;
+  const fetch_ = useCallback(async (pg = 1, reset = true) => {
     if (reset) {
       setLoading(true);
       setPosts([]);
-    } else setLoadingMore(true);
+    } else setMore(true);
     try {
-      const params = new URLSearchParams({ page: pg, limit: PER_PAGE2 });
-      if (search.trim()) params.set("q", search.trim());
-      if (cat && cat !== "All") params.set("category", cat);
-      const apiBase = "http://localhost:4000".replace(/\/$/, "");
-      const res = await fetch(
-        `${apiBase}/api/blog?${params}`
-      );
-      const data = await res.json();
-      const list = data.posts || data || [];
-      setPosts((p) => reset ? list : [...p, ...list]);
-      setTotal(data.total || list.length);
+      const p = new URLSearchParams({ page: pg, limit: PER });
+      if (search.trim()) p.set("q", search.trim());
+      if (cat && cat !== "All") p.set("category", cat);
+      const r = await fetch(`${API_BASE$2}/api/blog?${p}`);
+      const d = await r.json();
+      let list = d.posts || d || [];
+      if (sort === "popular") list = [...list].sort((a, b) => (b.views || 0) - (a.views || 0));
+      setPosts((prev) => reset ? list : [...prev, ...list]);
+      setTotal(d.total || list.length);
       setPage(pg);
     } catch {
       if (reset) setPosts([]);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
+      setMore(false);
     }
-  }, [search, cat]);
+  }, [search, cat, sort]);
   useEffect(() => {
-    fetchPosts(1, true);
-  }, [fetchPosts]);
+    fetch_(1, true);
+  }, [fetch_]);
   useEffect(() => {
     const p = {};
     if (search) p.q = search;
     if (cat && cat !== "All") p.cat = cat;
-    setSearchParams(p, { replace: true });
+    setSP(p, { replace: true });
   }, [search, cat]);
-  const handleSearch = (e) => {
-    if (e.key === "Enter") fetchPosts(1, true);
-  };
-  const featured = posts[0];
-  const rest = posts.slice(1);
+  const go = () => setSearch(si);
+  const isDefault = !search && cat === "All";
+  const heroMain = isDefault && posts[0];
+  const heroSides = isDefault ? posts.slice(1, 3) : [];
+  const gridPosts = isDefault ? posts.slice(3) : posts;
+  const trending = [...posts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 8);
   const hasMore = posts.length < total;
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$2 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$3 }),
     /* @__PURE__ */ jsxs(Helmet, { children: [
       /* @__PURE__ */ jsx("title", { children: "Ollywood Blog – Odia Movie Articles, Reviews & News | OllyPedia" }),
-      /* @__PURE__ */ jsx("meta", { name: "description", content: "Explore Odia movie reviews, top 10 lists, actor spotlights, and the latest Ollywood news on OllyPedia's blog." })
+      /* @__PURE__ */ jsx("meta", { name: "description", content: "Trending Odia movie reviews, top 10 lists, actor spotlights, and the latest Ollywood news." })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "bl-root", children: [
-      /* @__PURE__ */ jsxs("div", { className: "bl-hero", children: [
-        /* @__PURE__ */ jsx("h1", { className: "bl-hero-title", children: "✍️ Ollywood Blog" }),
-        /* @__PURE__ */ jsx("p", { className: "bl-hero-sub", children: "Movie reviews, top lists, actor spotlights, and the latest from Odia cinema." }),
-        /* @__PURE__ */ jsxs("div", { className: "bl-sbox", children: [
-          /* @__PURE__ */ jsx("span", { style: { color: "rgba(255,255,255,.35)", fontSize: ".9rem" }, children: "🔍" }),
-          /* @__PURE__ */ jsx(
-            "input",
-            {
-              placeholder: "Search articles…",
-              value: search,
-              onChange: (e) => setSearch(e.target.value),
-              onKeyDown: handleSearch
-            }
-          ),
-          search && /* @__PURE__ */ jsx(
-            "button",
-            {
-              onClick: () => {
-                setSearch("");
-              },
-              style: { background: "none", border: "none", color: "rgba(255,255,255,.4)", cursor: "pointer", fontSize: ".85rem" },
-              children: "✕"
-            }
-          )
+      /* @__PURE__ */ jsxs("div", { className: "bl-ticker", children: [
+        /* @__PURE__ */ jsxs("div", { className: "bl-ticker-label", children: [
+          /* @__PURE__ */ jsx("span", { className: "bl-ticker-ldot" }),
+          "TRENDING"
+        ] }),
+        /* @__PURE__ */ jsx("div", { style: { overflow: "hidden", flex: 1 }, children: /* @__PURE__ */ jsx("div", { className: "bl-ticker-track", children: [...posts.length ? posts.slice(0, 6) : Array(6).fill({ title: "Ollywood News & Reviews" }), ...posts.length ? posts.slice(0, 6) : Array(6).fill({ title: "Ollywood News & Reviews" })].map((p, i) => /* @__PURE__ */ jsxs("span", { className: "bl-ticker-item", children: [
+          /* @__PURE__ */ jsx("span", { className: "bl-ticker-dot" }),
+          p.title
+        ] }, i)) }) })
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "bl-masthead", children: /* @__PURE__ */ jsxs("div", { className: "bl-masthead-inner", children: [
+        /* @__PURE__ */ jsxs("div", { className: "bl-eyebrow", children: [
+          /* @__PURE__ */ jsx("span", { className: "bl-eyebrow-dot" }),
+          "Odia Cinema Coverage"
+        ] }),
+        /* @__PURE__ */ jsxs("h1", { className: "bl-brand", children: [
+          "The Ollywood",
+          /* @__PURE__ */ jsx("br", {}),
+          /* @__PURE__ */ jsx("em", { children: "Journal" })
+        ] }),
+        /* @__PURE__ */ jsx("div", { className: "bl-brand-rule" }),
+        /* @__PURE__ */ jsxs("div", { className: "bl-brand-sub", children: [
+          "Reviews",
+          /* @__PURE__ */ jsx("span", { children: "·" }),
+          "Spotlights",
+          /* @__PURE__ */ jsx("span", { children: "·" }),
+          "Stories",
+          /* @__PURE__ */ jsx("span", { children: "·" }),
+          "Rankings"
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "bl-srow", children: [
+          /* @__PURE__ */ jsx("div", { className: "bl-sico", children: "🔍" }),
+          /* @__PURE__ */ jsx("input", { className: "bl-sinput", placeholder: "Search articles, movies, actors…", value: si, onChange: (e) => setSi(e.target.value), onKeyDown: (e) => e.key === "Enter" && go() }),
+          si && /* @__PURE__ */ jsx("button", { className: "bl-sclear", onClick: () => {
+            setSi("");
+            setSearch("");
+          }, children: "✕" }),
+          /* @__PURE__ */ jsx("button", { className: "bl-sbtn", onClick: go, children: "Search" })
+        ] })
+      ] }) }),
+      /* @__PURE__ */ jsx("div", { className: "bl-catnav-wrap", children: /* @__PURE__ */ jsx("div", { className: "bl-catnav", children: CATS.map((c) => /* @__PURE__ */ jsx("button", { className: `bl-catbtn${cat === c ? " on" : ""}`, onClick: () => {
+        setCat(c);
+        setSearch("");
+        setSi("");
+      }, children: c }, c)) }) }),
+      /* @__PURE__ */ jsxs("div", { className: "bl-topbar", children: [
+        /* @__PURE__ */ jsx("div", { className: "bl-topbar-l", children: !loading && total > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx("span", { className: "bl-count-badge", children: total }),
+          "articles"
+        ] }) }),
+        /* @__PURE__ */ jsxs("div", { className: "bl-sort-grp", children: [
+          /* @__PURE__ */ jsx("span", { className: "bl-sort-l", children: "Sort" }),
+          [["newest", "🕐 Newest"], ["popular", "🔥 Popular"]].map(([k, l]) => /* @__PURE__ */ jsx("button", { className: `bl-sortbtn${sort === k ? " on" : ""}`, onClick: () => setSort(k), children: l }, k))
         ] })
       ] }),
-      /* @__PURE__ */ jsx("div", { className: "bl-cats", children: CATEGORIES$2.map((c) => /* @__PURE__ */ jsx(
-        "button",
-        {
-          className: `bl-cat${cat === c ? " on" : ""}`,
-          onClick: () => setCat(c),
-          children: c
-        },
-        c
-      )) }),
-      /* @__PURE__ */ jsx("div", { className: "bl-content", children: loading ? /* @__PURE__ */ jsx("div", { className: "bl-grid", children: Array.from({ length: 8 }).map((_, i) => /* @__PURE__ */ jsx(Skeleton, {}, i)) }) : posts.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "bl-empty", children: [
-        /* @__PURE__ */ jsx("div", { className: "bl-empty-icon", children: "📭" }),
-        /* @__PURE__ */ jsx("div", { className: "bl-empty-text", children: "No articles found. Check back soon!" })
-      ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-        featured && page === 1 && !search && cat === "All" && /* @__PURE__ */ jsxs(
-          "div",
-          {
-            className: "bl-featured",
-            onClick: () => navigate(`/blog/${featured.slug}`),
-            children: [
-              featured.coverImage ? /* @__PURE__ */ jsx(
-                "img",
-                {
-                  src: featured.coverImage,
-                  alt: featured.title,
-                  className: "bl-feat-img",
-                  onError: (e) => e.target.style.display = "none"
-                }
-              ) : /* @__PURE__ */ jsx("div", { className: "bl-feat-img", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3rem" }, children: "🎬" }),
-              /* @__PURE__ */ jsxs("div", { className: "bl-feat-body", children: [
-                /* @__PURE__ */ jsx("span", { className: "bl-feat-badge", children: "⭐ Featured" }),
-                /* @__PURE__ */ jsx("h2", { className: "bl-feat-title", children: featured.title }),
-                /* @__PURE__ */ jsx("p", { className: "bl-feat-excerpt", children: featured.excerpt }),
-                /* @__PURE__ */ jsxs("div", { className: "bl-feat-meta", children: [
+      /* @__PURE__ */ jsx("div", { className: "bl-main", children: loading ? /* @__PURE__ */ jsxs("div", { className: "bl-cwrap", children: [
+        /* @__PURE__ */ jsxs("div", { children: [
+          /* @__PURE__ */ jsxs("div", { style: { display: "grid", gridTemplateColumns: "1.65fr 1fr", gap: 3, marginBottom: 36, borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }, children: [
+            /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { minHeight: 320 } }),
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 3 }, children: [
+              /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { flex: 1, minHeight: 100 } }),
+              /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { flex: 1, minHeight: 100 } })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsx("div", { className: "bl-grid", children: Array.from({ length: 6 }).map((_, i) => /* @__PURE__ */ jsx(SkelCard, {}, i)) })
+        ] }),
+        /* @__PURE__ */ jsx("div", { children: Array.from({ length: 5 }).map((_, i) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 11, padding: "13px 0", borderBottom: "1px solid var(--border)" }, children: [
+          /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { width: 66, height: 44, borderRadius: 2, flexShrink: 0 } }),
+          /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", gap: 8 }, children: [
+            /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 9, width: "30%" } }),
+            /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 11, width: "88%" } }),
+            /* @__PURE__ */ jsx("div", { className: "bl-sk", style: { height: 9, width: "45%" } })
+          ] })
+        ] }, i)) })
+      ] }) : posts.length === 0 ? /* @__PURE__ */ jsxs("div", { className: "bl-empty", children: [
+        /* @__PURE__ */ jsx("div", { className: "bl-empty-ico", children: "📭" }),
+        /* @__PURE__ */ jsx("div", { className: "bl-empty-t", children: "No articles found" }),
+        /* @__PURE__ */ jsx("div", { className: "bl-empty-s", children: search ? `No results for "${search}" — try something else.` : "Check back soon for fresh stories!" })
+      ] }) : /* @__PURE__ */ jsxs("div", { className: "bl-cwrap", children: [
+        /* @__PURE__ */ jsxs("div", { children: [
+          heroMain && /* @__PURE__ */ jsxs("div", { className: "bl-hero", children: [
+            /* @__PURE__ */ jsxs("div", { className: "bl-hero-main", onClick: () => navigate(`/blog/${heroMain.slug}`), children: [
+              heroMain.coverImage ? /* @__PURE__ */ jsx("img", { src: heroMain.coverImage, alt: heroMain.title, className: "bl-hero-main-img", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(135deg,#1a1200,#040404)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3.5rem" }, children: "✍️" }),
+              /* @__PURE__ */ jsx("div", { className: "bl-hero-main-grad" }),
+              /* @__PURE__ */ jsxs("div", { className: "bl-hero-main-body", children: [
+                /* @__PURE__ */ jsx("span", { className: "bl-hero-badge", children: "⭐ Featured Story" }),
+                /* @__PURE__ */ jsx("h2", { className: "bl-hero-title", children: heroMain.title }),
+                heroMain.excerpt && /* @__PURE__ */ jsx("p", { className: "bl-hero-excerpt", children: heroMain.excerpt }),
+                /* @__PURE__ */ jsxs("div", { className: "bl-hero-meta", children: [
                   /* @__PURE__ */ jsxs("span", { children: [
                     "📅 ",
-                    formatDate$1(featured.createdAt)
+                    fd(heroMain.createdAt)
                   ] }),
-                  featured.readTime && /* @__PURE__ */ jsxs("span", { children: [
+                  heroMain.readTime && /* @__PURE__ */ jsxs("span", { children: [
                     "⏱ ",
-                    featured.readTime,
-                    " min read"
+                    heroMain.readTime,
+                    " min"
                   ] }),
-                  featured.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
+                  heroMain.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
                     "👁 ",
-                    featured.views.toLocaleString(),
-                    " views"
+                    fv(heroMain.views)
+                  ] }),
+                  heroMain.movieTitle && /* @__PURE__ */ jsxs("span", { style: { color: "var(--gold)" }, children: [
+                    "🎬 ",
+                    heroMain.movieTitle
                   ] })
+                ] }),
+                /* @__PURE__ */ jsx("span", { className: "bl-hero-read", children: "Read Story →" })
+              ] })
+            ] }),
+            heroSides.length > 0 && /* @__PURE__ */ jsx("div", { className: "bl-hero-stack", children: heroSides.map((p, i) => /* @__PURE__ */ jsxs("div", { className: "bl-hero-side", style: { animationDelay: `${(i + 1) * 80}ms` }, onClick: () => navigate(`/blog/${p.slug}`), children: [
+              p.coverImage ? /* @__PURE__ */ jsx("img", { src: p.coverImage, alt: p.title, className: "bl-hero-side-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(135deg,#1a1200,#040404)" } }),
+              /* @__PURE__ */ jsx("div", { className: "bl-hero-side-grad" }),
+              /* @__PURE__ */ jsxs("div", { className: "bl-hero-side-body", children: [
+                /* @__PURE__ */ jsx("div", { className: "bl-hero-side-cat", children: p.category || "Article" }),
+                /* @__PURE__ */ jsx("h3", { className: "bl-hero-side-title", children: p.title }),
+                /* @__PURE__ */ jsxs("div", { className: "bl-hero-side-meta", children: [
+                  fd(p.createdAt),
+                  p.readTime ? ` · ${p.readTime} min` : ""
                 ] })
               ] })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsx("div", { className: "bl-grid", children: (featured && page === 1 && !search && cat === "All" ? rest : posts).map((post2) => /* @__PURE__ */ jsxs(
-          "div",
-          {
-            className: "bl-card",
-            onClick: () => navigate(`/blog/${post2.slug}`),
-            children: [
-              post2.coverImage ? /* @__PURE__ */ jsx(
-                "img",
-                {
-                  src: post2.coverImage,
-                  alt: post2.title,
-                  className: "bl-card-img",
-                  loading: "lazy",
-                  onError: (e) => e.target.style.display = "none"
-                }
-              ) : /* @__PURE__ */ jsx("div", { className: "bl-card-img", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2rem" }, children: "🎬" }),
+            ] }, p._id)) })
+          ] }),
+          gridPosts.length > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsxs("div", { className: "bl-stitle", children: [
+              isDefault ? "Latest Articles" : "Results",
+              /* @__PURE__ */ jsxs("span", { className: "bl-stitle-ct", children: [
+                gridPosts.length,
+                " stories"
+              ] })
+            ] }),
+            /* @__PURE__ */ jsx("div", { className: "bl-grid", children: gridPosts.map((post2, i) => /* @__PURE__ */ jsxs("div", { className: "bl-card", style: { animationDelay: `${Math.min(i, 8) * 45}ms` }, onClick: () => navigate(`/blog/${post2.slug}`), children: [
+              /* @__PURE__ */ jsxs("div", { className: "bl-card-img-wrap", children: [
+                post2.coverImage ? /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "bl-card-img", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bl-card-img-ph", children: "✍️" }),
+                /* @__PURE__ */ jsx("span", { className: "bl-card-cat", style: cs(post2.category), children: post2.category || "Article" }),
+                post2.views > 0 && /* @__PURE__ */ jsxs("span", { className: "bl-card-views", children: [
+                  "👁 ",
+                  fv(post2.views)
+                ] })
+              ] }),
               /* @__PURE__ */ jsxs("div", { className: "bl-card-body", children: [
-                /* @__PURE__ */ jsx("div", { className: "bl-card-cat", children: post2.category || "Article" }),
                 /* @__PURE__ */ jsx("h3", { className: "bl-card-title", children: post2.title }),
-                /* @__PURE__ */ jsx("p", { className: "bl-card-excerpt", children: post2.excerpt }),
+                post2.excerpt && /* @__PURE__ */ jsx("p", { className: "bl-card-exc", children: post2.excerpt }),
                 /* @__PURE__ */ jsxs("div", { className: "bl-card-meta", children: [
-                  /* @__PURE__ */ jsxs("span", { children: [
-                    "📅 ",
-                    formatDate$1(post2.createdAt)
-                  ] }),
+                  /* @__PURE__ */ jsx("span", { children: fd(post2.createdAt) }),
                   post2.readTime && /* @__PURE__ */ jsxs("span", { children: [
-                    "⏱ ",
+                    "· ",
                     post2.readTime,
                     " min"
                   ] }),
-                  post2.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
-                    "👁 ",
-                    post2.views.toLocaleString()
+                  post2.movieTitle && /* @__PURE__ */ jsxs("span", { className: "bl-card-movie", children: [
+                    "🎬 ",
+                    post2.movieTitle
                   ] })
                 ] })
               ] })
-            ]
-          },
-          post2._id
-        )) }),
-        hasMore && /* @__PURE__ */ jsx(
-          "button",
-          {
-            className: "bl-more",
-            onClick: () => fetchPosts(page + 1, false),
-            disabled: loadingMore,
-            children: loadingMore ? "Loading…" : `Load More Articles (${total - posts.length} remaining)`
-          }
-        )
+            ] }, post2._id)) })
+          ] }),
+          hasMore && /* @__PURE__ */ jsx("div", { className: "bl-lmore", children: /* @__PURE__ */ jsx("button", { className: "bl-lmore-btn", onClick: () => fetch_(page + 1, false), disabled: more, children: more ? "⏳ Loading…" : `Load More · ${total - posts.length} remaining` }) })
+        ] }),
+        trending.length > 0 && /* @__PURE__ */ jsxs("aside", { className: "bl-sidebar", children: [
+          /* @__PURE__ */ jsx("div", { className: "bl-stitle", style: { marginBottom: 0, paddingBottom: 11 }, children: "🔥 Trending Now" }),
+          /* @__PURE__ */ jsx("div", { className: "bl-trending-list", children: trending.map((post2, i) => /* @__PURE__ */ jsxs("div", { className: "bl-trending-item", onClick: () => navigate(`/blog/${post2.slug}`), children: [
+            /* @__PURE__ */ jsx("div", { className: "bl-t-num", children: String(i + 1).padStart(2, "0") }),
+            post2.coverImage ? /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "bl-t-thumb", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bl-t-ph", children: "✍️" }),
+            /* @__PURE__ */ jsxs("div", { className: "bl-t-info", children: [
+              /* @__PURE__ */ jsx("div", { className: "bl-t-cat", children: post2.category || "Article" }),
+              /* @__PURE__ */ jsx("div", { className: "bl-t-title", children: post2.title }),
+              /* @__PURE__ */ jsxs("div", { className: "bl-t-meta", children: [
+                fd(post2.createdAt),
+                post2.views ? ` · 👁 ${fv(post2.views)}` : ""
+              ] })
+            ] })
+          ] }, post2._id)) })
+        ] })
       ] }) })
     ] })
   ] });
 }
-const CSS$1 = `
-@keyframes bp-pulse { 0%,100%{opacity:1} 50%{opacity:.28} }
+const API_BASE$1 = "http://localhost:4000".replace(/\/$/, "");
+const CSS$2 = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
 
-.bp-root { min-height:100vh; background:#0f0f0f; padding-top:58px; color:#f1f1f1; }
+@keyframes bp-up     { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:none} }
+@keyframes bp-shimmer{ 0%{background-position:-600px 0} 100%{background-position:600px 0} }
+@keyframes bp-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+@keyframes bp-glow   { 0%,100%{opacity:.6} 50%{opacity:1} }
+@keyframes bp-pulse  { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-/* Hero banner */
-.bp-banner {
-  position:relative; width:100%; max-height:420px; overflow:hidden;
-  display:flex; align-items:flex-end;
+:root {
+  --gold:#c9973a; --gold2:#e0b86a; --gold3:#7a5018;
+  --bg:#080808; --bg2:#0f0f0f; --bg3:#161616; --bg4:#1d1d1d; --bg5:#252525;
+  --border:rgba(255,255,255,.07); --border2:rgba(255,255,255,.13);
+  --muted:rgba(255,255,255,.38); --text:#ede9df;
+  --accent1:#c9973a; --accent2:#a78be8; --accent3:#4acf82;
+  --accent4:#e85a8a; --accent5:#5aaae8;
 }
-.bp-banner-img { width:100%; height:420px; object-fit:cover; filter:brightness(.45); }
-.bp-banner-overlay {
-  position:absolute; inset:0;
-  background:linear-gradient(0deg,rgba(15,15,15,1) 0%,rgba(15,15,15,.5) 50%,rgba(15,15,15,.1) 100%);
-}
-.bp-banner-content {
-  position:absolute; bottom:0; left:0; right:0;
-  padding:24px clamp(16px,4vw,56px) 32px;
-  max-width:860px;
-}
+*{box-sizing:border-box;}
 
-/* No banner fallback */
-.bp-nobanner {
-  background:linear-gradient(180deg,rgba(201,151,58,.07) 0%,transparent 100%);
-  border-bottom:1px solid rgba(255,255,255,.07);
-  padding:40px clamp(16px,4vw,56px) 32px;
-  max-width:860px; margin:0 auto;
-}
+.bp-root{min-height:100vh;background:var(--bg);padding-top:58px;color:var(--text);font-family:'DM Sans',system-ui,sans-serif;}
 
-.bp-cat {
-  display:inline-flex; align-items:center; gap:5px;
-  background:rgba(201,151,58,.15); color:#c9973a;
-  border:1px solid rgba(201,151,58,.3); border-radius:20px;
-  padding:3px 11px; font-size:.7rem; font-weight:700;
-  margin-bottom:12px; cursor:pointer; transition:background .15s;
+/* ══ CINEMATIC BANNER ════════════════════════════════════════════════ */
+.bp-banner{position:relative;width:100%;overflow:hidden;min-height:380px;display:flex;align-items:flex-end;}
+@media(min-width:768px){.bp-banner{min-height:520px;}}
+.bp-banner-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.5) saturate(1.2);transform:scale(1.04);}
+.bp-banner-grad{
+  position:absolute;inset:0;
+  background:
+    linear-gradient(0deg, rgba(8,8,8,1) 0%, rgba(8,8,8,.8) 25%, rgba(8,8,8,.2) 60%, transparent 100%),
+    linear-gradient(90deg, rgba(8,8,8,.5) 0%, transparent 50%);
 }
-.bp-cat:hover { background:rgba(201,151,58,.25); }
+.bp-banner-particles{position:absolute;inset:0;pointer-events:none;}
+.bp-banner-content{position:relative;z-index:2;width:100%;max-width:900px;padding:28px 20px 36px;}
+@media(min-width:768px){.bp-banner-content{padding:32px 40px 44px;}}
 
-.bp-title {
-  font-size:clamp(1.3rem,3.5vw,2rem); font-weight:900;
-  color:#fff; line-height:1.3; margin:0 0 12px;
+/* No image fallback */
+.bp-nobanner{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,rgba(201,151,58,.08) 0%,rgba(167,139,232,.04) 50%,transparent 100%);
+  border-bottom:1px solid var(--border);
+  padding:44px 20px 36px;
 }
-
-.bp-meta {
-  display:flex; flex-wrap:wrap; gap:12px; align-items:center;
-  font-size:.75rem; color:rgba(255,255,255,.45);
-}
-.bp-meta-dot { opacity:.35; }
-
-/* Layout */
-.bp-layout {
-  max-width:1100px; margin:0 auto;
-  display:grid; grid-template-columns:1fr;
-  gap:32px; padding:32px 16px 80px;
-}
-@media(min-width:600px){ .bp-layout { padding:36px 24px 80px; } }
-@media(min-width:960px){
-  .bp-layout { grid-template-columns:1fr 320px; padding:40px 32px 80px; }
-}
-
-/* Article body */
-.bp-article {
-  font-size:.95rem; color:rgba(255,255,255,.82);
-  line-height:1.85; white-space:pre-wrap;
-  word-break:break-word;
-}
-.bp-article p { margin:0 0 1.2em; }
-
-/* Tags */
-.bp-tags { display:flex; flex-wrap:wrap; gap:8px; margin-top:28px; }
-.bp-tag {
-  padding:4px 12px; border-radius:16px; font-size:.72rem; font-weight:600;
-  background:#1e1e1e; border:1px solid rgba(255,255,255,.1);
-  color:rgba(255,255,255,.55); cursor:pointer; transition:all .15s;
-}
-.bp-tag:hover { border-color:rgba(201,151,58,.4); color:#c9973a; }
-
-/* Divider */
-.bp-divider { border:none; border-top:1px solid rgba(255,255,255,.08); margin:32px 0; }
-
-/* Rating & Review section */
-.bp-reviews-head {
-  font-size:1rem; font-weight:800; color:#f1f1f1; margin:0 0 18px;
-  display:flex; align-items:center; gap:8px;
-}
-.bp-rating-row {
-  display:flex; align-items:center; gap:10px; margin-bottom:24px;
-  flex-wrap:wrap;
-}
-.bp-stars { display:flex; gap:4px; }
-.bp-star {
-  font-size:1.6rem; cursor:pointer; transition:transform .12s;
-  line-height:1; user-select:none;
-}
-.bp-star:hover { transform:scale(1.18); }
-.bp-rating-label { font-size:.82rem; color:rgba(255,255,255,.45); }
-
-/* Review form */
-.bp-form { display:flex; flex-direction:column; gap:12px; }
-.bp-input {
-  padding:10px 14px; background:#1e1e1e; border:1.5px solid rgba(255,255,255,.1);
-  border-radius:8px; color:#f1f1f1; font-size:.85rem; outline:none;
-  transition:border-color .18s; font-family:inherit;
-}
-.bp-input:focus { border-color:rgba(201,151,58,.5); }
-.bp-input::placeholder { color:rgba(255,255,255,.28); }
-.bp-textarea { resize:vertical; min-height:90px; }
-.bp-submit {
-  padding:10px 22px; background:#c9973a; border:none; border-radius:8px;
-  color:#000; font-weight:700; font-size:.85rem; cursor:pointer;
-  transition:background .15s; align-self:flex-start;
-}
-.bp-submit:hover { background:#e0aa44; }
-.bp-submit:disabled { background:#555; color:#888; cursor:not-allowed; }
-
-/* Review cards */
-.bp-review-card {
-  background:#1a1a1a; border:1px solid rgba(255,255,255,.07);
-  border-radius:10px; padding:16px; margin-bottom:14px;
-}
-.bp-rv-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; flex-wrap:wrap; gap:6px; }
-.bp-rv-name { font-weight:700; font-size:.88rem; color:#f1f1f1; }
-.bp-rv-stars { color:#c9973a; font-size:.85rem; }
-.bp-rv-date { font-size:.7rem; color:rgba(255,255,255,.3); }
-.bp-rv-text { font-size:.83rem; color:rgba(255,255,255,.65); line-height:1.65; }
-.bp-rv-actions { display:flex; gap:14px; margin-top:10px; align-items:center; }
-.bp-rv-like {
-  background:none; border:none; color:rgba(255,255,255,.4);
-  font-size:.75rem; cursor:pointer; padding:0; transition:color .15s;
-  display:flex; align-items:center; gap:4px;
-}
-.bp-rv-like:hover { color:#c9973a; }
-.bp-rv-reply-btn {
-  background:none; border:none; color:rgba(255,255,255,.4);
-  font-size:.75rem; cursor:pointer; padding:0; transition:color .15s;
-}
-.bp-rv-reply-btn:hover { color:#f1f1f1; }
-
-/* Replies */
-.bp-replies { margin-top:12px; padding-left:16px; border-left:2px solid rgba(255,255,255,.07); }
-.bp-reply { padding:8px 0; font-size:.78rem; color:rgba(255,255,255,.55); line-height:1.55; }
-.bp-reply-name { font-weight:700; color:rgba(255,255,255,.75); margin-right:6px; }
-.bp-reply-form { display:flex; gap:8px; margin-top:8px; }
-.bp-reply-input {
-  flex:1; padding:7px 12px; background:#252525;
-  border:1px solid rgba(255,255,255,.1); border-radius:6px;
-  color:#f1f1f1; font-size:.78rem; outline:none; font-family:inherit;
-}
-.bp-reply-input:focus { border-color:rgba(201,151,58,.4); }
-.bp-reply-submit {
-  padding:7px 14px; background:rgba(201,151,58,.2); border:1px solid rgba(201,151,58,.3);
-  border-radius:6px; color:#c9973a; font-size:.75rem; font-weight:700; cursor:pointer;
-  transition:background .15s;
-}
-.bp-reply-submit:hover { background:rgba(201,151,58,.35); }
-
-/* Sidebar */
-.bp-sidebar { display:flex; flex-direction:column; gap:20px; }
-.bp-sidebar-box {
-  background:#1a1a1a; border:1px solid rgba(255,255,255,.08);
-  border-radius:12px; padding:18px; overflow:hidden;
-}
-.bp-sidebar-title { font-size:.82rem; font-weight:800; color:#c9973a; text-transform:uppercase; letter-spacing:.07em; margin:0 0 14px; }
-.bp-rel-item {
-  display:flex; gap:10px; align-items:flex-start; padding:9px 0;
-  border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer;
-  transition:opacity .15s;
-}
-.bp-rel-item:last-child { border-bottom:none; padding-bottom:0; }
-.bp-rel-item:hover { opacity:.75; }
-.bp-rel-thumb { width:52px; height:34px; object-fit:cover; border-radius:5px; background:#252525; flex-shrink:0; }
-.bp-rel-title { font-size:.78rem; font-weight:600; color:#f1f1f1; line-height:1.4; }
-.bp-rel-meta { font-size:.68rem; color:rgba(255,255,255,.3); margin-top:3px; }
-
-/* Skeleton */
-.bp-skel-banner { width:100%; height:320px; background:#1a1a1a; animation:bp-pulse 1.4s ease infinite; }
-.bp-skel-line { height:14px; border-radius:7px; background:#1e1e1e; animation:bp-pulse 1.4s ease infinite; margin-bottom:12px; }
+@media(min-width:768px){.bp-nobanner{padding:56px 40px 44px;}}
+.bp-nobanner-inner{max-width:900px;}
+.bp-nobanner::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:60px 60px;}
 
 /* Back btn */
-.bp-back {
-  display:inline-flex; align-items:center; gap:6px;
-  background:none; border:none; color:rgba(255,255,255,.5);
-  font-size:.8rem; cursor:pointer; padding:0;
-  transition:color .15s; margin-bottom:16px;
-}
-.bp-back:hover { color:#f1f1f1; }
+.bp-back{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);border:1px solid var(--border2);color:rgba(255,255,255,.6);font-family:inherit;font-size:.72rem;font-weight:600;cursor:pointer;padding:5px 12px;border-radius:2px;transition:all .15s;margin-bottom:18px;}
+.bp-back:hover{background:rgba(255,255,255,.14);color:#fff;}
 
-/* Overall rating badge */
-.bp-overall {
-  display:inline-flex; align-items:center; gap:8px;
-  background:rgba(201,151,58,.12); border:1px solid rgba(201,151,58,.3);
-  border-radius:10px; padding:8px 16px; margin-bottom:20px;
+/* Category badge */
+.bp-catbadge{display:inline-flex;align-items:center;gap:6px;width:fit-content;font-size:.6rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;padding:4px 11px;border-radius:2px;margin-bottom:14px;cursor:pointer;transition:opacity .15s;}
+.bp-catbadge:hover{opacity:.8;}
+
+/* Title */
+.bp-title{
+  font-family:'Playfair Display',serif;
+  font-size:clamp(1.6rem,4vw,3rem);
+  font-weight:900;color:#fff;line-height:1.18;margin:0 0 16px;
+  text-shadow:0 2px 20px rgba(0,0,0,.6);
 }
-.bp-overall-num { font-size:1.5rem; font-weight:900; color:#c9973a; }
-.bp-overall-label { font-size:.75rem; color:rgba(255,255,255,.45); line-height:1.4; }
+
+/* Meta strip */
+.bp-meta{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:.72rem;color:rgba(255,255,255,.42);}
+.bp-meta-sep{opacity:.25;}
+.bp-meta-gold{color:var(--gold);font-weight:600;}
+.bp-meta-rating{display:inline-flex;align-items:center;gap:5px;background:rgba(201,151,58,.14);border:1px solid rgba(201,151,58,.3);border-radius:12px;padding:2px 9px;color:var(--gold);font-weight:700;}
+
+/* ══ LAYOUT ══════════════════════════════════════════════════════════ */
+.bp-layout{
+  max-width:1200px;margin:0 auto;
+  display:grid;grid-template-columns:1fr;
+  gap:40px;padding:36px 20px 80px;
+}
+@media(min-width:768px){.bp-layout{padding:44px 32px 80px;}}
+@media(min-width:1060px){.bp-layout{grid-template-columns:1fr 320px;gap:52px;padding:48px 40px 80px;}}
+
+/* ══ ARTICLE BODY ════════════════════════════════════════════════════ */
+.bp-article{
+  font-family:'DM Sans',system-ui,sans-serif;
+  font-size:1.02rem;line-height:1.9;
+  color:rgba(255,255,255,.78);
+  word-break:break-word;
+}
+/* Style each paragraph with the colorful drop-cap approach */
+.bp-article p{margin:0 0 1.4em;position:relative;}
+/* Every first paragraph gets a drop cap */
+.bp-article p:first-of-type::first-letter{
+  font-family:'Playfair Display',serif;
+  font-size:4.2rem;font-weight:900;line-height:.72;
+  float:left;margin-right:.12em;margin-top:.08em;
+  background:linear-gradient(135deg,var(--gold2),var(--gold),var(--gold3));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+/* Colorful highlighted words — we inject spans via JS */
+.bp-highlight-gold   {color:var(--gold);  font-weight:600;}
+.bp-highlight-purple {color:var(--accent2);font-weight:600;}
+.bp-highlight-green  {color:var(--accent3);font-weight:600;}
+.bp-highlight-pink   {color:var(--accent4);font-weight:600;}
+.bp-highlight-blue   {color:var(--accent5);font-weight:600;}
+
+/* Pull quote */
+.bp-pullquote{
+  margin:2em 0;padding:20px 24px;
+  border-left:3px solid var(--gold);
+  background:linear-gradient(135deg,rgba(201,151,58,.06),transparent);
+  border-radius:0 6px 6px 0;
+  font-family:'DM Serif Display',serif;
+  font-style:italic;font-size:1.08rem;
+  color:rgba(255,255,255,.7);line-height:1.7;
+}
+
+/* Divider */
+.bp-divider{border:none;margin:36px 0;display:flex;align-items:center;gap:12px;}
+.bp-divider::before,.bp-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+.bp-divider-icon{font-size:.9rem;color:rgba(255,255,255,.2);}
+
+/* Tags */
+.bp-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px;}
+.bp-tag{padding:5px 13px;border-radius:2px;font-size:.7rem;font-weight:600;background:var(--bg3);border:1px solid var(--border2);color:var(--muted);cursor:pointer;transition:all .15s;letter-spacing:.03em;}
+.bp-tag:hover{border-color:rgba(201,151,58,.4);color:var(--gold);background:rgba(201,151,58,.07);}
+
+/* ══ RELATED MOVIES ══════════════════════════════════════════════════ */
+.bp-related-title{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--muted);display:flex;align-items:center;gap:11px;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--border);}
+.bp-related-title::before{content:'';display:block;width:20px;height:2.5px;background:var(--gold);border-radius:2px;flex-shrink:0;}
+
+.bp-movies-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+.bp-movies-row::-webkit-scrollbar{display:none;}
+.bp-movie-card{flex-shrink:0;width:130px;cursor:pointer;animation:bp-up .4s ease both;}
+.bp-movie-card:hover .bp-movie-poster{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.7);border-color:rgba(201,151,58,.5);}
+.bp-movie-card:hover .bp-movie-name{color:var(--gold);}
+.bp-movie-poster{width:130px;aspect-ratio:2/3;object-fit:cover;border-radius:5px;display:block;border:1px solid var(--border);background:var(--bg4);transition:transform .3s,box-shadow .3s,border-color .3s;}
+.bp-movie-poster-ph{width:130px;aspect-ratio:2/3;border-radius:5px;border:1px solid var(--border);background:linear-gradient(135deg,#1a1200,#080808);display:flex;align-items:center;justify-content:center;font-size:2.2rem;transition:transform .3s;}
+.bp-movie-card:hover .bp-movie-poster-ph{transform:translateY(-4px);}
+.bp-movie-name{font-size:.74rem;font-weight:700;color:var(--text);margin-top:8px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;transition:color .15s;}
+.bp-movie-year{font-size:.62rem;color:var(--muted);margin-top:2px;}
+.bp-movie-verdict{font-size:.58rem;font-weight:700;padding:2px 6px;border-radius:2px;margin-top:3px;display:inline-block;}
+
+/* ══ RELATED SONGS ═══════════════════════════════════════════════════ */
+.bp-songs-list{display:flex;flex-direction:column;gap:2px;}
+.bp-song-item{display:flex;gap:11px;align-items:center;padding:10px 12px;background:var(--bg3);border-radius:3px;cursor:pointer;transition:background .15s;}
+.bp-song-item:hover{background:var(--bg4);}
+.bp-song-item:hover .bp-song-title{color:var(--gold);}
+.bp-song-thumb{width:52px;height:36px;object-fit:cover;border-radius:2px;background:var(--bg4);flex-shrink:0;}
+.bp-song-thumb-ph{width:52px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg4);border-radius:2px;font-size:1.1rem;}
+.bp-song-info{flex:1;min-width:0;}
+.bp-song-title{font-size:.8rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .15s;}
+.bp-song-meta{font-size:.65rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bp-song-play{width:28px;height:28px;background:rgba(201,151,58,.15);border:1px solid rgba(201,151,58,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:var(--gold);flex-shrink:0;transition:background .15s;}
+.bp-song-item:hover .bp-song-play{background:rgba(201,151,58,.3);}
+
+/* ══ REVIEWS ═════════════════════════════════════════════════════════ */
+.bp-reviews-wrap{margin-top:8px;}
+.bp-reviews-hd{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--muted);display:flex;align-items:center;gap:11px;margin-bottom:18px;padding-bottom:11px;border-bottom:1px solid var(--border);}
+.bp-reviews-hd::before{content:'';display:block;width:20px;height:2.5px;background:var(--gold);border-radius:2px;flex-shrink:0;}
+
+.bp-overall{display:inline-flex;align-items:center;gap:14px;background:rgba(201,151,58,.08);border:1px solid rgba(201,151,58,.2);border-radius:6px;padding:14px 20px;margin-bottom:20px;}
+.bp-overall-num{font-family:'Playfair Display',serif;font-size:2.4rem;font-weight:900;color:var(--gold);line-height:1;}
+.bp-overall-stars{color:var(--gold);font-size:1rem;letter-spacing:2px;}
+.bp-overall-label{font-size:.7rem;color:var(--muted);margin-top:2px;}
+
+.bp-rv-card{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:16px;margin-bottom:12px;transition:border-color .15s;}
+.bp-rv-card:hover{border-color:rgba(255,255,255,.14);}
+.bp-rv-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
+.bp-rv-name{font-weight:700;font-size:.86rem;color:var(--text);}
+.bp-rv-stars{color:var(--gold);font-size:.82rem;letter-spacing:1px;}
+.bp-rv-date{font-size:.68rem;color:rgba(255,255,255,.28);}
+.bp-rv-text{font-size:.82rem;color:rgba(255,255,255,.6);line-height:1.65;}
+.bp-rv-actions{display:flex;gap:14px;margin-top:10px;}
+.bp-rv-act-btn{background:none;border:none;color:rgba(255,255,255,.35);font-family:inherit;font-size:.72rem;cursor:pointer;padding:0;transition:color .15s;display:flex;align-items:center;gap:4px;}
+.bp-rv-act-btn:hover{color:var(--gold);}
+
+.bp-replies{margin-top:10px;padding:10px 14px;background:rgba(255,255,255,.02);border-left:2px solid rgba(255,255,255,.07);border-radius:0 3px 3px 0;}
+.bp-reply{padding:5px 0;font-size:.76rem;color:rgba(255,255,255,.5);line-height:1.55;}
+.bp-reply-name{font-weight:700;color:rgba(255,255,255,.7);margin-right:6px;}
+.bp-reply-form{display:flex;gap:7px;margin-top:10px;}
+.bp-reply-inp{flex:1;padding:7px 11px;background:var(--bg4);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-size:.76rem;outline:none;font-family:inherit;}
+.bp-reply-inp:focus{border-color:rgba(201,151,58,.4);}
+.bp-reply-sub{padding:7px 13px;background:rgba(201,151,58,.18);border:1px solid rgba(201,151,58,.3);border-radius:2px;color:var(--gold);font-family:inherit;font-size:.73rem;font-weight:700;cursor:pointer;transition:background .15s;white-space:nowrap;}
+.bp-reply-sub:hover{background:rgba(201,151,58,.32);}
+
+/* Review form */
+.bp-form-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:20px;}
+.bp-form-title{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin-bottom:16px;}
+.bp-stars-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.bp-star-btn{font-size:1.7rem;cursor:pointer;transition:transform .12s;line-height:1;user-select:none;background:none;border:none;padding:0;}
+.bp-star-btn:hover{transform:scale(1.2);}
+.bp-star-label{font-size:.8rem;color:rgba(255,255,255,.4);}
+.bp-inp{width:100%;padding:10px 13px;background:var(--bg4);border:1.5px solid var(--border2);border-radius:3px;color:var(--text);font-family:inherit;font-size:.84rem;outline:none;transition:border-color .18s;margin-bottom:10px;}
+.bp-inp:focus{border-color:rgba(201,151,58,.45);}
+.bp-inp::placeholder{color:rgba(255,255,255,.22);}
+.bp-textarea{resize:vertical;min-height:90px;}
+.bp-sub-btn{padding:10px 24px;background:var(--gold);border:none;border-radius:2px;color:#000;font-family:inherit;font-weight:700;font-size:.82rem;letter-spacing:.04em;cursor:pointer;transition:background .15s;}
+.bp-sub-btn:hover{background:var(--gold2);}
+.bp-sub-btn:disabled{background:var(--bg5);color:var(--muted);cursor:not-allowed;}
+.bp-success{padding:14px 16px;background:rgba(74,207,130,.08);border:1px solid rgba(74,207,130,.25);border-radius:3px;color:#4acf82;font-size:.82rem;}
+
+/* ══ SIDEBAR ═════════════════════════════════════════════════════════ */
+.bp-sidebar{display:flex;flex-direction:column;gap:24px;}
+.bp-sidebar-box{background:var(--bg3);border:1px solid var(--border);border-radius:5px;overflow:hidden;}
+.bp-sidebar-hd{font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--muted);padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.bp-sidebar-hd::before{content:'';display:block;width:16px;height:2px;background:var(--gold);border-radius:2px;flex-shrink:0;}
+.bp-sidebar-body{padding:14px 16px;}
+
+/* Article info */
+.bp-info-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:.76rem;}
+.bp-info-row:last-child{border-bottom:none;}
+.bp-info-key{color:rgba(255,255,255,.35);}
+.bp-info-val{color:var(--text);font-weight:600;}
+
+/* Share buttons */
+.bp-share-btns{display:flex;gap:8px;flex-wrap:wrap;padding:14px 16px;}
+.bp-share-btn{flex:1;min-width:80px;padding:8px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:2px;color:rgba(255,255,255,.65);font-family:inherit;font-size:.7rem;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;}
+.bp-share-btn:hover{background:var(--bg5);border-color:var(--border2);color:#fff;}
+.bp-share-twitter:hover{border-color:rgba(29,161,242,.4);color:#1da1f2;}
+.bp-share-fb:hover{border-color:rgba(66,103,178,.4);color:#4267b2;}
+.bp-share-copy:hover{border-color:rgba(201,151,58,.4);color:var(--gold);}
+
+/* Related articles in sidebar */
+.bp-rel-item{display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;}
+.bp-rel-item:last-child{border-bottom:none;}
+.bp-rel-item:hover{background:var(--bg4);}
+.bp-rel-item:hover .bp-rel-title{color:var(--gold);}
+.bp-rel-thumb{width:58px;height:38px;object-fit:cover;border-radius:2px;background:var(--bg4);flex-shrink:0;}
+.bp-rel-ph{width:58px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg4);border-radius:2px;font-size:1.1rem;}
+.bp-rel-info{flex:1;min-width:0;}
+.bp-rel-title{font-size:.76rem;font-weight:700;color:var(--text);line-height:1.35;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;transition:color .15s;}
+.bp-rel-meta{font-size:.62rem;color:rgba(255,255,255,.28);margin-top:3px;}
+
+/* ══ SKELETON ════════════════════════════════════════════════════════ */
+.bp-sk{background:linear-gradient(90deg,var(--bg4) 25%,var(--bg5) 50%,var(--bg4) 75%);background-size:600px 100%;animation:bp-shimmer 1.5s infinite;border-radius:2px;}
+
+/* ══ 404 ═════════════════════════════════════════════════════════════ */
+.bp-404{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:40px;}
+.bp-404-ico{font-size:4rem;opacity:.35;animation:bp-float 3s ease infinite;}
+.bp-404-t{font-family:'Playfair Display',serif;font-size:1.5rem;color:rgba(255,255,255,.4);}
+.bp-404-btn{padding:10px 24px;background:var(--gold);border:none;border-radius:2px;color:#000;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer;transition:background .15s;}
+.bp-404-btn:hover{background:var(--gold2);}
 `;
-function StarRating({ value, onChange }) {
+const ACCENT_COLORS = ["bp-highlight-gold", "bp-highlight-purple", "bp-highlight-green", "bp-highlight-pink", "bp-highlight-blue"];
+const ODIA_KEYWORDS = ["Ollywood", "Odia", "Odisha", "Bhubaneswar", "Cuttack", "blockbuster", "superhit", "director", "producer", "cinematography", "soundtrack", "music director", "choreography", "debut", "award", "release", "theatre", "cast", "crew", "action", "drama", "romance", "comedy", "thriller", "family", "historical", "devotional", "biography", "sequel"];
+function ColorfulArticle({ content }) {
+  const paras = (content || "").split(/\n\n+/).filter((p) => p.trim());
+  const highlight = (text, paraIdx) => {
+    let result = text;
+    const used = /* @__PURE__ */ new Set();
+    ODIA_KEYWORDS.forEach((kw, ki) => {
+      const colorClass = ACCENT_COLORS[ki % ACCENT_COLORS.length];
+      const regex = new RegExp(`\\b(${kw})\\b`, "gi");
+      if (regex.test(result) && !used.has(kw.toLowerCase())) {
+        used.add(kw.toLowerCase());
+        result = result.replace(regex, `<span class="${colorClass}">$1</span>`);
+      }
+    });
+    return result;
+  };
+  return /* @__PURE__ */ jsx("div", { className: "bp-article", children: paras.map((para, i) => {
+    const isPullQuote = i > 0 && i % 4 === 3 && para.length > 80;
+    const firstSentence = para.split(/[.!?]/)[0];
+    return /* @__PURE__ */ jsxs(React.Fragment, { children: [
+      isPullQuote && firstSentence.length > 40 && /* @__PURE__ */ jsxs("blockquote", { className: "bp-pullquote", children: [
+        '"',
+        firstSentence,
+        '."'
+      ] }),
+      /* @__PURE__ */ jsx("p", { dangerouslySetInnerHTML: { __html: highlight(para) } })
+    ] }, i);
+  }) });
+}
+function StarPicker({ value, onChange }) {
   const [hover, setHover] = useState(0);
-  return /* @__PURE__ */ jsx("div", { className: "bp-stars", children: [1, 2, 3, 4, 5].map((s) => /* @__PURE__ */ jsx(
-    "span",
-    {
-      className: "bp-star",
-      style: { color: s <= (hover || value) ? "#c9973a" : "rgba(255,255,255,.2)" },
-      onMouseEnter: () => setHover(s),
-      onMouseLeave: () => setHover(0),
-      onClick: () => onChange(s),
-      children: "★"
-    },
-    s
-  )) });
+  return /* @__PURE__ */ jsxs("div", { className: "bp-stars-row", children: [
+    [1, 2, 3, 4, 5].map((s) => /* @__PURE__ */ jsx(
+      "button",
+      {
+        className: "bp-star-btn",
+        style: { color: s <= (hover || value) ? "var(--gold)" : "rgba(255,255,255,.18)" },
+        onMouseEnter: () => setHover(s),
+        onMouseLeave: () => setHover(0),
+        onClick: () => onChange(s),
+        children: "★"
+      },
+      s
+    )),
+    /* @__PURE__ */ jsx("span", { className: "bp-star-label", children: ["", "Poor", "Fair", "Good", "Great", "Excellent"][hover || value] })
+  ] });
 }
-function formatDate(iso) {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-  } catch {
-    return "";
-  }
-}
-function averageRating(reviews) {
-  if (!(reviews == null ? void 0 : reviews.length)) return 0;
-  const valid = reviews.filter((r) => r.rating > 0);
-  if (!valid.length) return 0;
-  return (valid.reduce((s, r) => s + r.rating, 0) / valid.length).toFixed(1);
-}
+const fmtDate$2 = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "";
+const fmtShort = (iso) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+const avgRating = (reviews) => {
+  const v = (reviews || []).filter((r) => r.rating > 0);
+  return v.length ? (v.reduce((s, r) => s + r.rating, 0) / v.length).toFixed(1) : 0;
+};
+const VERDICT_COLORS = {
+  "Blockbuster": "#4acf82",
+  "Super Hit": "#4acf82",
+  "Hit": "#a3e8a0",
+  "Average": "#e8c87a",
+  "Flop": "#e59595",
+  "Disaster": "#e85555",
+  "Upcoming": "#5aaae8"
+};
 function BlogPost() {
   var _a;
   const { slug } = useParams();
   const navigate = useNavigate();
   const [post2, setPost] = useState(null);
   const [related, setRelated] = useState([]);
+  const [relMovies, setRelMovies] = useState([]);
+  const [relSongs, setRelSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [reviewName, setReviewName] = useState("");
-  const [reviewText, setReviewText] = useState("");
-  const [reviewRating, setReviewRating] = useState(5);
+  const [rvName, setRvName] = useState("");
+  const [rvText, setRvText] = useState("");
+  const [rvRating, setRvRating] = useState(5);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [replies, setReplies] = useState({});
-  const API_BASE2 = "http://localhost:4000".replace(/\/$/, "");
   useEffect(() => {
-    let cancelled = false;
+    let dead = false;
     (async () => {
       setLoading(true);
       setPost(null);
       setNotFound(false);
       try {
-        const res = await fetch(`${API_BASE2}/api/blog/${slug}`);
-        if (!res.ok) {
+        const r = await fetch(`${API_BASE$1}/api/blog/${slug}`);
+        if (!r.ok) {
           setNotFound(true);
           setLoading(false);
           return;
         }
-        const data = await res.json();
-        if (!cancelled) setPost(data);
+        const d = await r.json();
+        if (!dead) setPost(d);
       } catch {
-        if (!cancelled) setNotFound(true);
+        if (!dead) setNotFound(true);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!dead) setLoading(false);
       }
     })();
     return () => {
-      cancelled = true;
+      dead = true;
     };
   }, [slug]);
   useEffect(() => {
     if (!post2) return;
     (async () => {
       try {
-        const cat = post2.category || "";
-        const res = await fetch(`${API_BASE2}/api/blog?limit=5${cat ? `&category=${encodeURIComponent(cat)}` : ""}`);
-        const data = await res.json();
-        const list = (data.posts || data || []).filter((p) => p.slug !== slug).slice(0, 4);
-        setRelated(list);
+        const r = await fetch(`${API_BASE$1}/api/blog?limit=6${post2.category ? `&category=${encodeURIComponent(post2.category)}` : ""}`);
+        const d = await r.json();
+        setRelated((d.posts || d || []).filter((p) => p.slug !== slug).slice(0, 4));
       } catch {
-        setRelated([]);
       }
     })();
+    if (post2.movieTitle) {
+      (async () => {
+        var _a2, _b, _c;
+        try {
+          const r = await fetch(`${API_BASE$1}/api/movies?q=${encodeURIComponent(post2.movieTitle)}&limit=4`);
+          const d = await r.json();
+          const movies = d.movies || d || [];
+          setRelMovies(movies.slice(0, 4));
+          if ((_c = (_b = (_a2 = movies[0]) == null ? void 0 : _a2.media) == null ? void 0 : _b.songs) == null ? void 0 : _c.length) {
+            setRelSongs(movies[0].media.songs.slice(0, 5).map((s, idx) => ({ ...s, movieId: movies[0]._id, movieSlug: movies[0].slug || movies[0]._id, songIndex: idx })));
+          }
+        } catch {
+        }
+      })();
+    }
   }, [post2]);
   const submitReview = async () => {
-    if (!reviewName.trim() || !reviewText.trim()) return;
+    if (!rvName.trim() || !rvText.trim()) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE2}/api/blog/${post2._id}/reviews`, {
+      const r = await fetch(`${API_BASE$1}/api/blog/${post2._id}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: reviewName.trim(), text: reviewText.trim(), rating: reviewRating })
+        body: JSON.stringify({ user: rvName.trim(), text: rvText.trim(), rating: rvRating })
       });
-      if (res.ok) {
+      if (r.ok) {
         setSubmitted(true);
-        setReviewName("");
-        setReviewText("");
-        setReviewRating(5);
-        const updated = await fetch(`${API_BASE2}/api/blog/${slug}`);
+        const updated = await fetch(`${API_BASE$1}/api/blog/${slug}`);
         if (updated.ok) setPost(await updated.json());
       }
     } catch {
@@ -8568,13 +9502,13 @@ function BlogPost() {
   };
   const likeReview = async (idx) => {
     try {
-      const res = await fetch(`${API_BASE2}/api/blog/${post2._id}/reviews/${idx}/like`, { method: "POST" });
-      if (res.ok) {
-        const { likes } = await res.json();
+      const r = await fetch(`${API_BASE$1}/api/blog/${post2._id}/reviews/${idx}/like`, { method: "POST" });
+      if (r.ok) {
+        const { likes } = await r.json();
         setPost((p) => {
-          const reviews = [...p.reviews || []];
-          reviews[idx] = { ...reviews[idx], likes };
-          return { ...p, reviews };
+          const rv = [...p.reviews || []];
+          rv[idx] = { ...rv[idx], likes };
+          return { ...p, reviews: rv };
         });
       }
     } catch {
@@ -8582,56 +9516,110 @@ function BlogPost() {
   };
   const submitReply = async (idx) => {
     var _a2, _b;
-    const r = replies[idx] || {};
-    if (!((_a2 = r.text) == null ? void 0 : _a2.trim()) || !((_b = r.name) == null ? void 0 : _b.trim())) return;
+    const rep = replies[idx] || {};
+    if (!((_a2 = rep.text) == null ? void 0 : _a2.trim()) || !((_b = rep.name) == null ? void 0 : _b.trim())) return;
     try {
-      const res = await fetch(`${API_BASE2}/api/blog/${post2._id}/reviews/${idx}/reply`, {
+      const r = await fetch(`${API_BASE$1}/api/blog/${post2._id}/reviews/${idx}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: r.name.trim(), text: r.text.trim(), date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] })
+        body: JSON.stringify({ user: rep.name.trim(), text: rep.text.trim(), date: (/* @__PURE__ */ new Date()).toISOString().split("T")[0] })
       });
-      if (res.ok) {
-        const replyList = await res.json();
+      if (r.ok) {
+        const list = await r.json();
         setPost((p) => {
-          const reviews = [...p.reviews || []];
-          reviews[idx] = { ...reviews[idx], replies: replyList };
-          return { ...p, reviews };
+          const rv = [...p.reviews || []];
+          rv[idx] = { ...rv[idx], replies: list };
+          return { ...p, reviews: rv };
         });
-        setReplies((prev) => ({ ...prev, [idx]: { ...prev[idx], text: "", open: false } }));
+        setReplies((p) => ({ ...p, [idx]: { ...p[idx], text: "", open: false } }));
       }
     } catch {
     }
   };
-  const toggleReply = (idx) => setReplies((prev) => {
+  const toggleReply = (idx) => setReplies((p) => {
     var _a2;
-    return { ...prev, [idx]: { ...prev[idx] || {}, open: !((_a2 = prev[idx]) == null ? void 0 : _a2.open) } };
+    return { ...p, [idx]: { ...p[idx] || {}, open: !((_a2 = p[idx]) == null ? void 0 : _a2.open) } };
   });
-  const avg = averageRating(post2 == null ? void 0 : post2.reviews);
-  const reviewCount = ((post2 == null ? void 0 : post2.reviews) || []).length;
+  const avg = avgRating(post2 == null ? void 0 : post2.reviews);
+  const rvCount = ((post2 == null ? void 0 : post2.reviews) || []).length;
+  const CAT_STYLE2 = {
+    "Movie Review": { bg: "rgba(201,151,58,.9)", c: "#000" },
+    "Actor Spotlight": { bg: "rgba(167,139,232,.9)", c: "#fff" },
+    "Top 10": { bg: "rgba(232,200,122,.9)", c: "#000" },
+    "News": { bg: "rgba(74,207,130,.9)", c: "#000" },
+    "Upcoming": { bg: "rgba(90,170,232,.9)", c: "#000" },
+    "General": { bg: "rgba(229,121,154,.9)", c: "#fff" }
+  };
+  const cst = (cat) => {
+    const s = CAT_STYLE2[cat] || CAT_STYLE2["Movie Review"];
+    return { background: s.bg, color: s.c };
+  };
   if (loading) return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$2 }),
     /* @__PURE__ */ jsxs("div", { className: "bp-root", children: [
-      /* @__PURE__ */ jsx("div", { className: "bp-skel-banner" }),
-      /* @__PURE__ */ jsx("div", { style: { maxWidth: 860, margin: "32px auto", padding: "0 20px" }, children: [90, 70, 100, 60, 85, 50].map((w, i) => /* @__PURE__ */ jsx("div", { className: "bp-skel-line", style: { width: `${w}%` } }, i)) })
+      /* @__PURE__ */ jsx("div", { className: "bp-sk", style: { width: "100%", height: 400 } }),
+      /* @__PURE__ */ jsx("div", { style: { maxWidth: 900, margin: "40px auto", padding: "0 24px", display: "flex", flexDirection: "column", gap: 14 }, children: [85, 65, 100, 55, 80, 42, 70, 30].map((w, i) => /* @__PURE__ */ jsx("div", { className: "bp-sk", style: { height: i === 0 ? 24 : 14, width: `${w}%` } }, i)) })
     ] })
   ] });
   if (notFound) return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
-    /* @__PURE__ */ jsxs("div", { className: "bp-root", style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }, children: [
-      /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem" }, children: "📭" }),
-      /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", color: "rgba(255,255,255,.5)" }, children: "Article not found." }),
-      /* @__PURE__ */ jsx(
-        "button",
-        {
-          onClick: () => navigate("/blog"),
-          style: { padding: "9px 22px", background: "#c9973a", border: "none", borderRadius: 8, color: "#000", fontWeight: 700, cursor: "pointer" },
-          children: "← Back to Blog"
-        }
-      )
+    /* @__PURE__ */ jsx("style", { children: CSS$2 }),
+    /* @__PURE__ */ jsx("div", { className: "bp-root", children: /* @__PURE__ */ jsxs("div", { className: "bp-404", children: [
+      /* @__PURE__ */ jsx("div", { className: "bp-404-ico", children: "📭" }),
+      /* @__PURE__ */ jsx("div", { className: "bp-404-t", children: "Article not found" }),
+      /* @__PURE__ */ jsx("button", { className: "bp-404-btn", onClick: () => navigate("/blog"), children: "← Back to Blog" })
+    ] }) })
+  ] });
+  const Header = () => /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("button", { className: "bp-back", onClick: () => navigate("/blog"), children: "← Back to Blog" }),
+    /* @__PURE__ */ jsx("span", { className: "bp-catbadge", style: cst(post2.category), onClick: () => navigate(`/blog?cat=${encodeURIComponent(post2.category || "")}`), children: post2.category || "Article" }),
+    /* @__PURE__ */ jsx("h1", { className: "bp-title", children: post2.title }),
+    /* @__PURE__ */ jsxs("div", { className: "bp-meta", children: [
+      post2.author && /* @__PURE__ */ jsxs("span", { children: [
+        "✍️ ",
+        post2.author
+      ] }),
+      /* @__PURE__ */ jsx("span", { className: "bp-meta-sep", children: "·" }),
+      /* @__PURE__ */ jsxs("span", { children: [
+        "📅 ",
+        fmtDate$2(post2.createdAt)
+      ] }),
+      post2.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("span", { className: "bp-meta-sep", children: "·" }),
+        /* @__PURE__ */ jsxs("span", { children: [
+          "⏱ ",
+          post2.readTime,
+          " min read"
+        ] })
+      ] }),
+      post2.views > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("span", { className: "bp-meta-sep", children: "·" }),
+        /* @__PURE__ */ jsxs("span", { children: [
+          "👁 ",
+          post2.views.toLocaleString(),
+          " views"
+        ] })
+      ] }),
+      avg > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("span", { className: "bp-meta-sep", children: "·" }),
+        /* @__PURE__ */ jsxs("span", { className: "bp-meta-rating", children: [
+          "★ ",
+          avg,
+          " (",
+          rvCount,
+          ")"
+        ] })
+      ] }),
+      post2.movieTitle && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("span", { className: "bp-meta-sep", children: "·" }),
+        /* @__PURE__ */ jsxs("span", { className: "bp-meta-gold", children: [
+          "🎬 ",
+          post2.movieTitle
+        ] })
+      ] })
     ] })
   ] });
   return /* @__PURE__ */ jsxs(Fragment, { children: [
-    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
+    /* @__PURE__ */ jsx("style", { children: CSS$2 }),
     /* @__PURE__ */ jsxs(Helmet, { children: [
       /* @__PURE__ */ jsxs("title", { children: [
         post2.seoTitle || post2.title,
@@ -8645,125 +9633,81 @@ function BlogPost() {
     /* @__PURE__ */ jsxs("div", { className: "bp-root", children: [
       post2.coverImage ? /* @__PURE__ */ jsxs("div", { className: "bp-banner", children: [
         /* @__PURE__ */ jsx("img", { src: post2.coverImage, alt: post2.title, className: "bp-banner-img", onError: (e) => e.target.style.display = "none" }),
-        /* @__PURE__ */ jsx("div", { className: "bp-banner-overlay" }),
-        /* @__PURE__ */ jsxs("div", { className: "bp-banner-content", children: [
-          /* @__PURE__ */ jsx("button", { className: "bp-back", onClick: () => navigate("/blog"), children: "← Back to Blog" }),
-          /* @__PURE__ */ jsx("button", { className: "bp-cat", onClick: () => navigate(`/blog?cat=${encodeURIComponent(post2.category || "")}`), children: post2.category || "Article" }),
-          /* @__PURE__ */ jsx("h1", { className: "bp-title", children: post2.title }),
-          /* @__PURE__ */ jsxs("div", { className: "bp-meta", children: [
-            post2.author && /* @__PURE__ */ jsxs("span", { children: [
-              "✍️ ",
-              post2.author
-            ] }),
-            /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-            /* @__PURE__ */ jsxs("span", { children: [
-              "📅 ",
-              formatDate(post2.createdAt)
-            ] }),
-            post2.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
-              /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-              /* @__PURE__ */ jsxs("span", { children: [
-                "⏱ ",
-                post2.readTime,
-                " min read"
-              ] })
-            ] }),
-            post2.views > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
-              /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-              /* @__PURE__ */ jsxs("span", { children: [
-                "👁 ",
-                post2.views.toLocaleString(),
-                " views"
-              ] })
-            ] }),
-            avg > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
-              /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-              /* @__PURE__ */ jsxs("span", { children: [
-                "⭐ ",
-                avg,
-                " (",
-                reviewCount,
-                " reviews)"
-              ] })
-            ] })
-          ] })
-        ] })
-      ] }) : /* @__PURE__ */ jsxs("div", { className: "bp-nobanner", children: [
-        /* @__PURE__ */ jsx("button", { className: "bp-back", onClick: () => navigate("/blog"), children: "← Back to Blog" }),
-        /* @__PURE__ */ jsx("button", { className: "bp-cat", onClick: () => navigate(`/blog?cat=${encodeURIComponent(post2.category || "")}`), children: post2.category || "Article" }),
-        /* @__PURE__ */ jsx("h1", { className: "bp-title", children: post2.title }),
-        /* @__PURE__ */ jsxs("div", { className: "bp-meta", children: [
-          post2.author && /* @__PURE__ */ jsxs("span", { children: [
-            "✍️ ",
-            post2.author
-          ] }),
-          /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-          /* @__PURE__ */ jsxs("span", { children: [
-            "📅 ",
-            formatDate(post2.createdAt)
-          ] }),
-          post2.readTime && /* @__PURE__ */ jsxs(Fragment, { children: [
-            /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-            /* @__PURE__ */ jsxs("span", { children: [
-              "⏱ ",
-              post2.readTime,
-              " min read"
-            ] })
-          ] }),
-          post2.views > 0 && /* @__PURE__ */ jsxs(Fragment, { children: [
-            /* @__PURE__ */ jsx("span", { className: "bp-meta-dot", children: "·" }),
-            /* @__PURE__ */ jsxs("span", { children: [
-              "👁 ",
-              post2.views.toLocaleString(),
-              " views"
-            ] })
-          ] })
-        ] })
-      ] }),
+        /* @__PURE__ */ jsx("div", { className: "bp-banner-grad" }),
+        /* @__PURE__ */ jsx("div", { className: "bp-banner-content", children: /* @__PURE__ */ jsx(Header, {}) })
+      ] }) : /* @__PURE__ */ jsx("div", { className: "bp-nobanner", children: /* @__PURE__ */ jsx("div", { className: "bp-nobanner-inner", children: /* @__PURE__ */ jsx(Header, {}) }) }),
       /* @__PURE__ */ jsxs("div", { className: "bp-layout", children: [
         /* @__PURE__ */ jsxs("div", { children: [
-          /* @__PURE__ */ jsx("div", { className: "bp-article", children: (post2.content || "").split(/\n\n+/).map((para, i) => /* @__PURE__ */ jsx("p", { children: para }, i)) }),
-          ((_a = post2.tags) == null ? void 0 : _a.length) > 0 && /* @__PURE__ */ jsx("div", { className: "bp-tags", children: post2.tags.map((tag) => /* @__PURE__ */ jsxs(
-            "span",
-            {
-              className: "bp-tag",
-              onClick: () => navigate(`/blog?q=${encodeURIComponent(tag)}`),
-              children: [
-                "#",
-                tag
-              ]
-            },
-            tag
-          )) }),
-          /* @__PURE__ */ jsx("hr", { className: "bp-divider" }),
-          /* @__PURE__ */ jsxs("div", { children: [
-            /* @__PURE__ */ jsxs("div", { className: "bp-reviews-head", children: [
+          /* @__PURE__ */ jsx(ColorfulArticle, { content: post2.content }),
+          ((_a = post2.tags) == null ? void 0 : _a.length) > 0 && /* @__PURE__ */ jsx("div", { className: "bp-tags", style: { marginTop: 28 }, children: post2.tags.map((t) => /* @__PURE__ */ jsxs("span", { className: "bp-tag", onClick: () => navigate(`/blog?q=${encodeURIComponent(t)}`), children: [
+            "#",
+            t
+          ] }, t)) }),
+          relMovies.length > 0 && /* @__PURE__ */ jsxs("div", { style: { marginTop: 40 }, children: [
+            /* @__PURE__ */ jsx("div", { className: "bp-related-title", children: "🎬 Related Movies" }),
+            /* @__PURE__ */ jsx("div", { className: "bp-movies-row", children: relMovies.map((m, i) => /* @__PURE__ */ jsxs("div", { className: "bp-movie-card", style: { animationDelay: `${i * 60}ms` }, onClick: () => navigate(`/movie/${m.slug || m._id}`), children: [
+              m.posterUrl || m.thumbnailUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl || m.thumbnailUrl, alt: m.title, className: "bp-movie-poster", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bp-movie-poster-ph", children: "🎬" }),
+              /* @__PURE__ */ jsx("div", { className: "bp-movie-name", children: m.title }),
+              m.releaseDate && /* @__PURE__ */ jsx("div", { className: "bp-movie-year", children: new Date(m.releaseDate).getFullYear() }),
+              m.verdict && m.verdict !== "Upcoming" && /* @__PURE__ */ jsx("div", { className: "bp-movie-verdict", style: { background: `${VERDICT_COLORS[m.verdict] || "#888"}22`, color: VERDICT_COLORS[m.verdict] || "#888", border: `1px solid ${VERDICT_COLORS[m.verdict] || "#888"}44` }, children: m.verdict })
+            ] }, m._id)) })
+          ] }),
+          relSongs.length > 0 && /* @__PURE__ */ jsxs("div", { style: { marginTop: 36 }, children: [
+            /* @__PURE__ */ jsx("div", { className: "bp-related-title", children: "🎵 Songs from this Movie" }),
+            /* @__PURE__ */ jsx("div", { className: "bp-songs-list", children: relSongs.map((s, i) => {
+              const thumb = s.ytId ? `https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg` : s.thumbnailUrl || null;
+              return /* @__PURE__ */ jsxs(
+                "div",
+                {
+                  className: "bp-song-item",
+                  style: { animationDelay: `${i * 50}ms` },
+                  onClick: () => navigate(`/song/${s.movieSlug}/${s.songIndex}`),
+                  children: [
+                    thumb ? /* @__PURE__ */ jsx("img", { src: thumb, alt: s.title, className: "bp-song-thumb", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bp-song-thumb-ph", children: "🎵" }),
+                    /* @__PURE__ */ jsxs("div", { className: "bp-song-info", children: [
+                      /* @__PURE__ */ jsx("div", { className: "bp-song-title", children: s.title || "Untitled" }),
+                      /* @__PURE__ */ jsxs("div", { className: "bp-song-meta", children: [
+                        s.singer && `🎤 ${s.singer}`,
+                        s.singer && s.musicDirector && " · ",
+                        s.musicDirector && `🎼 ${s.musicDirector}`
+                      ] })
+                    ] }),
+                    /* @__PURE__ */ jsx("div", { className: "bp-song-play", children: "▶" })
+                  ]
+                },
+                i
+              );
+            }) })
+          ] }),
+          /* @__PURE__ */ jsx("div", { className: "bp-divider", children: /* @__PURE__ */ jsx("span", { className: "bp-divider-icon", children: "✦" }) }),
+          /* @__PURE__ */ jsxs("div", { className: "bp-reviews-wrap", children: [
+            /* @__PURE__ */ jsxs("div", { className: "bp-reviews-hd", children: [
               "⭐ Reviews & Ratings",
-              reviewCount > 0 && /* @__PURE__ */ jsxs("span", { style: { fontSize: ".78rem", color: "rgba(255,255,255,.4)", fontWeight: 400 }, children: [
+              rvCount > 0 && /* @__PURE__ */ jsxs("span", { style: { fontWeight: 400, color: "rgba(255,255,255,.3)", letterSpacing: ".04em" }, children: [
                 "(",
-                reviewCount,
-                ")"
+                rvCount,
+                " reviews)"
               ] })
             ] }),
             avg > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-overall", children: [
               /* @__PURE__ */ jsx("div", { className: "bp-overall-num", children: avg }),
               /* @__PURE__ */ jsxs("div", { children: [
-                /* @__PURE__ */ jsxs("div", { style: { color: "#c9973a", fontSize: ".9rem" }, children: [
+                /* @__PURE__ */ jsxs("div", { className: "bp-overall-stars", children: [
                   "★".repeat(Math.round(avg)),
                   "☆".repeat(5 - Math.round(avg))
                 ] }),
                 /* @__PURE__ */ jsxs("div", { className: "bp-overall-label", children: [
-                  "avg from ",
-                  reviewCount,
+                  "avg · ",
+                  rvCount,
                   " review",
-                  reviewCount !== 1 ? "s" : ""
+                  rvCount !== 1 ? "s" : ""
                 ] })
               ] })
             ] }),
             (post2.reviews || []).map((rv, idx) => {
               var _a2, _b, _c, _d;
-              return /* @__PURE__ */ jsxs("div", { className: "bp-review-card", children: [
-                /* @__PURE__ */ jsxs("div", { className: "bp-rv-header", children: [
+              return /* @__PURE__ */ jsxs("div", { className: "bp-rv-card", children: [
+                /* @__PURE__ */ jsxs("div", { className: "bp-rv-head", children: [
                   /* @__PURE__ */ jsxs("div", { children: [
                     /* @__PURE__ */ jsxs("div", { className: "bp-rv-name", children: [
                       "👤 ",
@@ -8772,152 +9716,103 @@ function BlogPost() {
                     rv.rating > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-rv-stars", children: [
                       "★".repeat(rv.rating),
                       "☆".repeat(5 - rv.rating),
-                      /* @__PURE__ */ jsxs("span", { style: { color: "rgba(255,255,255,.35)", fontSize: ".7rem", marginLeft: 5 }, children: [
+                      " ",
+                      /* @__PURE__ */ jsxs("span", { style: { fontSize: ".68rem", color: "rgba(255,255,255,.3)", marginLeft: 4 }, children: [
                         "(",
                         rv.rating,
                         "/5)"
                       ] })
                     ] })
                   ] }),
-                  /* @__PURE__ */ jsx("div", { className: "bp-rv-date", children: rv.date || "" })
+                  /* @__PURE__ */ jsx("div", { className: "bp-rv-date", children: rv.date })
                 ] }),
                 /* @__PURE__ */ jsx("div", { className: "bp-rv-text", children: rv.text }),
                 /* @__PURE__ */ jsxs("div", { className: "bp-rv-actions", children: [
-                  /* @__PURE__ */ jsxs("button", { className: "bp-rv-like", onClick: () => likeReview(idx), children: [
+                  /* @__PURE__ */ jsxs("button", { className: "bp-rv-act-btn", onClick: () => likeReview(idx), children: [
                     "👍 ",
                     rv.likes > 0 ? rv.likes : "Like"
                   ] }),
-                  /* @__PURE__ */ jsx("button", { className: "bp-rv-reply-btn", onClick: () => toggleReply(idx), children: "💬 Reply" })
+                  /* @__PURE__ */ jsx("button", { className: "bp-rv-act-btn", onClick: () => toggleReply(idx), children: "💬 Reply" })
                 ] }),
-                ((_a2 = rv.replies) == null ? void 0 : _a2.length) > 0 && /* @__PURE__ */ jsx("div", { className: "bp-replies", children: rv.replies.map((rep, ri) => /* @__PURE__ */ jsxs("div", { className: "bp-reply", children: [
+                ((_a2 = rv.replies) == null ? void 0 : _a2.length) > 0 && /* @__PURE__ */ jsx("div", { className: "bp-replies", children: rv.replies.map((r, ri) => /* @__PURE__ */ jsxs("div", { className: "bp-reply", children: [
                   /* @__PURE__ */ jsxs("span", { className: "bp-reply-name", children: [
-                    rep.user || "Anonymous",
+                    r.user || "Anonymous",
                     ":"
                   ] }),
-                  rep.text
+                  r.text
                 ] }, ri)) }),
                 ((_b = replies[idx]) == null ? void 0 : _b.open) && /* @__PURE__ */ jsxs("div", { className: "bp-reply-form", style: { marginTop: 10 }, children: [
-                  /* @__PURE__ */ jsx(
-                    "input",
-                    {
-                      className: "bp-reply-input",
-                      placeholder: "Your name",
-                      style: { maxWidth: 110 },
-                      value: ((_c = replies[idx]) == null ? void 0 : _c.name) || "",
-                      onChange: (e) => setReplies((p) => ({ ...p, [idx]: { ...p[idx], name: e.target.value } }))
-                    }
-                  ),
-                  /* @__PURE__ */ jsx(
-                    "input",
-                    {
-                      className: "bp-reply-input",
-                      placeholder: "Write a reply…",
-                      value: ((_d = replies[idx]) == null ? void 0 : _d.text) || "",
-                      onChange: (e) => setReplies((p) => ({ ...p, [idx]: { ...p[idx], text: e.target.value } })),
-                      onKeyDown: (e) => e.key === "Enter" && submitReply(idx)
-                    }
-                  ),
-                  /* @__PURE__ */ jsx("button", { className: "bp-reply-submit", onClick: () => submitReply(idx), children: "Send" })
+                  /* @__PURE__ */ jsx("input", { className: "bp-reply-inp", placeholder: "Name", style: { maxWidth: 100 }, value: ((_c = replies[idx]) == null ? void 0 : _c.name) || "", onChange: (e) => setReplies((p) => ({ ...p, [idx]: { ...p[idx], name: e.target.value } })) }),
+                  /* @__PURE__ */ jsx("input", { className: "bp-reply-inp", placeholder: "Write a reply…", value: ((_d = replies[idx]) == null ? void 0 : _d.text) || "", onChange: (e) => setReplies((p) => ({ ...p, [idx]: { ...p[idx], text: e.target.value } })), onKeyDown: (e) => e.key === "Enter" && submitReply(idx) }),
+                  /* @__PURE__ */ jsx("button", { className: "bp-reply-sub", onClick: () => submitReply(idx), children: "Send" })
                 ] })
               ] }, idx);
             }),
-            /* @__PURE__ */ jsx("hr", { className: "bp-divider" }),
-            /* @__PURE__ */ jsx("div", { style: { marginBottom: 12, fontWeight: 700, fontSize: ".88rem", color: "#f1f1f1" }, children: "✏️ Write a Review" }),
-            submitted ? /* @__PURE__ */ jsx("div", { style: { padding: "16px", background: "rgba(40,160,80,.1)", border: "1px solid rgba(40,160,80,.3)", borderRadius: 8, color: "#5de08a", fontSize: ".85rem" }, children: "✅ Thanks for your review! It's been submitted." }) : /* @__PURE__ */ jsxs("div", { className: "bp-form", children: [
-              /* @__PURE__ */ jsxs("div", { className: "bp-rating-row", children: [
-                /* @__PURE__ */ jsx(StarRating, { value: reviewRating, onChange: setReviewRating }),
-                /* @__PURE__ */ jsx("span", { className: "bp-rating-label", children: ["", "Poor", "Fair", "Good", "Great", "Excellent"][reviewRating] })
-              ] }),
-              /* @__PURE__ */ jsx(
-                "input",
-                {
-                  className: "bp-input",
-                  placeholder: "Your name",
-                  value: reviewName,
-                  onChange: (e) => setReviewName(e.target.value)
-                }
-              ),
-              /* @__PURE__ */ jsx(
-                "textarea",
-                {
-                  className: "bp-input bp-textarea",
-                  placeholder: "Share your thoughts about this movie…",
-                  value: reviewText,
-                  onChange: (e) => setReviewText(e.target.value)
-                }
-              ),
-              /* @__PURE__ */ jsx(
-                "button",
-                {
-                  className: "bp-submit",
-                  onClick: submitReview,
-                  disabled: submitting || !reviewName.trim() || !reviewText.trim(),
-                  children: submitting ? "Submitting…" : "Submit Review"
-                }
-              )
+            /* @__PURE__ */ jsx("div", { className: "bp-divider", children: /* @__PURE__ */ jsx("span", { className: "bp-divider-icon", children: "✦" }) }),
+            /* @__PURE__ */ jsxs("div", { className: "bp-form-wrap", children: [
+              /* @__PURE__ */ jsx("div", { className: "bp-form-title", children: "✏️ Write a Review" }),
+              submitted ? /* @__PURE__ */ jsx("div", { className: "bp-success", children: "✅ Thanks for your review! It's been submitted." }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+                /* @__PURE__ */ jsx(StarPicker, { value: rvRating, onChange: setRvRating }),
+                /* @__PURE__ */ jsx("input", { className: "bp-inp", placeholder: "Your name", value: rvName, onChange: (e) => setRvName(e.target.value) }),
+                /* @__PURE__ */ jsx("textarea", { className: "bp-inp bp-textarea", placeholder: "Share your thoughts about this movie…", value: rvText, onChange: (e) => setRvText(e.target.value) }),
+                /* @__PURE__ */ jsx("button", { className: "bp-sub-btn", onClick: submitReview, disabled: submitting || !rvName.trim() || !rvText.trim(), children: submitting ? "Submitting…" : "Submit Review" })
+              ] })
             ] })
           ] })
         ] }),
         /* @__PURE__ */ jsxs("aside", { className: "bp-sidebar", children: [
           /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
-            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-title", children: "Share" }),
-            /* @__PURE__ */ jsx("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" }, children: [
-              ["🐦 Twitter", `https://twitter.com/intent/tweet?text=${encodeURIComponent(post2.title)}&url=${encodeURIComponent(window.location.href)}`],
-              ["📘 Facebook", `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`],
-              ["🔗 Copy Link", null]
-            ].map(([label, url]) => /* @__PURE__ */ jsx(
-              "button",
-              {
-                onClick: () => {
-                  if (url) window.open(url, "_blank");
-                  else navigator.clipboard.writeText(window.location.href);
-                },
-                style: {
-                  padding: "6px 13px",
-                  background: "#252525",
-                  border: "1px solid rgba(255,255,255,.1)",
-                  borderRadius: 7,
-                  color: "rgba(255,255,255,.7)",
-                  fontSize: ".74rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "all .15s"
-                },
-                children: label
-              },
-              label
-            )) })
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-hd", children: "Share Article" }),
+            /* @__PURE__ */ jsxs("div", { className: "bp-share-btns", children: [
+              /* @__PURE__ */ jsx("button", { className: "bp-share-btn bp-share-twitter", onClick: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(post2.title)}&url=${encodeURIComponent(window.location.href)}`), children: "🐦 Twitter" }),
+              /* @__PURE__ */ jsx("button", { className: "bp-share-btn bp-share-fb", onClick: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`), children: "📘 Facebook" }),
+              /* @__PURE__ */ jsx("button", { className: "bp-share-btn bp-share-copy", onClick: () => navigator.clipboard.writeText(window.location.href), children: "🔗 Copy" })
+            ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
-            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-title", children: "Article Info" }),
-            /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
-              ["📅 Published", formatDate(post2.createdAt)],
-              ["✍️ Author", post2.author || "OllyPedia Editorial"],
-              ["🏷 Category", post2.category || "General"],
-              ["⏱ Read Time", `${post2.readTime || 3} min`],
-              ["👁 Views", (post2.views || 0).toLocaleString()],
-              avg > 0 ? ["⭐ Rating", `${avg}/5`] : null
-            ].filter(Boolean).map(([k, v]) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: ".78rem" }, children: [
-              /* @__PURE__ */ jsx("span", { style: { color: "rgba(255,255,255,.4)" }, children: k }),
-              /* @__PURE__ */ jsx("span", { style: { color: "#f1f1f1", fontWeight: 600 }, children: v })
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-hd", children: "Article Info" }),
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-body", children: [
+              ["Published", fmtDate$2(post2.createdAt)],
+              ["Author", post2.author || "OllyPedia Editorial"],
+              ["Category", post2.category || "General"],
+              ["Read Time", `${post2.readTime || 3} min`],
+              ["Views", (post2.views || 0).toLocaleString()],
+              avg > 0 ? ["Rating", `${avg} / 5 ⭐`] : null,
+              rvCount > 0 ? ["Reviews", `${rvCount} review${rvCount !== 1 ? "s" : ""}`] : null
+            ].filter(Boolean).map(([k, v]) => /* @__PURE__ */ jsxs("div", { className: "bp-info-row", children: [
+              /* @__PURE__ */ jsx("span", { className: "bp-info-key", children: k }),
+              /* @__PURE__ */ jsx("span", { className: "bp-info-val", children: v })
             ] }, k)) })
           ] }),
           related.length > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
-            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-title", children: "Related Articles" }),
-            related.map((rel) => /* @__PURE__ */ jsxs("div", { className: "bp-rel-item", onClick: () => navigate(`/blog/${rel.slug}`), children: [
-              rel.coverImage ? /* @__PURE__ */ jsx("img", { src: rel.coverImage, alt: rel.title, className: "bp-rel-thumb", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bp-rel-thumb", style: { display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }, children: "🎬" }),
-              /* @__PURE__ */ jsxs("div", { children: [
-                /* @__PURE__ */ jsx("div", { className: "bp-rel-title", children: rel.title }),
-                /* @__PURE__ */ jsx("div", { className: "bp-rel-meta", children: formatDate(rel.createdAt) })
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-hd", children: "Related Articles" }),
+            related.map((r) => /* @__PURE__ */ jsxs("div", { className: "bp-rel-item", onClick: () => navigate(`/blog/${r.slug}`), children: [
+              r.coverImage ? /* @__PURE__ */ jsx("img", { src: r.coverImage, alt: r.title, className: "bp-rel-thumb", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bp-rel-ph", children: "✍️" }),
+              /* @__PURE__ */ jsxs("div", { className: "bp-rel-info", children: [
+                /* @__PURE__ */ jsx("div", { className: "bp-rel-title", children: r.title }),
+                /* @__PURE__ */ jsx("div", { className: "bp-rel-meta", children: fmtShort(r.createdAt) })
               ] })
-            ] }, rel._id))
+            ] }, r._id))
+          ] }),
+          relMovies.length > 0 && /* @__PURE__ */ jsxs("div", { className: "bp-sidebar-box", children: [
+            /* @__PURE__ */ jsx("div", { className: "bp-sidebar-hd", children: "🎬 Related Movies" }),
+            relMovies.map((m) => /* @__PURE__ */ jsxs("div", { className: "bp-rel-item", onClick: () => navigate(`/movie/${m.slug || m._id}`), children: [
+              m.posterUrl || m.thumbnailUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl || m.thumbnailUrl, alt: m.title, className: "bp-rel-thumb", loading: "lazy", onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { className: "bp-rel-ph", children: "🎬" }),
+              /* @__PURE__ */ jsxs("div", { className: "bp-rel-info", children: [
+                /* @__PURE__ */ jsx("div", { className: "bp-rel-title", children: m.title }),
+                /* @__PURE__ */ jsxs("div", { className: "bp-rel-meta", children: [
+                  m.releaseDate ? new Date(m.releaseDate).getFullYear() : "",
+                  m.verdict ? ` · ${m.verdict}` : ""
+                ] })
+              ] })
+            ] }, m._id))
           ] })
         ] })
       ] })
     ] })
   ] });
 }
-const CSS = `
+const CSS$1 = `
 .contact-root {
   max-width: 860px;
   margin: 0 auto;
@@ -9063,7 +9958,7 @@ function ContactUs() {
       /* @__PURE__ */ jsx("title", { children: "Contact Us — Ollypedia" }),
       /* @__PURE__ */ jsx("meta", { name: "description", content: "Get in touch with Ollypedia. Report errors, suggest additions, or send us your feedback." })
     ] }),
-    /* @__PURE__ */ jsx("style", { children: CSS }),
+    /* @__PURE__ */ jsx("style", { children: CSS$1 }),
     /* @__PURE__ */ jsxs("div", { className: "contact-root", children: [
       /* @__PURE__ */ jsx("button", { className: "policy-back", onClick: () => navigate(-1), children: "← Back" }),
       /* @__PURE__ */ jsx("h1", { children: "Contact Us" }),
@@ -11117,91 +12012,91 @@ function PortalCastProfile({ production }) {
   ] });
 }
 const API_BASE = "http://localhost:4000".replace(/\/$/, "") + "/api";
+const ARTICLE_TYPES = [
+  { id: "review", label: "🎬 Movie Review", color: "#c9973a" },
+  { id: "story", label: "📖 Story & Plot", color: "#7aaae8" },
+  { id: "cast", label: "👥 Cast Spotlight", color: "#a78be8" },
+  { id: "music", label: "🎵 Music & Songs", color: "#4caf82" },
+  { id: "analysis", label: "🔍 Deep Dive", color: "#e8c87a" },
+  { id: "trivia", label: "💡 Trivia & Facts", color: "#e5799a" }
+];
 function slugify(str) {
   return String(str || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
 }
-function buildPrompt(movie) {
+function formatDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+function buildPrompt(movie, type) {
   var _a;
   const cast = (movie.cast || []).slice(0, 5).map((c) => `${c.name}${c.role ? ` as ${c.role}` : ""}`).join(", ");
   const songs = (((_a = movie.media) == null ? void 0 : _a.songs) || []).slice(0, 3).map((s) => s.title).filter(Boolean).join(", ");
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
   const genre = (movie.genre || []).join(", ") || "Odia";
-  return `Write a high-quality, unique, SEO-optimized article about the Odia movie "${movie.title}" (${year}).
-
-Requirements:
-- Minimum 1000 words
-- Use simple, engaging language
-- Do NOT copy from any source
-- Make it feel like an original blog-style article
-
-Structure your article around these 6 parts (write flowing paragraphs, NO section headers, NO bullet points):
-1. Introduction of the movie (release year: ${year}, genre: ${genre}, its importance in Ollywood)
-2. Story summary (short, no spoilers)
-3. Cast details: ${cast || "the lead cast"}
-4. Highlights: music${songs ? ` (songs: ${songs})` : ""}, direction${movie.director ? ` by ${movie.director}` : ""}, cinematography
-5. Why people should watch this movie
-6. One or two interesting facts about the movie
-
-Context:
-- Director: ${movie.director || "not specified"}
-- Producer: ${movie.producer || "not specified"}
-- Synopsis: ${movie.synopsis || "not available"}
-- Verdict: ${movie.verdict || "Upcoming"}
-- Language: ${movie.language || "Odia"}
-
-Tone: Informative, engaging, SEO-friendly, human-like. Not robotic.
-IMPORTANT: Return ONLY the article text. No headings. No markdown. No labels. No preamble. Just the article.`;
+  const ctx = `Movie: "${movie.title}" (${year}) | Genre: ${genre} | Director: ${movie.director || "N/A"} | Cast: ${cast || "N/A"} | Songs: ${songs || "N/A"} | Synopsis: ${movie.synopsis || "N/A"} | Verdict: ${movie.verdict || "Upcoming"}`;
+  const prompts = {
+    review: `Write a 1000+ word original engaging movie review for the Odia film "${movie.title}" (${year}). Cover introduction, story, performances, direction, music, verdict. Flowing paragraphs. No headers. No bullet points. SEO-friendly. ${ctx}`,
+    story: `Write a 1000+ word detailed story and plot breakdown for the Odia film "${movie.title}" (${year}). Cover narrative arc, key scenes, emotional beats, themes — no major spoilers. Flowing paragraphs only. ${ctx}`,
+    cast: `Write a 1000+ word cast spotlight article for "${movie.title}" (${year}). Profile each major cast member's role, acting performance, career highlights, and contribution. Flowing paragraphs only. ${ctx}`,
+    music: `Write a 1000+ word music and songs review for the Odia film "${movie.title}" (${year}). Cover the music director's work, each song's mood, lyrics, and overall musical impact. Flowing paragraphs only. ${ctx}`,
+    analysis: `Write a 1000+ word deep-dive analysis of the Odia film "${movie.title}" (${year}). Examine themes, cinematography, direction style, cultural significance, Ollywood impact. Flowing paragraphs only. ${ctx}`,
+    trivia: `Write a 1000+ word trivia and interesting facts article about the Odia film "${movie.title}" (${year}). Include behind-the-scenes stories, production challenges, casting decisions, box office, fun trivia. Flowing paragraphs only. ${ctx}`
+  };
+  return (prompts[type] || prompts.review) + "\n\nIMPORTANT: Return ONLY the article text. No headings. No markdown. No labels. Just the article.";
 }
-async function generateArticle(movie) {
+function articleTitle(movie, type) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const genre = (movie.genre || []).join(", ") || "Odia Film";
+  const titles = {
+    review: `${movie.title}${year ? ` (${year})` : ""} – ${genre} Odia Movie Review & Story`,
+    story: `${movie.title} – Full Story, Plot & Narrative Breakdown`,
+    cast: `${movie.title} – Cast Spotlight: Meet the Actors & Characters`,
+    music: `${movie.title} – Music Review: Songs, Score & Soundtrack`,
+    analysis: `${movie.title} – Deep Dive Analysis & Themes`,
+    trivia: `${movie.title} – Interesting Trivia, Facts & Behind the Scenes`
+  };
+  return titles[type] || titles.review;
+}
+function articleCategory(type) {
+  return { review: "Movie Review", story: "Movie Review", cast: "Actor Spotlight", music: "General", analysis: "Top 10", trivia: "General" }[type] || "Movie Review";
+}
+async function generateArticle(movie, type) {
   const token = getAdminToken();
-  if (!token) throw new Error("Not logged in as admin. Please log in again.");
+  if (!token) throw new Error("Not logged in as admin.");
   const response = await fetch(`${API_BASE}/admin/generate-article`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({ prompt: buildPrompt(movie) })
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ prompt: buildPrompt(movie, type) })
   });
   if (!response.ok) {
-    let errorMessage = `Server error (${response.status})`;
-    try {
-      const errData = await response.json();
-      errorMessage = errData.error || errorMessage;
-    } catch {
-      errorMessage = await response.text() || errorMessage;
-    }
-    throw new Error(errorMessage);
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.error || `Server error (${response.status})`);
   }
   const data = await response.json();
   const text = (data.text || "").trim();
-  if (!text) throw new Error("AI returned an empty response. Try again.");
+  if (!text) throw new Error("AI returned empty response. Try again.");
   return text;
 }
-async function publishArticle(movie, article) {
+async function publishArticle(movie, article, type) {
   const token = getAdminToken();
   if (!token) throw new Error("Not logged in as admin.");
-  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  const genre = (movie.genre || []).join(", ") || "Odia Film";
-  const title = `${movie.title}${year ? ` (${year})` : ""} – ${genre} Odia Movie Review & Story`;
-  const slug = slugify(`${movie.title}${year ? `-${year}` : ""}-odia-movie`);
+  const title = articleTitle(movie, type);
+  const slug = slugify(`${movie.title}-${type}-${Date.now().toString(36)}`);
   const excerpt = article.slice(0, 200).trim() + "…";
-  const readTime = Math.ceil(article.split(/\s+/).length / 200);
+  const readTime = Math.max(1, Math.ceil(article.split(/\s+/).length / 200));
   const res = await fetch(`${API_BASE}/admin/blog`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       title,
       slug,
       content: article,
       excerpt,
-      category: "Movie Review",
+      category: articleCategory(type),
       tags: [movie.title, "Ollywood", "Odia Movie", ...movie.genre || []],
       coverImage: movie.posterUrl || movie.thumbnailUrl || "",
       movieTitle: movie.title,
+      movieId: movie._id,
       author: "OllyPedia Editorial",
       readTime,
       seoTitle: title,
@@ -11210,30 +12105,190 @@ async function publishArticle(movie, article) {
     })
   });
   if (!res.ok) {
-    let errorMessage = `Publish failed (${res.status})`;
-    try {
-      const errData = await res.json();
-      errorMessage = errData.error || errorMessage;
-    } catch {
-    }
-    throw new Error(errorMessage);
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Publish failed (${res.status})`);
   }
+  return res.json();
 }
-function MovieRow({ movie, isPublished, onPublished, onToast }) {
-  const [status, setStatus] = useState(isPublished ? "done" : "idle");
+async function fetchMovieBlogs(movieTitle) {
+  const token = getAdminToken();
+  const res = await fetch(`${API_BASE}/admin/blog`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) return [];
+  const all = await res.json();
+  return all.filter((p) => p.movieTitle === movieTitle);
+}
+async function deleteArticle(id) {
+  const token = getAdminToken();
+  await fetch(`${API_BASE}/admin/blog/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+async function updateArticle(id, body) {
+  const token = getAdminToken();
+  const res = await fetch(`${API_BASE}/admin/blog/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Update failed");
+  }
+  return res.json();
+}
+const CSS = `
+.bg-wrap { padding:24px 28px; }
+.bg-header { display:flex; align-items:center; gap:14px; margin-bottom:20px; flex-wrap:wrap; }
+.bg-title { font-size:1.1rem; font-weight:800; color:var(--gold); flex:1; }
+.bg-stats { display:flex; gap:18px; font-size:.82rem; color:var(--muted); }
+.bg-search { padding:7px 12px; border-radius:7px; border:1px solid var(--border); background:var(--bg2); color:var(--text); font-size:.85rem; width:200px; outline:none; }
+.bg-bulk-btn { padding:7px 16px; border-radius:7px; border:none; font-size:.82rem; font-weight:700; cursor:pointer; background:var(--gold); color:#000; }
+.bg-bulk-btn:disabled { opacity:.5; cursor:not-allowed; }
+.bg-progress { margin-bottom:14px; padding:10px 14px; background:rgba(201,151,58,.1); border-radius:8px; border:1px solid rgba(201,151,58,.3); font-size:.84rem; color:var(--gold); font-weight:600; }
+.bg-progress-bar { margin-top:8px; height:6px; background:var(--bg3); border-radius:4px; overflow:hidden; }
+.bg-progress-fill { height:100%; border-radius:4px; background:var(--gold); transition:width .4s; }
+.bg-tip { margin-bottom:14px; padding:8px 14px; border-radius:7px; background:rgba(255,255,255,.03); border:1px solid var(--border); font-size:.74rem; color:var(--muted); line-height:1.7; }
+.bg-list { background:var(--bg2); border-radius:10px; border:1px solid var(--border); overflow:hidden; }
+.bg-empty { padding:40px; text-align:center; color:var(--muted); font-size:.9rem; }
+
+.bg-movie-row { border-bottom:1px solid var(--border); }
+.bg-movie-row:last-child { border-bottom:none; }
+.bg-movie-header { display:flex; align-items:flex-start; gap:14px; padding:14px 18px; cursor:pointer; transition:background .15s; user-select:none; }
+.bg-movie-header:hover { background:rgba(255,255,255,.03); }
+.bg-poster { width:38px; height:54px; object-fit:cover; border-radius:4px; flex-shrink:0; border:1px solid var(--border); background:var(--bg3); }
+.bg-poster-ph { width:38px; height:54px; border-radius:4px; flex-shrink:0; border:1px solid var(--border); background:var(--bg3); display:flex; align-items:center; justify-content:center; font-size:1.2rem; }
+.bg-minfo { flex:1; min-width:0; }
+.bg-mtitle { font-weight:700; font-size:.93rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bg-msub { font-size:.75rem; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.bg-mcount { font-size:.68rem; font-weight:700; padding:1px 7px; border-radius:10px; background:rgba(201,151,58,.15); color:#c9973a; border:1px solid rgba(201,151,58,.3); }
+.bg-chevron { font-size:.8rem; color:var(--muted); margin-top:3px; transition:transform .2s; }
+
+.bg-panel { padding:0 18px 18px 70px; }
+.bg-section-label { font-size:.65rem; font-weight:800; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); margin-bottom:8px; }
+
+/* Published articles */
+.bg-articles { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.bg-art-item { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; }
+.bg-art-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+.bg-art-body { flex:1; min-width:0; }
+.bg-art-title { font-size:.8rem; font-weight:700; color:var(--text); line-height:1.35; margin-bottom:3px; }
+.bg-art-meta { font-size:.67rem; color:var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.bg-art-actions { display:flex; gap:5px; flex-shrink:0; }
+.bg-art-btn { padding:3px 9px; border-radius:5px; border:1px solid var(--border); background:var(--bg2); color:var(--text); font-size:.67rem; cursor:pointer; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; transition:all .15s; }
+.bg-art-btn:hover { border-color:var(--gold); color:var(--gold); }
+.bg-art-btn.del:hover { border-color:#e57373; color:#e57373; }
+
+/* Type selector */
+.bg-types { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+.bg-type-chip { padding:4px 12px; border-radius:18px; border:1.5px solid; font-size:.73rem; font-weight:700; cursor:pointer; transition:all .15s; background:transparent; }
+.bg-type-chip.active { filter:brightness(1.1); }
+
+/* Generate box */
+.bg-gen-box { padding:10px 12px; background:rgba(201,151,58,.05); border:1px dashed rgba(201,151,58,.25); border-radius:8px; }
+.bg-gen-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.bg-gen-label { font-size:.75rem; font-weight:700; flex:1; }
+.bg-gen-preview { margin-top:10px; padding:10px 12px; background:var(--bg3); border-radius:6px; font-size:.76rem; color:var(--text); line-height:1.75; white-space:pre-wrap; max-height:200px; overflow-y:auto; border:1px solid var(--border); }
+
+/* Buttons */
+.bg-btn { padding:5px 12px; border-radius:6px; border:none; cursor:pointer; font-size:.75rem; font-weight:600; transition:opacity .15s; }
+.bg-btn:disabled { opacity:.45; cursor:not-allowed; }
+.bg-btn-gold  { background:var(--gold); color:#000; }
+.bg-btn-green { background:#28a050; color:#fff; }
+.bg-btn-red   { background:#a02828; color:#fff; }
+.bg-btn-ghost { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
+
+/* Edit modal */
+.bg-overlay { position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:1000; display:flex; align-items:center; justify-content:center; padding:16px; }
+.bg-modal { background:var(--bg2); border:1px solid var(--border); border-radius:14px; width:100%; max-width:680px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+.bg-modal-head { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+.bg-modal-title { font-size:.95rem; font-weight:800; color:var(--gold); }
+.bg-modal-close { background:none; border:none; color:var(--muted); font-size:1.3rem; cursor:pointer; line-height:1; }
+.bg-modal-body { flex:1; overflow-y:auto; padding:18px 20px; display:flex; flex-direction:column; gap:14px; }
+.bg-modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border); }
+.bg-field-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin-bottom:5px; display:block; }
+.bg-field-input { padding:9px 12px; border-radius:7px; border:1px solid var(--border); background:var(--bg3); color:var(--text); font-size:.84rem; outline:none; font-family:inherit; width:100%; box-sizing:border-box; }
+.bg-field-input:focus { border-color:rgba(201,151,58,.5); }
+.bg-field-textarea { min-height:200px; resize:vertical; }
+`;
+function EditModal({ article, onClose, onSaved, onToast }) {
+  const [title, setTitle] = useState(article.title || "");
+  const [content, setContent] = useState(article.content || "");
+  const [excerpt, setExcerpt] = useState(article.excerpt || "");
+  const [pub, setPub] = useState(article.published !== false);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateArticle(article._id, {
+        title: title.trim(),
+        content: content.trim(),
+        excerpt: excerpt.trim() || content.slice(0, 200).trim() + "…",
+        published: pub
+      });
+      onSaved(updated);
+      onToast("✅ Article updated!", "success");
+      onClose();
+    } catch (err) {
+      onToast("❌ " + err.message, "error");
+    }
+    setSaving(false);
+  };
+  return /* @__PURE__ */ jsx("div", { className: "bg-overlay", onClick: (e) => e.target === e.currentTarget && onClose(), children: /* @__PURE__ */ jsxs("div", { className: "bg-modal", children: [
+    /* @__PURE__ */ jsxs("div", { className: "bg-modal-head", children: [
+      /* @__PURE__ */ jsx("span", { className: "bg-modal-title", children: "✏️ Edit Article" }),
+      /* @__PURE__ */ jsx("button", { className: "bg-modal-close", onClick: onClose, children: "×" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "bg-modal-body", children: [
+      /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Title" }),
+        /* @__PURE__ */ jsx("input", { className: "bg-field-input", value: title, onChange: (e) => setTitle(e.target.value) })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Excerpt" }),
+        /* @__PURE__ */ jsx("input", { className: "bg-field-input", value: excerpt, onChange: (e) => setExcerpt(e.target.value), placeholder: "Short teaser shown on blog cards…" })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { children: [
+        /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Article Content" }),
+        /* @__PURE__ */ jsx("textarea", { className: "bg-field-input bg-field-textarea", value: content, onChange: (e) => setContent(e.target.value) })
+      ] }),
+      /* @__PURE__ */ jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: ".84rem", color: "var(--text)" }, children: [
+        /* @__PURE__ */ jsx("input", { type: "checkbox", checked: pub, onChange: (e) => setPub(e.target.checked) }),
+        "Published (visible on public blog)"
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "bg-modal-foot", children: [
+      /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-ghost", onClick: onClose, children: "Cancel" }),
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          className: "bg-btn bg-btn-gold",
+          onClick: save,
+          disabled: saving || !title.trim() || !content.trim(),
+          children: saving ? "Saving…" : "💾 Save Changes"
+        }
+      )
+    ] })
+  ] }) });
+}
+function GenPanel({ movie, type, onPublished, onToast }) {
+  const [status, setStatus] = useState("idle");
   const [article, setArticle] = useState("");
   const [preview, setPreview] = useState(false);
   const [errMsg, setErrMsg] = useState("");
   const busy = status === "generating" || status === "publishing";
+  const typeInfo = ARTICLE_TYPES.find((t) => t.id === type);
   const handleGenerate = async () => {
     setStatus("generating");
     setArticle("");
     setErrMsg("");
     setPreview(false);
     try {
-      const text = await generateArticle(movie);
+      const text = await generateArticle(movie, type);
       setArticle(text);
-      setStatus("idle");
+      setStatus("ready");
     } catch (err) {
       setStatus("error");
       setErrMsg(err.message);
@@ -11245,300 +12300,244 @@ function MovieRow({ movie, isPublished, onPublished, onToast }) {
     setStatus("publishing");
     setErrMsg("");
     try {
-      await publishArticle(movie, article);
-      setStatus("done");
-      onPublished(movie._id);
-      onToast(`✅ Published: "${movie.title}"`, "success");
+      const post2 = await publishArticle(movie, article, type);
+      onPublished(post2);
+      onToast(`✅ Published: "${typeInfo == null ? void 0 : typeInfo.label}" for ${movie.title}`, "success");
+      setStatus("idle");
+      setArticle("");
+      setPreview(false);
     } catch (err) {
       setStatus("error");
       setErrMsg(err.message);
       onToast("❌ " + err.message, "error");
     }
   };
+  return /* @__PURE__ */ jsxs("div", { className: "bg-gen-box", children: [
+    /* @__PURE__ */ jsxs("div", { className: "bg-gen-row", children: [
+      /* @__PURE__ */ jsx("span", { className: "bg-gen-label", style: { color: typeInfo == null ? void 0 : typeInfo.color }, children: typeInfo == null ? void 0 : typeInfo.label }),
+      errMsg && /* @__PURE__ */ jsxs("span", { style: { fontSize: ".69rem", color: "#f77" }, children: [
+        "⚠️ ",
+        errMsg
+      ] }),
+      /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-gold", onClick: handleGenerate, disabled: busy, children: status === "generating" ? "⏳ Generating…" : article ? "🔄 Regenerate" : "✨ Generate" }),
+      article && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-ghost", onClick: () => setPreview((p) => !p), disabled: busy, children: preview ? "Hide" : "Preview" }),
+        /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-green", onClick: handlePublish, disabled: busy, children: status === "publishing" ? "⏳ Publishing…" : "🚀 Publish" })
+      ] }),
+      status === "error" && /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-red", onClick: handleGenerate, children: "🔁 Retry" })
+    ] }),
+    article && preview && /* @__PURE__ */ jsx("div", { className: "bg-gen-preview", children: article })
+  ] });
+}
+function MoviePanel({ movie, onToast }) {
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeType, setActiveType] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+  useEffect(() => {
+    setLoading(true);
+    fetchMovieBlogs(movie.title).then((posts) => setArticles(posts)).catch(() => {
+    }).finally(() => setLoading(false));
+  }, [movie.title]);
+  const handlePublished = (post2) => {
+    setArticles((prev) => [post2, ...prev]);
+    setActiveType(null);
+  };
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this article? This cannot be undone.")) return;
+    try {
+      await deleteArticle(id);
+      setArticles((prev) => prev.filter((a) => a._id !== id));
+      onToast("🗑 Article deleted", "success");
+    } catch {
+      onToast("❌ Delete failed", "error");
+    }
+  };
+  const handleSaved = (updated) => {
+    setArticles((prev) => prev.map((a) => a._id === updated._id ? updated : a));
+  };
+  return /* @__PURE__ */ jsxs("div", { className: "bg-panel", children: [
+    loading ? /* @__PURE__ */ jsx("div", { style: { fontSize: ".77rem", color: "var(--muted)", padding: "6px 0 10px" }, children: "Loading articles…" }) : articles.length > 0 && /* @__PURE__ */ jsxs("div", { style: { marginBottom: 14 }, children: [
+      /* @__PURE__ */ jsxs("div", { className: "bg-section-label", children: [
+        "📄 Published Articles (",
+        articles.length,
+        ")"
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "bg-articles", children: articles.map((art) => /* @__PURE__ */ jsxs("div", { className: "bg-art-item", children: [
+        /* @__PURE__ */ jsx("div", { className: "bg-art-dot", style: { background: art.published ? "#4caf82" : "#666" } }),
+        /* @__PURE__ */ jsxs("div", { className: "bg-art-body", children: [
+          /* @__PURE__ */ jsx("div", { className: "bg-art-title", children: art.title }),
+          /* @__PURE__ */ jsxs("div", { className: "bg-art-meta", children: [
+            /* @__PURE__ */ jsx("span", { style: { color: art.published ? "#4caf82" : "#888", fontWeight: 700 }, children: art.published ? "● Live" : "○ Draft" }),
+            /* @__PURE__ */ jsxs("span", { children: [
+              "📅 ",
+              formatDate(art.createdAt)
+            ] }),
+            art.readTime && /* @__PURE__ */ jsxs("span", { children: [
+              "⏱ ",
+              art.readTime,
+              " min"
+            ] }),
+            art.views > 0 && /* @__PURE__ */ jsxs("span", { children: [
+              "👁 ",
+              art.views
+            ] }),
+            /* @__PURE__ */ jsx("span", { style: { color: "rgba(255,255,255,.25)" }, children: art.category })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "bg-art-actions", children: [
+          /* @__PURE__ */ jsx("a", { href: `/blog/${art.slug}`, target: "_blank", rel: "noreferrer", className: "bg-art-btn", children: "🔗 View" }),
+          /* @__PURE__ */ jsx("button", { className: "bg-art-btn", onClick: () => setEditTarget(art), children: "✏️" }),
+          /* @__PURE__ */ jsx("button", { className: "bg-art-btn del", onClick: () => handleDelete(art._id), children: "🗑" })
+        ] })
+      ] }, art._id)) })
+    ] }),
+    /* @__PURE__ */ jsx("div", { className: "bg-section-label", children: "✨ Generate New Article — Choose Type" }),
+    /* @__PURE__ */ jsx("div", { className: "bg-types", children: ARTICLE_TYPES.map((t) => /* @__PURE__ */ jsx(
+      "button",
+      {
+        className: `bg-type-chip${activeType === t.id ? " active" : ""}`,
+        style: {
+          borderColor: t.color,
+          color: activeType === t.id ? t.id === "review" ? "#000" : "#fff" : t.color,
+          background: activeType === t.id ? t.color : "transparent"
+        },
+        onClick: () => setActiveType((p) => p === t.id ? null : t.id),
+        children: t.label
+      },
+      t.id
+    )) }),
+    activeType && /* @__PURE__ */ jsx(
+      GenPanel,
+      {
+        movie,
+        type: activeType,
+        onPublished: handlePublished,
+        onToast
+      },
+      activeType
+    ),
+    editTarget && /* @__PURE__ */ jsx(
+      EditModal,
+      {
+        article: editTarget,
+        onClose: () => setEditTarget(null),
+        onSaved: handleSaved,
+        onToast
+      }
+    )
+  ] });
+}
+function MovieRow({ movie, onToast }) {
+  const [open, setOpen] = useState(false);
+  const [artCount, setArtCount] = useState(null);
+  useEffect(() => {
+    fetchMovieBlogs(movie.title).then((posts) => setArtCount(posts.length)).catch(() => setArtCount(0));
+  }, [movie.title]);
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "TBA";
-  const btn = (variant, disabled) => ({
-    padding: "5px 13px",
-    borderRadius: 6,
-    border: "none",
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontSize: "0.78rem",
-    fontWeight: 600,
-    opacity: disabled ? 0.55 : 1,
-    background: variant === "gold" ? "var(--gold)" : variant === "green" ? "#28a050" : variant === "red" ? "#a02828" : "var(--bg3)",
-    color: variant === "gold" || variant === "green" || variant === "red" ? "#fff" : "var(--text)"
-  });
-  return /* @__PURE__ */ jsxs("div", { children: [
-    /* @__PURE__ */ jsxs("div", { style: {
-      display: "flex",
-      alignItems: "flex-start",
-      gap: 14,
-      padding: "14px 18px",
-      borderBottom: "1px solid var(--border)",
-      background: status === "done" ? "rgba(40,160,80,0.06)" : status === "error" ? "rgba(160,40,40,0.06)" : "transparent"
-    }, children: [
+  return /* @__PURE__ */ jsxs("div", { className: "bg-movie-row", children: [
+    /* @__PURE__ */ jsxs("div", { className: "bg-movie-header", onClick: () => setOpen((o) => !o), children: [
       movie.posterUrl || movie.thumbnailUrl ? /* @__PURE__ */ jsx(
         "img",
         {
           src: movie.posterUrl || movie.thumbnailUrl,
           alt: movie.title,
-          style: {
-            width: 38,
-            height: 54,
-            objectFit: "cover",
-            borderRadius: 4,
-            flexShrink: 0,
-            border: "1px solid var(--border)",
-            background: "var(--bg3)"
-          },
+          className: "bg-poster",
           onError: (e) => e.target.style.opacity = "0"
         }
-      ) : /* @__PURE__ */ jsx("div", { style: {
-        width: 38,
-        height: 54,
-        borderRadius: 4,
-        flexShrink: 0,
-        border: "1px solid var(--border)",
-        background: "var(--bg3)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "1.2rem"
-      }, children: "🎬" }),
-      /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-        /* @__PURE__ */ jsx("div", { style: {
-          fontWeight: 700,
-          fontSize: "0.93rem",
-          color: "var(--text)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis"
-        }, children: movie.title }),
-        /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.75rem", color: "var(--muted)", marginTop: 2 }, children: [
-          year,
-          " · ",
-          (movie.genre || []).join(", ") || "Odia",
-          " · ",
-          movie.verdict || "Upcoming"
-        ] }),
-        status === "error" && errMsg && /* @__PURE__ */ jsxs("div", { style: {
-          fontSize: "0.72rem",
-          color: "#f77",
-          marginTop: 4,
-          background: "rgba(220,50,50,0.12)",
-          padding: "3px 8px",
-          borderRadius: 4
-        }, children: [
-          "⚠️ ",
-          errMsg
+      ) : /* @__PURE__ */ jsx("div", { className: "bg-poster-ph", children: "🎬" }),
+      /* @__PURE__ */ jsxs("div", { className: "bg-minfo", children: [
+        /* @__PURE__ */ jsx("div", { className: "bg-mtitle", children: movie.title }),
+        /* @__PURE__ */ jsxs("div", { className: "bg-msub", children: [
+          /* @__PURE__ */ jsx("span", { children: year }),
+          /* @__PURE__ */ jsx("span", { children: "·" }),
+          /* @__PURE__ */ jsx("span", { children: (movie.genre || []).join(", ") || "Odia" }),
+          /* @__PURE__ */ jsx("span", { children: "·" }),
+          /* @__PURE__ */ jsx("span", { children: movie.verdict || "Upcoming" }),
+          artCount !== null && artCount > 0 && /* @__PURE__ */ jsxs("span", { className: "bg-mcount", children: [
+            artCount,
+            " article",
+            artCount !== 1 ? "s" : ""
+          ] }),
+          artCount === 0 && /* @__PURE__ */ jsx("span", { className: "bg-mcount", style: { background: "rgba(255,255,255,.06)", color: "var(--muted)", borderColor: "var(--border)" }, children: "No articles" })
         ] })
       ] }),
-      /* @__PURE__ */ jsx("div", { style: { display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }, children: status === "done" ? /* @__PURE__ */ jsx("span", { style: { fontSize: "0.78rem", color: "#28a050", fontWeight: 700 }, children: "✅ Published" }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx("button", { style: btn("gold", busy), onClick: handleGenerate, disabled: busy, children: status === "generating" ? "⏳ Generating…" : article ? "🔄 Regenerate" : "✨ Generate" }),
-        article && /* @__PURE__ */ jsxs(Fragment, { children: [
-          /* @__PURE__ */ jsx("button", { style: btn("ghost", busy), onClick: () => setPreview((p) => !p), disabled: busy, children: preview ? "Hide" : "Preview" }),
-          /* @__PURE__ */ jsx("button", { style: btn("green", busy), onClick: handlePublish, disabled: busy, children: status === "publishing" ? "⏳ Publishing…" : "🚀 Publish" })
-        ] }),
-        status === "error" && /* @__PURE__ */ jsx("button", { style: btn("red", false), onClick: handleGenerate, children: "🔁 Retry" })
-      ] }) })
+      /* @__PURE__ */ jsx("div", { className: "bg-chevron", style: { transform: open ? "rotate(90deg)" : "none" }, children: "▶" })
     ] }),
-    article && preview && /* @__PURE__ */ jsx("div", { style: {
-      margin: "0 18px 12px 70px",
-      padding: 12,
-      background: "var(--bg3)",
-      borderRadius: 6,
-      fontSize: "0.78rem",
-      color: "var(--text)",
-      lineHeight: 1.75,
-      whiteSpace: "pre-wrap",
-      maxHeight: 220,
-      overflowY: "auto",
-      border: "1px solid var(--border)"
-    }, children: article })
+    open && /* @__PURE__ */ jsx(MoviePanel, { movie, onToast })
   ] });
 }
 function BlogGenerator({ movies = [], onToast }) {
-  const [published, setPublished] = useState(/* @__PURE__ */ new Set());
-  const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState("");
+  const [generating, setGenerating] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(null);
-  const markPublished = (id) => setPublished((prev) => /* @__PURE__ */ new Set([...prev, id]));
   const filtered = movies.filter(
     (m) => m.title.toLowerCase().includes(search.toLowerCase())
   );
-  const unpublished = filtered.filter((m) => !published.has(m._id));
-  const done = filtered.filter((m) => published.has(m._id));
   const bulkGenerate = async () => {
-    const targets = movies.filter((m) => !published.has(m._id));
-    if (!targets.length) return;
+    if (!window.confirm(`Generate review articles for all ${movies.length} movies? This may take several minutes.`)) return;
     setGenerating(true);
-    setBulkProgress({ done: 0, total: targets.length });
-    for (let i = 0; i < targets.length; i++) {
-      const movie = targets[i];
+    setBulkProgress({ done: 0, total: movies.length });
+    for (let i = 0; i < movies.length; i++) {
       try {
-        const text = await generateArticle(movie);
-        await publishArticle(movie, text);
-        markPublished(movie._id);
+        const text = await generateArticle(movies[i], "review");
+        await publishArticle(movies[i], text, "review");
       } catch {
       }
-      setBulkProgress({ done: i + 1, total: targets.length });
-      await new Promise((r) => setTimeout(r, 1e3));
+      setBulkProgress({ done: i + 1, total: movies.length });
+      await new Promise((r) => setTimeout(r, 1200));
     }
     setGenerating(false);
     setBulkProgress(null);
     onToast("✅ Bulk generation complete!", "success");
   };
-  return /* @__PURE__ */ jsxs("div", { style: { padding: "24px 28px" }, children: [
-    /* @__PURE__ */ jsxs("div", { style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      marginBottom: 16,
-      flexWrap: "wrap"
-    }, children: [
-      /* @__PURE__ */ jsxs("div", { style: { fontSize: "1.1rem", fontWeight: 800, color: "var(--gold)", flex: 1 }, children: [
-        "✨ AI Blog Generator",
-        /* @__PURE__ */ jsx("span", { style: {
-          fontSize: "0.65rem",
-          fontWeight: 500,
-          marginLeft: 10,
-          color: "var(--muted)",
-          fontFamily: "monospace"
-        }, children: API_BASE })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 18, fontSize: "0.82rem", color: "var(--muted)" }, children: [
-        /* @__PURE__ */ jsxs("span", { children: [
-          "🎬 ",
-          /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: movies.length }),
-          " total"
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("style", { children: CSS }),
+    /* @__PURE__ */ jsxs("div", { className: "bg-wrap", children: [
+      /* @__PURE__ */ jsxs("div", { className: "bg-header", children: [
+        /* @__PURE__ */ jsxs("div", { className: "bg-title", children: [
+          "✨ AI Blog Generator",
+          /* @__PURE__ */ jsx("span", { style: { fontSize: ".63rem", fontWeight: 500, marginLeft: 10, color: "var(--muted)", fontFamily: "monospace" }, children: API_BASE })
         ] }),
-        /* @__PURE__ */ jsxs("span", { children: [
-          "✅ ",
-          /* @__PURE__ */ jsx("b", { style: { color: "#28a050" }, children: published.size }),
-          " published"
+        /* @__PURE__ */ jsxs("div", { className: "bg-stats", children: [
+          /* @__PURE__ */ jsxs("span", { children: [
+            "🎬 ",
+            /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: movies.length }),
+            " movies"
+          ] }),
+          /* @__PURE__ */ jsxs("span", { children: [
+            "📝 ",
+            /* @__PURE__ */ jsx("b", { style: { color: "var(--gold)" }, children: "6" }),
+            " article types each"
+          ] })
         ] }),
-        /* @__PURE__ */ jsxs("span", { children: [
-          "⏳ ",
-          /* @__PURE__ */ jsx("b", { style: { color: "var(--gold)" }, children: movies.length - published.size }),
-          " pending"
-        ] })
+        /* @__PURE__ */ jsx(
+          "input",
+          {
+            className: "bg-search",
+            placeholder: "Search movies…",
+            value: search,
+            onChange: (e) => setSearch(e.target.value)
+          }
+        ),
+        /* @__PURE__ */ jsx("button", { className: "bg-bulk-btn", onClick: bulkGenerate, disabled: generating, children: generating ? "⏳ Generating…" : "🚀 Bulk Generate Reviews" })
       ] }),
-      /* @__PURE__ */ jsx(
-        "input",
-        {
-          style: {
-            padding: "7px 12px",
-            borderRadius: 7,
-            border: "1px solid var(--border)",
-            background: "var(--bg2)",
-            color: "var(--text)",
-            fontSize: "0.85rem",
-            width: 200
-          },
-          placeholder: "Search movies…",
-          value: search,
-          onChange: (e) => setSearch(e.target.value)
-        }
-      ),
-      /* @__PURE__ */ jsx(
-        "button",
-        {
-          onClick: bulkGenerate,
-          disabled: generating,
-          style: {
-            padding: "7px 16px",
-            borderRadius: 7,
-            border: "none",
-            cursor: generating ? "not-allowed" : "pointer",
-            fontSize: "0.82rem",
-            fontWeight: 700,
-            background: generating ? "var(--bg3)" : "var(--gold)",
-            color: generating ? "var(--muted)" : "#000"
-          },
-          children: generating ? "⏳ Generating All…" : "🚀 Generate All"
-        }
-      )
-    ] }),
-    bulkProgress && /* @__PURE__ */ jsxs("div", { style: {
-      marginBottom: 14,
-      padding: "10px 14px",
-      background: "rgba(201,151,58,0.1)",
-      borderRadius: 8,
-      border: "1px solid rgba(201,151,58,0.3)",
-      fontSize: "0.84rem",
-      color: "var(--gold)",
-      fontWeight: 600
-    }, children: [
-      "⏳ ",
-      bulkProgress.done,
-      " / ",
-      bulkProgress.total,
-      " complete",
-      /* @__PURE__ */ jsx("div", { style: { marginTop: 8, height: 6, background: "var(--bg3)", borderRadius: 4, overflow: "hidden" }, children: /* @__PURE__ */ jsx("div", { style: {
-        height: "100%",
-        borderRadius: 4,
-        background: "var(--gold)",
-        transition: "width 0.4s",
-        width: `${bulkProgress.done / bulkProgress.total * 100}%`
-      } }) })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: {
-      marginBottom: 14,
-      padding: "8px 14px",
-      borderRadius: 7,
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid var(--border)",
-      fontSize: "0.74rem",
-      color: "var(--muted)",
-      lineHeight: 1.7
-    }, children: [
-      "💡 ",
-      /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: "Ollama must be running." }),
-      " ",
-      "If you see a 500 error, open Command Prompt and run:",
-      " ",
-      /* @__PURE__ */ jsx("code", { style: { background: "var(--bg3)", padding: "1px 6px", borderRadius: 3, fontSize: "0.72rem" }, children: "ollama pull llama3.2" }),
-      " ",
-      "— model downloads once (~2 GB), then generation works instantly."
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: {
-      background: "var(--bg2)",
-      borderRadius: 10,
-      border: "1px solid var(--border)",
-      overflow: "hidden"
-    }, children: [
-      filtered.length === 0 && /* @__PURE__ */ jsx("div", { style: {
-        padding: 40,
-        textAlign: "center",
-        color: "var(--muted)",
-        fontSize: "0.9rem"
-      }, children: search ? "No movies match your search." : "No movies found." }),
-      unpublished.map((movie) => /* @__PURE__ */ jsx(
-        MovieRow,
-        {
-          movie,
-          isPublished: false,
-          onPublished: markPublished,
-          onToast
-        },
-        movie._id
-      )),
-      done.map((movie) => /* @__PURE__ */ jsx(
-        MovieRow,
-        {
-          movie,
-          isPublished: true,
-          onPublished: markPublished,
-          onToast
-        },
-        movie._id
-      )),
-      unpublished.length === 0 && done.length > 0 && !search && /* @__PURE__ */ jsx("div", { style: {
-        padding: 16,
-        textAlign: "center",
-        color: "#28a050",
-        fontSize: "0.85rem",
-        fontWeight: 600
-      }, children: "🎉 All movies have published articles!" })
+      bulkProgress && /* @__PURE__ */ jsxs("div", { className: "bg-progress", children: [
+        "⏳ ",
+        bulkProgress.done,
+        " / ",
+        bulkProgress.total,
+        " complete",
+        /* @__PURE__ */ jsx("div", { className: "bg-progress-bar", children: /* @__PURE__ */ jsx("div", { className: "bg-progress-fill", style: { width: `${bulkProgress.done / bulkProgress.total * 100}%` } }) })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "bg-tip", children: [
+        "💡 ",
+        /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: "Multiple articles per movie:" }),
+        " Click any movie to expand it, then pick an article type — ",
+        /* @__PURE__ */ jsx("b", { style: { color: "var(--text)" }, children: "Movie Review, Story & Plot, Cast Spotlight, Music & Songs, Deep Dive, or Trivia & Facts." }),
+        " Each generates a unique 1000+ word article. Edit or delete any article after publishing. A single movie can have all 6 types published simultaneously."
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "bg-list", children: filtered.length === 0 ? /* @__PURE__ */ jsx("div", { className: "bg-empty", children: search ? "No movies match your search." : "No movies found." }) : filtered.map((movie) => /* @__PURE__ */ jsx(MovieRow, { movie, onToast }, movie._id)) })
     ] })
   ] });
 }
@@ -13138,7 +14137,7 @@ function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovi
           NewsForm,
           {
             initial: (modal == null ? void 0 : modal.data) ? { ...modal.data, movieId: movie._id } : { movieId: movie._id },
-            onSave: (modal == null ? void 0 : modal.type) === "edit-news" ? (fd) => handleEditNews(modal.data._id, fd) : handleAddNews,
+            onSave: (modal == null ? void 0 : modal.type) === "edit-news" ? (fd2) => handleEditNews(modal.data._id, fd2) : handleAddNews,
             onCancel: () => setModal(null),
             saving,
             movies: [movie]

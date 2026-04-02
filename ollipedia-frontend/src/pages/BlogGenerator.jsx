@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { getAdminToken } from "../api/api";
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "") + "/api";
+// Uses the same env var as api.js — VITE_API_URL already includes /api
+// e.g. "https://ollipedia-backend.onrender.com/api"
+// Do NOT append /api again — that creates a double /api/api path in prod.
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:4000/api").replace(/\/$/, "");
 
 // ─── Article type variants ─────────────────────────────────────────────────
 const ARTICLE_TYPES = [

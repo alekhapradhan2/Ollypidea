@@ -2,7 +2,10 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+// Uses the same env var as api.js — VITE_API_URL already includes /api
+// e.g. "https://ollipedia-backend.onrender.com/api"
+// So we must NOT append /api again here.
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:4000/api").replace(/\/$/, "");
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
@@ -344,7 +347,7 @@ export default function BlogPost() {
     (async () => {
       setLoading(true); setPost(null); setNotFound(false);
       try {
-        const r = await fetch(`${API_BASE}/api/blog/${slug}`);
+        const r = await fetch(`${API_BASE}/blog/${slug}`);
         if (!r.ok) { setNotFound(true); setLoading(false); return; }
         const d = await r.json();
         if (!dead) setPost(d);
@@ -360,7 +363,7 @@ export default function BlogPost() {
     // Related articles
     (async () => {
       try {
-        const r = await fetch(`${API_BASE}/api/blog?limit=6${post.category ? `&category=${encodeURIComponent(post.category)}` : ""}`);
+        const r = await fetch(`${API_BASE}/blog?limit=6${post.category ? `&category=${encodeURIComponent(post.category)}` : ""}`);
         const d = await r.json();
         setRelated((d.posts||d||[]).filter(p=>p.slug!==slug).slice(0,4));
       } catch {}
@@ -370,7 +373,7 @@ export default function BlogPost() {
     if (post.movieTitle) {
       (async () => {
         try {
-          const r = await fetch(`${API_BASE}/api/movies?q=${encodeURIComponent(post.movieTitle)}&limit=4`);
+          const r = await fetch(`${API_BASE}/movies?q=${encodeURIComponent(post.movieTitle)}&limit=4`);
           const d = await r.json();
           const movies = d.movies || d || [];
           setRelMovies(movies.slice(0,4));
@@ -388,13 +391,13 @@ export default function BlogPost() {
     if (!rvName.trim() || !rvText.trim()) return;
     setSubmitting(true);
     try {
-      const r = await fetch(`${API_BASE}/api/blog/${post._id}/reviews`, {
+      const r = await fetch(`${API_BASE}/blog/${post._id}/reviews`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({user:rvName.trim(),text:rvText.trim(),rating:rvRating}),
       });
       if (r.ok) {
         setSubmitted(true);
-        const updated = await fetch(`${API_BASE}/api/blog/${slug}`);
+        const updated = await fetch(`${API_BASE}/blog/${slug}`);
         if (updated.ok) setPost(await updated.json());
       }
     } catch {}
@@ -403,7 +406,7 @@ export default function BlogPost() {
 
   const likeReview = async idx => {
     try {
-      const r = await fetch(`${API_BASE}/api/blog/${post._id}/reviews/${idx}/like`,{method:"POST"});
+      const r = await fetch(`${API_BASE}/blog/${post._id}/reviews/${idx}/like`,{method:"POST"});
       if (r.ok) {
         const {likes} = await r.json();
         setPost(p => { const rv=[...(p.reviews||[])]; rv[idx]={...rv[idx],likes}; return {...p,reviews:rv}; });
@@ -415,7 +418,7 @@ export default function BlogPost() {
     const rep = replies[idx]||{};
     if (!rep.text?.trim()||!rep.name?.trim()) return;
     try {
-      const r = await fetch(`${API_BASE}/api/blog/${post._id}/reviews/${idx}/reply`,{
+      const r = await fetch(`${API_BASE}/blog/${post._id}/reviews/${idx}/reply`,{
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({user:rep.name.trim(),text:rep.text.trim(),date:new Date().toISOString().split("T")[0]}),
       });
