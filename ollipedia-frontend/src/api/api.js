@@ -1,11 +1,43 @@
-// ─────────────────────────────────────────────────────────────────
-//  api.js  —  Drop this file into your src/ folder
-//  Replace the DB object in ollipedia-full.jsx with this
-// ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  api.js — BOX OFFICE EXTENSION
+//  Add the following entries to your existing API object in api.js.
+//  These go INSIDE the existing `export const API = { ... }` block.
+//  DO NOT replace the existing file — only ADD these lines.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/*
+  ── Paste inside the API = { ... } object, after the last entry ──
+
+  // ── Box Office (public)
+  getMovieBoxOfficeDays:    (id)          => get(`/movies/${id}/boxoffice-days`),
+  getMovieBoxOffice:        (id)          => get(`/movies/${id}/boxoffice`),
+
+  // ── Admin — Box Office
+  adminGetBoxOfficeMovies:  ()            => get("/admin/boxoffice/all-movies", _adminToken),
+  adminAddBoxOfficeDay:     (id, body)    => post(`/admin/movies/${id}/boxoffice-days`, body, _adminToken),
+  adminUpdateBoxOfficeDay:  (id, day, body) => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}`, body, _adminToken),
+  adminDeleteBoxOfficeDay:  (id, day)    => del(`/admin/movies/${id}/boxoffice-days/${day}`, _adminToken),
+
+*/
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  NOTE: The following two entries already exist in the original api.js.
+//  Do NOT add them again:
+//    getMovieBoxOfficeDays:   (id) => get(`/movies/${id}/boxoffice-days`),
+//    adminGetBoxOfficeMovies: ()   => get("/admin/boxoffice/all-movies", _adminToken),
+//
+//  Only add the NEW entries (adminAddBoxOfficeDay, adminUpdateBoxOfficeDay,
+//  adminDeleteBoxOfficeDay) that are not already present.
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FULL UPDATED api.js  — safe to replace your existing file entirely
+//  (All existing methods preserved; box office admin methods added at the end)
+// ─────────────────────────────────────────────────────────────────────────────
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
-// ── Production token
 let _token = (() => { try { return localStorage.getItem("op_token"); } catch { return null; } })();
 export const setToken = (t) => {
   _token = t;
@@ -13,7 +45,6 @@ export const setToken = (t) => {
 };
 export const getToken = () => _token;
 
-// ── Cast member token
 let _castToken = (() => { try { return localStorage.getItem("cm_token"); } catch { return null; } })();
 export const setCastToken = (t) => {
   _castToken = t;
@@ -21,7 +52,6 @@ export const setCastToken = (t) => {
 };
 export const getCastToken = () => _castToken;
 
-// ── Admin token
 let _adminToken = (() => { try { return localStorage.getItem("admin_token"); } catch { return null; } })();
 export const setAdminToken = (t) => {
   _adminToken = t;
@@ -29,7 +59,6 @@ export const setAdminToken = (t) => {
 };
 export const getAdminToken = () => _adminToken;
 
-// ── Request helpers
 const authHeader = (token) => token ? { Authorization: `Bearer ${token}` } : {};
 
 const req = async (method, path, body, token) => {
@@ -146,27 +175,15 @@ export const API = {
   adminUnreadCount:     ()     => get("/admin/enquiries/unread-count", _adminToken),
   adminMarkEnquiryRead: (id)   => req("PATCH", `/admin/enquiries/${id}/read`, undefined, _adminToken),
   adminDeleteEnquiry:   (id)   => del(`/admin/enquiries/${id}`, _adminToken),
-};
 
-// ─────────────────────────────────────────────────────────────────
-//  HOW TO USE in your React components:
-//
-//  import { API, setToken, getToken } from "./api";
-//
-//  // Load all movies
-//  const movies = await API.getMovies();
-//
-//  // Register a movie
-//  const { token, movie } = await API.register({ email, password, title, ... });
-//  setToken(token);
-//
-//  // Login
-//  const { token, movie } = await API.login(email, password);
-//  setToken(token);
-//
-//  // Update box office (owner only)
-//  await API.updateBoxOffice(movieId, { opening, firstWeek, total, verdict });
-//
-//  // Add news (owner only)
-//  await API.addNews(movieId, { title, content, category, imageUrl });
-// ─────────────────────────────────────────────────────────────────
+  // ── Box Office (public) — existing
+  getMovieBoxOfficeDays:   (id) => get(`/movies/${id}/boxoffice-days`),
+
+  // ── Admin — Box Office (existing)
+  adminGetBoxOfficeMovies: ()   => get("/admin/boxoffice/all-movies", _adminToken),
+
+  // ── Admin — Box Office (NEW additions)
+  adminAddBoxOfficeDay:    (id, body)       => post(`/admin/movies/${id}/boxoffice-days`, body, _adminToken),
+  adminUpdateBoxOfficeDay: (id, day, body)  => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}`, body, _adminToken),
+  adminDeleteBoxOfficeDay: (id, day)        => del(`/admin/movies/${id}/boxoffice-days/${day}`, _adminToken),
+};

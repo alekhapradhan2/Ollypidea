@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import BlogGenerator from "./BlogGenerator";
+import BoxOfficePanel from "./BoxOfficePanel"; 
 import { API, getAdminToken } from "../api/api";
+
 
 // ════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -2306,6 +2308,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["productions","🎥","Productions"],
             ["news","📰","News"],
             ["blog","✍️","Blog"],
+            ["boxoffice","📊","Box Office"],
             ["enquiries","✉️","Enquiries"],
             ["settings","⚙️","Settings"],
           ].map(([key,icon,label]) => {
@@ -2877,6 +2880,10 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {/* ── BLOG ── */}
               {tab==="blog" && (
                 <BlogGenerator movies={movies} onToast={onToast} />
+              )}
+             {/* ── BOX OFFICE ── */}
+              {tab==="boxoffice" && (
+                <BoxOfficePanel movies={movies} onToast={onToast} />
               )}
 
               {/* ── ENQUIRIES ── */}

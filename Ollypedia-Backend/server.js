@@ -192,11 +192,18 @@ const MovieSchema = new mongoose.Schema({
     },
     songs: [SongSchema],
   },
-  boxOffice: {
-    opening:   { type: String, default: "TBA" },
-    firstWeek: { type: String, default: "TBA" },
-    total:     { type: String, default: "TBA" },
-  },
+ boxOffice: {
+   opening:   { type: String, default: "TBA" },
+   firstWeek: { type: String, default: "TBA" },
+   total:     { type: String, default: "TBA" },
+ },
+ boxOfficeDays: [{
+   day:   { type: Number, required: true },
+   net:   { type: String, default: "" },
+   gross: { type: String, default: "" },
+   date:  { type: String, default: "" },
+   note:  { type: String, default: "" },
+ }],
   verdict:  { type: String, default: "Upcoming" },
   status:   { type: String, default: "Upcoming" },
   reviews:  [ReviewSchema],
@@ -1856,6 +1863,155 @@ app.post("/api/admin/generate-article", adminAuth, async (req, res) => {
   }
 });
 
+// ── PUBLIC — GET /api/movies/:id/boxoffice-days ──────────────────────────────
+app.get("/api/movies/:id/boxoffice-days", async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+    const movie = await Movie.findById(req.params.id, "boxOfficeDays title slug verdict").lean();
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+    const days = (movie.boxOfficeDays || []).slice().sort((a, b) => a.day - b.day);
+    res.json(days);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ 
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN — POST /api/admin/movies/:id/boxoffice-days
+// Add a new day entry (prevents duplicate day numbers)
+// ═══════════════════════════════════════════════════════════════════════════
+app.post("/api/admin/movies/:id/boxoffice-days", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+    const { day, net, gross, date, note } = req.body;
+ 
+    if (!day || isNaN(parseInt(day, 10))) return res.status(400).json({ error: "day is required (integer)" });
+    const dayNum = parseInt(day, 10);
+ 
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+ 
+    // Prevent duplicate
+    const exists = (movie.boxOfficeDays || []).some((d) => d.day === dayNum);
+    if (exists) return res.status(409).json({ error: `Day ${dayNum} already exists. Use PATCH to update.` });
+ 
+    movie.boxOfficeDays.push({ day: dayNum, net: net || "", gross: gross || "", date: date || "", note: note || "" });
+    movie.boxOfficeDays.sort((a, b) => a.day - b.day);
+ 
+    // Auto-update boxOffice summary totals
+    const totalNet = movie.boxOfficeDays.reduce((s, d) => {
+      const v = parseFloat(String(d.net || "").replace(/[^0-9.]/g, ""));
+      return s + (isNaN(v) ? 0 : v);
+    }, 0);
+    if (totalNet > 0) {
+      movie.boxOffice = movie.boxOffice || {};
+      movie.boxOffice.total = `₹${(totalNet / 1_00_00_000).toFixed(2)} Cr`;
+    }
+ 
+    await movie.save();
+    res.status(201).json({ success: true, days: movie.boxOfficeDays });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ 
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN — PATCH /api/admin/movies/:id/boxoffice-days/:day
+// Update an existing day entry
+// ═══════════════════════════════════════════════════════════════════════════
+app.patch("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+    const dayNum = parseInt(req.params.day, 10);
+    if (isNaN(dayNum)) return res.status(400).json({ error: "Invalid day number" });
+ 
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+ 
+    const idx = (movie.boxOfficeDays || []).findIndex((d) => d.day === dayNum);
+    if (idx === -1) return res.status(404).json({ error: `Day ${dayNum} not found` });
+ 
+    const { net, gross, date, note } = req.body;
+    if (net   !== undefined) movie.boxOfficeDays[idx].net   = net;
+    if (gross !== undefined) movie.boxOfficeDays[idx].gross = gross;
+    if (date  !== undefined) movie.boxOfficeDays[idx].date  = date;
+    if (note  !== undefined) movie.boxOfficeDays[idx].note  = note;
+ 
+    // Re-sync total
+    const totalNet = movie.boxOfficeDays.reduce((s, d) => {
+      const v = parseFloat(String(d.net || "").replace(/[^0-9.]/g, ""));
+      return s + (isNaN(v) ? 0 : v);
+    }, 0);
+    if (totalNet > 0) {
+      movie.boxOffice = movie.boxOffice || {};
+      movie.boxOffice.total = `₹${(totalNet / 1_00_00_000).toFixed(2)} Cr`;
+    }
+ 
+    await movie.save();
+    res.json({ success: true, days: movie.boxOfficeDays });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ 
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN — DELETE /api/admin/movies/:id/boxoffice-days/:day
+// Remove a day entry
+// ═══════════════════════════════════════════════════════════════════════════
+app.delete("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+    const dayNum = parseInt(req.params.day, 10);
+    if (isNaN(dayNum)) return res.status(400).json({ error: "Invalid day number" });
+ 
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+ 
+    const before = (movie.boxOfficeDays || []).length;
+    movie.boxOfficeDays = (movie.boxOfficeDays || []).filter((d) => d.day !== dayNum);
+    if (movie.boxOfficeDays.length === before) {
+      return res.status(404).json({ error: `Day ${dayNum} not found` });
+    }
+ 
+    await movie.save();
+    res.json({ success: true, days: movie.boxOfficeDays });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ 
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN — GET /api/admin/boxoffice/all-movies
+// Returns movies that have at least one boxOfficeDays entry (already existed
+// in the original server.js but included here for completeness)
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTE: if this route already exists in your server.js, skip adding it again.
+app.get("/api/admin/boxoffice/all-movies", adminAuth, async (req, res) => {
+  try {
+    const movies = await Movie
+      .find({ "boxOfficeDays.0": { $exists: true } },
+            "title slug posterUrl thumbnailUrl releaseDate language verdict boxOffice boxOfficeDays budget")
+      .sort({ updatedAt: -1 })
+      .lean();
+    res.json(movies);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// SITEMAP EXTENSION
+// Add this block inside your existing sitemap-movies.xml route so box office
+// pages are indexed. OR add a separate /sitemap-boxoffice.xml as shown below.
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+app.get("/sitemap-boxoffice.xml", async (req, res) => {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  try {
+    const movies = await Movie
+      .find({ "boxOfficeDays.0": { $exists: true } }, "title slug releaseDate updatedAt")
+      .lean();
+    const SITE_URL_LOCAL = process.env.SITE_URL || "https://www.ollypedia.in";
+    movies.forEach((m) => {
+      const slug    = m.slug || (String(m.title || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
+      const lastmod = m.updatedAt ? new Date(m.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      xml += `  <url>\n    <loc>${SITE_URL_LOCAL}/box-office/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.85</priority>\n  </url>\n`;
+    });
+  } catch {}
+  res.type("application/xml").send(xml + "</urlset>");
+});
+// ────────────────────────────────────────────────────────────────────
+
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build
 // command is: cd frontend && npm run build  (or wherever your React app lives)
@@ -1870,7 +2026,6 @@ app.get("*", (req, res) => {
   }
   res.sendFile(path.join(distPath, "index.html"));
 });
-// ────────────────────────────────────────────────────────────────────
 
 app.listen(process.env.PORT || 4000, () =>
   console.log(`🚀 Server running on port ${process.env.PORT || 4000}`)
