@@ -1527,8 +1527,10 @@ app.post("/api/admin/blog", adminAuth, async (req, res) => {
   try {
     const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,author,published,featured,seoTitle,seoDesc } = req.body;
     if (!title?.trim() || !content?.trim()) return res.status(400).json({ error:"Title and content required" });
-    const slug = title.toLowerCase().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").trim()
-      + "-" + Date.now().toString(36);
+    const slug = req.body.slug?.trim()
+      ? req.body.slug.trim()
+      : title.toLowerCase().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").trim()
+        + "-" + Date.now().toString(36);
     const readTime = Math.max(1, Math.ceil((content||"").split(/\s+/).length/200));
     const post = await Blog.create({
       title:title.trim(), slug, excerpt:excerpt||"", content:content.trim(),
@@ -1906,7 +1908,7 @@ app.post("/api/admin/movies/:id/boxoffice-days", adminAuth, async (req, res) => 
       movie.boxOffice.total = `₹${(totalNet / 1_00_00_000).toFixed(2)} Cr`;
     }
  
-    await movie.save();
+    await movie.save({ validateBeforeSave: false });
     res.status(201).json({ success: true, days: movie.boxOfficeDays });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1943,7 +1945,7 @@ app.patch("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, re
       movie.boxOffice.total = `₹${(totalNet / 1_00_00_000).toFixed(2)} Cr`;
     }
  
-    await movie.save();
+    await movie.save({ validateBeforeSave: false });
     res.json({ success: true, days: movie.boxOfficeDays });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1967,7 +1969,7 @@ app.delete("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, r
       return res.status(404).json({ error: `Day ${dayNum} not found` });
     }
  
-    await movie.save();
+    await movie.save({ validateBeforeSave: false });
     res.json({ success: true, days: movie.boxOfficeDays });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
