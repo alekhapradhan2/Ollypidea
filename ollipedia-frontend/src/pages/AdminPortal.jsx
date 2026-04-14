@@ -18,7 +18,7 @@ const CAST_TYPES = [
   "Background Score","Art Director","Costume Designer",
   "Stunt Director","Voice Artist","Other"
 ];
-const VERDICTS   = ["Upcoming","Hit","Super Hit","Blockbuster","Average","Flop","Disaster"];
+const VERDICTS   = ["Upcoming","Hit","Super Hit","Blockbuster","Average","Flop","Disaster","Released"];
 const NEWS_CATS  = ["Update","Announcement","Review","Interview","Event","Award","Other"];
 
 const isOid = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
