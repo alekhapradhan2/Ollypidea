@@ -305,11 +305,61 @@ const CSS = `
 // ─── Spinner element ─────────────────────────────────────────────────────────
 const Spin = () => <span className="bg-spinner" />;
 
-// ─── Edit Modal ───────────────────────────────────────────────────────────────
+// ─── Shared YouTube picker with live thumbnail preview ───────────────────────
+// Accepts full URLs (youtube.com/watch?v=X, youtu.be/X) or bare 11-char IDs.
+function parseYtId(input) {
+  const s = String(input || "").trim();
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  return "";
+}
+
+function YoutubePicker({ value, onChange }) {
+  const cleanId = parseYtId(value);
+  const valid   = cleanId.length === 11;
+  return (
+    <div>
+      <label className="bg-field-label">
+        🎬 YouTube Video
+        <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>
+          optional — full URL or video ID
+        </span>
+      </label>
+      <input
+        className="bg-field-input"
+        placeholder="https://youtube.com/watch?v=… or just the ID"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+      {value && valid && (
+        <div style={{ marginTop:8, display:"flex", alignItems:"flex-start", gap:10 }}>
+          <img
+            src={`https://img.youtube.com/vi/${cleanId}/mqdefault.jpg`}
+            alt="YouTube thumbnail"
+            style={{ width:160, height:90, objectFit:"cover", borderRadius:6, border:"1px solid var(--border)", flexShrink:0 }}
+            onError={e => e.target.style.display="none"}
+          />
+          <div style={{ fontSize:".69rem", lineHeight:1.7 }}>
+            <span style={{ color:"#4acf82" }}>✅ Video ID: <b style={{ color:"var(--text)" }}>{cleanId}</b></span><br />
+            <span style={{ color:"var(--muted)" }}>This video will be embedded on the blog post.</span>
+          </div>
+        </div>
+      )}
+      {value && !valid && (
+        <div style={{ marginTop:5, fontSize:".69rem", color:"#f88" }}>
+          ⚠️ Could not detect a valid YouTube ID — paste the full URL or the 11-character ID.
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function EditModal({ article, onClose, onSaved, onToast }) {
-  const [title,          setTitle]          = useState(article.title   || "");
-  const [content,        setContent]        = useState(article.content || "");
-  const [excerpt,        setExcerpt]        = useState(article.excerpt || "");
+  const [title,          setTitle]          = useState(article.title          || "");
+  const [content,        setContent]        = useState(article.content        || "");
+  const [excerpt,        setExcerpt]        = useState(article.excerpt        || "");
   const [pub,            setPub]            = useState(article.published !== false);
   const [youtubeVideoId, setYoutubeVideoId] = useState(article.youtubeVideoId || "");
   const [saving,         setSaving]         = useState(false);
@@ -317,11 +367,12 @@ function EditModal({ article, onClose, onSaved, onToast }) {
   const save = async () => {
     setSaving(true);
     try {
+      const cleanId = parseYtId(youtubeVideoId);
       const updated = await updateArticle(article._id, {
         title: title.trim(), content: content.trim(),
         excerpt: excerpt.trim() || content.slice(0,200).trim()+"…",
         published: pub,
-        youtubeVideoId: youtubeVideoId.trim(),
+        youtubeVideoId: cleanId,
       });
       onSaved(updated);
       onToast("✅ Article updated!", "success");
@@ -344,21 +395,7 @@ function EditModal({ article, onClose, onSaved, onToast }) {
             <input className="bg-field-input" value={excerpt} onChange={e=>setExcerpt(e.target.value)} placeholder="Short teaser shown on blog cards…" /></div>
           <div><label className="bg-field-label">Content</label>
             <textarea className="bg-field-input bg-field-textarea tall" value={content} onChange={e=>setContent(e.target.value)} /></div>
-          <div>
-            <label className="bg-field-label">
-              YouTube Video ID
-              <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>optional — paste ID from youtube.com/watch?v=<b>XXXXXXXXXXX</b></span>
-            </label>
-            <input className="bg-field-input"
-              placeholder="e.g. dQw4w9WgXcQ"
-              value={youtubeVideoId}
-              onChange={e => setYoutubeVideoId(e.target.value.trim())} />
-            {youtubeVideoId && (
-              <div style={{ marginTop:5, fontSize:".69rem", color:"#4acf82" }}>
-                ✅ Will embed: https://youtube.com/watch?v={youtubeVideoId}
-              </div>
-            )}
-          </div>
+          <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
           <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:".84rem", color:"var(--text)" }}>
             <input type="checkbox" checked={pub} onChange={e=>setPub(e.target.checked)} />
             Published (visible on public blog)
@@ -500,7 +537,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
         title:blogTitle, content:blogContent,
         category:blogCategory, tags:blogTags,
         coverImage, movie:linkedMovie, published:publishNow,
-        youtubeVideoId,
+        youtubeVideoId: parseYtId(youtubeVideoId),
       });
       onPublished(post); onClose();
     } catch (err) {
@@ -575,19 +612,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
             onError={e=>e.target.style.display="none"} />
         )}
       </div>
-      <div>
-        <label className="bg-field-label">
-          YouTube Video ID
-          <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>optional — paste the video ID (e.g. dQw4w9WgXcQ)</span>
-        </label>
-        <input className="bg-field-input" placeholder="e.g. dQw4w9WgXcQ (from youtube.com/watch?v=…)"
-          value={youtubeVideoId} onChange={e=>setYoutubeVideoId(e.target.value.trim())} />
-        {youtubeVideoId && (
-          <div style={{ marginTop:6, fontSize:".69rem", color:"#4acf82" }}>
-            ✅ Video: https://youtube.com/watch?v={youtubeVideoId}
-          </div>
-        )}
-      </div>
+      <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
       {linkedMovie && (
         <div style={{ padding:"7px 12px", background:"rgba(201,151,58,.06)", border:"1px solid rgba(201,151,58,.22)", borderRadius:7, fontSize:".76rem", color:"var(--gold)" }}>
           🎬 Linked to: <b>{linkedMovie.title}</b>
@@ -925,21 +950,7 @@ function GenPanel({ movie, type, onPublished, onToast }) {
       {/* YouTube Video — shown once article is ready, before publishing */}
       {article && (
         <div style={{ marginTop:10 }}>
-          <div style={{ fontSize:".68rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:".07em", marginBottom:5 }}>
-            🎬 YouTube Video ID
-            <span style={{ fontWeight:400, textTransform:"none", marginLeft:8, color:"rgba(255,255,255,.3)" }}>optional</span>
-          </div>
-          <input className="bg-field-input"
-            placeholder="e.g. dQw4w9WgXcQ  (from youtube.com/watch?v=…)"
-            value={youtubeVideoId}
-            onChange={e => setYoutubeVideoId(e.target.value.trim())}
-            style={{ fontSize:".8rem" }}
-          />
-          {youtubeVideoId && (
-            <div style={{ marginTop:4, fontSize:".69rem", color:"#4acf82" }}>
-              ✅ Will embed: https://youtube.com/watch?v={youtubeVideoId}
-            </div>
-          )}
+          <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
         </div>
       )}
     </div>
