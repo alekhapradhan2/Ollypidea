@@ -307,11 +307,12 @@ const Spin = () => <span className="bg-spinner" />;
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 function EditModal({ article, onClose, onSaved, onToast }) {
-  const [title,   setTitle]   = useState(article.title   || "");
-  const [content, setContent] = useState(article.content || "");
-  const [excerpt, setExcerpt] = useState(article.excerpt || "");
-  const [pub,     setPub]     = useState(article.published !== false);
-  const [saving,  setSaving]  = useState(false);
+  const [title,          setTitle]          = useState(article.title   || "");
+  const [content,        setContent]        = useState(article.content || "");
+  const [excerpt,        setExcerpt]        = useState(article.excerpt || "");
+  const [pub,            setPub]            = useState(article.published !== false);
+  const [youtubeVideoId, setYoutubeVideoId] = useState(article.youtubeVideoId || "");
+  const [saving,         setSaving]         = useState(false);
 
   const save = async () => {
     setSaving(true);
@@ -320,6 +321,7 @@ function EditModal({ article, onClose, onSaved, onToast }) {
         title: title.trim(), content: content.trim(),
         excerpt: excerpt.trim() || content.slice(0,200).trim()+"…",
         published: pub,
+        youtubeVideoId: youtubeVideoId.trim(),
       });
       onSaved(updated);
       onToast("✅ Article updated!", "success");
@@ -342,6 +344,21 @@ function EditModal({ article, onClose, onSaved, onToast }) {
             <input className="bg-field-input" value={excerpt} onChange={e=>setExcerpt(e.target.value)} placeholder="Short teaser shown on blog cards…" /></div>
           <div><label className="bg-field-label">Content</label>
             <textarea className="bg-field-input bg-field-textarea tall" value={content} onChange={e=>setContent(e.target.value)} /></div>
+          <div>
+            <label className="bg-field-label">
+              YouTube Video ID
+              <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>optional — paste ID from youtube.com/watch?v=<b>XXXXXXXXXXX</b></span>
+            </label>
+            <input className="bg-field-input"
+              placeholder="e.g. dQw4w9WgXcQ"
+              value={youtubeVideoId}
+              onChange={e => setYoutubeVideoId(e.target.value.trim())} />
+            {youtubeVideoId && (
+              <div style={{ marginTop:5, fontSize:".69rem", color:"#4acf82" }}>
+                ✅ Will embed: https://youtube.com/watch?v={youtubeVideoId}
+              </div>
+            )}
+          </div>
           <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:".84rem", color:"var(--text)" }}>
             <input type="checkbox" checked={pub} onChange={e=>setPub(e.target.checked)} />
             Published (visible on public blog)
