@@ -131,7 +131,7 @@ async function generateArticle(movie, type) {
   return callGenerateAPI(buildMoviePrompt(movie, type));
 }
 
-async function publishArticle(movie, article, type) {
+async function publishArticle(movie, article, type, youtubeVideoId = "") {
   const token   = getAdminToken();
   if (!token) throw new Error("Not logged in as admin.");
   const title   = autoTitle(movie, type);
@@ -148,6 +148,7 @@ async function publishArticle(movie, article, type) {
       movieTitle: movie.title, movieId: movie._id,
       author: "OllyPedia Editorial",
       readTime: readTime(article), seoTitle:title, seoDesc:excerpt, published:true,
+      ...(youtubeVideoId.trim() ? { youtubeVideoId: youtubeVideoId.trim() } : {}),
     }),
   });
   if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error||`Publish failed (${res.status})`); }
@@ -156,7 +157,7 @@ async function publishArticle(movie, article, type) {
   return post;
 }
 
-async function publishBlogPost({ title, content, category, tags, coverImage, movie, published }) {
+async function publishBlogPost({ title, content, category, tags, coverImage, movie, published, youtubeVideoId }) {
   const token   = getAdminToken();
   if (!token) throw new Error("Not logged in as admin.");
   const slug    = slugify(`${title}-${Date.now().toString(36)}`);
@@ -174,6 +175,7 @@ async function publishBlogPost({ title, content, category, tags, coverImage, mov
       readTime: readTime(content),
       seoTitle: title.trim(), seoDesc: excerpt,
       published: published !== false,
+      ...(youtubeVideoId?.trim() ? { youtubeVideoId: youtubeVideoId.trim() } : {}),
     }),
   });
   if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error||`Publish failed (${res.status})`); }
@@ -378,6 +380,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
   const [blogTags,     setBlogTags]     = useState("");
   const [coverImage,   setCoverImage]   = useState("");
   const [publishNow,   setPublishNow]   = useState(true);
+  const [youtubeVideoId, setYoutubeVideoId] = useState("");
 
   const [generating, setGenerating] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -480,6 +483,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
         title:blogTitle, content:blogContent,
         category:blogCategory, tags:blogTags,
         coverImage, movie:linkedMovie, published:publishNow,
+        youtubeVideoId,
       });
       onPublished(post); onClose();
     } catch (err) {
@@ -552,6 +556,19 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
           <img src={coverImage} alt="cover"
             style={{ marginTop:6, maxHeight:80, borderRadius:5, border:"1px solid var(--border)", display:"block" }}
             onError={e=>e.target.style.display="none"} />
+        )}
+      </div>
+      <div>
+        <label className="bg-field-label">
+          YouTube Video ID
+          <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>optional — paste the video ID (e.g. dQw4w9WgXcQ)</span>
+        </label>
+        <input className="bg-field-input" placeholder="e.g. dQw4w9WgXcQ (from youtube.com/watch?v=…)"
+          value={youtubeVideoId} onChange={e=>setYoutubeVideoId(e.target.value.trim())} />
+        {youtubeVideoId && (
+          <div style={{ marginTop:6, fontSize:".69rem", color:"#4acf82" }}>
+            ✅ Video: https://youtube.com/watch?v={youtubeVideoId}
+          </div>
         )}
       </div>
       {linkedMovie && (
@@ -805,6 +822,7 @@ function GenPanel({ movie, type, onPublished, onToast }) {
   const [preview,      setPreview]      = useState(false);
   const [errMsg,       setErrMsg]       = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [youtubeVideoId, setYoutubeVideoId] = useState("");
   const busy     = status==="generating" || status==="publishing";
   const typeInfo = ARTICLE_TYPES.find(t=>t.id===type);
 
@@ -837,7 +855,7 @@ function GenPanel({ movie, type, onPublished, onToast }) {
     if (!article.trim()) return;
     setStatus("publishing"); setErrMsg("");
     try {
-      const post = await publishArticle(movie, article, type === "custom" ? "review" : type);
+      const post = await publishArticle(movie, article, type === "custom" ? "review" : type, youtubeVideoId);
       onPublished(post);
       onToast(`✅ Published: "${typeInfo?.label}" for ${movie.title}`, "success");
       setStatus("idle"); setArticle(""); setPreview(false);
@@ -886,6 +904,27 @@ function GenPanel({ movie, type, onPublished, onToast }) {
         )}
       </div>
       {article && preview && <div className="bg-gen-preview">{article}</div>}
+
+      {/* YouTube Video — shown once article is ready, before publishing */}
+      {article && (
+        <div style={{ marginTop:10 }}>
+          <div style={{ fontSize:".68rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:".07em", marginBottom:5 }}>
+            🎬 YouTube Video ID
+            <span style={{ fontWeight:400, textTransform:"none", marginLeft:8, color:"rgba(255,255,255,.3)" }}>optional</span>
+          </div>
+          <input className="bg-field-input"
+            placeholder="e.g. dQw4w9WgXcQ  (from youtube.com/watch?v=…)"
+            value={youtubeVideoId}
+            onChange={e => setYoutubeVideoId(e.target.value.trim())}
+            style={{ fontSize:".8rem" }}
+          />
+          {youtubeVideoId && (
+            <div style={{ marginTop:4, fontSize:".69rem", color:"#4acf82" }}>
+              ✅ Will embed: https://youtube.com/watch?v={youtubeVideoId}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
