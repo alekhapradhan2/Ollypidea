@@ -242,9 +242,10 @@ const BlogSchema = new mongoose.Schema({
   featured:   { type: Boolean, default: false },
   views:      { type: Number, default: 0 },
   readTime:   { type: Number, default: 5 },         // minutes
-  seoTitle:   { type: String, default: "" },
-  seoDesc:    { type: String, default: "" },
-  reviews:    [ReviewSchema],
+  seoTitle:      { type: String, default: "" },
+  seoDesc:       { type: String, default: "" },
+  youtubeVideoId:{ type: String, default: "" },  // optional embedded YouTube video
+  reviews:       [ReviewSchema],
 }, { timestamps: true });
 
 // Auto-generate slug from title
@@ -1500,16 +1501,25 @@ app.get("/api/blog", async (req, res) => {
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
-// GET /api/blog/:slug — single post (increments views)
+// GET /api/blog/:slug — single post (no view increment here — use POST /:slug/view)
 app.get("/api/blog/:slug", async (req, res) => {
+  try {
+    const post = await Blog.findOne({ slug: req.params.slug, published: true }).lean();
+    if (!post) return res.status(404).json({ error:"Not found" });
+    res.json(post);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// POST /api/blog/:slug/view — increment view count (prod only, session-deduped on frontend)
+app.post("/api/blog/:slug/view", async (req, res) => {
   try {
     const post = await Blog.findOneAndUpdate(
       { slug: req.params.slug, published: true },
       { $inc: { views: 1 } },
-      { new: true }
+      { new: true, select: "views" }
     ).lean();
-    if (!post) return res.status(404).json({ error:"Not found" });
-    res.json(post);
+    if (!post) return res.status(404).json({ error: "Not found" });
+    res.json({ views: post.views });
   } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
@@ -1525,7 +1535,7 @@ app.get("/api/admin/blog", adminAuth, async (req, res) => {
 // POST /api/admin/blog
 app.post("/api/admin/blog", adminAuth, async (req, res) => {
   try {
-    const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,author,published,featured,seoTitle,seoDesc } = req.body;
+    const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,author,published,featured,seoTitle,seoDesc,youtubeVideoId } = req.body;
     if (!title?.trim() || !content?.trim()) return res.status(400).json({ error:"Title and content required" });
     const slug = req.body.slug?.trim()
       ? req.body.slug.trim()
@@ -1538,6 +1548,7 @@ app.post("/api/admin/blog", adminAuth, async (req, res) => {
       coverImage:coverImage||"", movieId:movieId||undefined, movieTitle:movieTitle||"",
       author:author||"Ollypedia Team", published:!!published, featured:!!featured, readTime,
       seoTitle:seoTitle||title, seoDesc:seoDesc||excerpt||"",
+      youtubeVideoId: youtubeVideoId?.trim() || "",
     });
     res.status(201).json(post);
   } catch(e) { res.status(500).json({ error:e.message }); }
@@ -1546,7 +1557,7 @@ app.post("/api/admin/blog", adminAuth, async (req, res) => {
 // PATCH /api/admin/blog/:id
 app.patch("/api/admin/blog/:id", adminAuth, async (req, res) => {
   try {
-    const allowed = ["title","excerpt","content","category","tags","coverImage","movieId","movieTitle","author","published","featured","seoTitle","seoDesc"];
+    const allowed = ["title","excerpt","content","category","tags","coverImage","movieId","movieTitle","author","published","featured","seoTitle","seoDesc","youtubeVideoId"];
     const update = {};
     for (const k of allowed) if (req.body[k] !== undefined) update[k] = req.body[k];
     if (update.content) update.readTime = Math.max(1, Math.ceil(update.content.split(/\s+/).length/200));
