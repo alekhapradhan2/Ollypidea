@@ -79,6 +79,7 @@ Requirements:
 - Mention total net and gross collection prominently
 - Write for an Odia cinema (Ollywood) audience
 - End with: "All figures are industry estimates. Last updated: Day ${targetDay}. Source: Ollypedia."
+- convert it to perfect HTML for blog UI
 - Do NOT mention or calculate any verdict/hit/flop judgement`;
 };
 
