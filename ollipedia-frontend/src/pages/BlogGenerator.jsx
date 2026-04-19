@@ -401,6 +401,67 @@ const CSS = `
 // ─── Spinner element ─────────────────────────────────────────────────────────
 const Spin = () => <span className="bg-spinner" />;
 
+// ─── Inline Image Uploader ───────────────────────────────────────────────────
+// Uploads a photo file → inserts a centered <figure> tag at the textarea cursor.
+function InlineImageUploader({ textareaRef, content, onChange, onToast }) {
+  const fileRef   = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploading(true);
+    try {
+      const token = getAdminToken();
+      const fd    = new FormData();
+      fd.append("image", file);
+      const res = await fetch(`${API_BASE}/admin/upload-blog-image`, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body:    fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Upload failed (${res.status})`);
+      }
+      const { url } = await res.json();
+      const caption  = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+      const imgHtml  = `\n<figure class="article-inline-img">\n  <img src="${url}" alt="${caption}" />\n  <figcaption>${caption}</figcaption>\n</figure>\n`;
+      const ta = textareaRef?.current;
+      let newContent;
+      if (ta) {
+        const start = ta.selectionStart ?? content.length;
+        const end   = ta.selectionEnd   ?? content.length;
+        newContent  = content.slice(0, start) + imgHtml + content.slice(end);
+      } else {
+        newContent = content + imgHtml;
+      }
+      onChange(newContent);
+      onToast("📷 Photo inserted into article!", "success");
+    } catch (err) {
+      onToast("❌ " + err.message, "error");
+    }
+    setUploading(false);
+  };
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept="image/*"
+        style={{ display:"none" }} onChange={handleFile} />
+      <button
+        className="bg-btn bg-btn-ghost"
+        style={{ fontSize:".72rem", padding:"4px 10px", borderColor:"rgba(144,202,249,.35)", color:"#90caf9" }}
+        disabled={uploading}
+        onClick={() => fileRef.current?.click()}
+        title="Upload a photo and insert it inline into the article"
+      >
+        {uploading ? <><Spin /> Uploading…</> : "📷 Insert Photo"}
+      </button>
+    </>
+  );
+}
+
 // ─── Shared YouTube picker with live thumbnail preview ───────────────────────
 // Accepts full URLs (youtube.com/watch?v=X, youtu.be/X) or bare 11-char IDs.
 function parseYtId(input) {
@@ -459,6 +520,7 @@ function EditModal({ article, onClose, onSaved, onToast }) {
   const [pub,            setPub]            = useState(article.published !== false);
   const [youtubeVideoId, setYoutubeVideoId] = useState(article.youtubeVideoId || "");
   const [saving,         setSaving]         = useState(false);
+  const contentRef = useRef(null);
 
   const save = async () => {
     setSaving(true);
@@ -489,8 +551,18 @@ function EditModal({ article, onClose, onSaved, onToast }) {
             <input className="bg-field-input" value={title} onChange={e=>setTitle(e.target.value)} /></div>
           <div><label className="bg-field-label">Excerpt</label>
             <input className="bg-field-input" value={excerpt} onChange={e=>setExcerpt(e.target.value)} placeholder="Short teaser shown on blog cards…" /></div>
-          <div><label className="bg-field-label">Content</label>
-            <textarea className="bg-field-input bg-field-textarea tall" value={content} onChange={e=>setContent(e.target.value)} /></div>
+          <div>
+            <label className="bg-field-label" style={{ marginBottom:5 }}>
+              Content
+              <InlineImageUploader
+                textareaRef={contentRef}
+                content={content}
+                onChange={setContent}
+                onToast={onToast}
+              />
+            </label>
+            <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall" value={content} onChange={e=>setContent(e.target.value)} />
+          </div>
           <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
           <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:".84rem", color:"var(--text)" }}>
             <input type="checkbox" checked={pub} onChange={e=>setPub(e.target.checked)} />
@@ -535,6 +607,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
   const [generating, setGenerating] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [errMsg,     setErrMsg]     = useState("");
+  const contentRef = useRef(null);
 
   // Client-side movie search — no API call
   useEffect(() => {
@@ -883,11 +956,17 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
               <div>
                 <label className="bg-field-label">
                   Generated Content — review & edit before publishing
-                  <span style={{ fontWeight:400, textTransform:"none", color:"var(--muted)" }}>
-                    {wordCount(blogContent)} words · ~{readTime(blogContent)} min
+                  <span style={{ fontWeight:400, textTransform:"none", color:"var(--muted)", display:"flex", alignItems:"center", gap:8 }}>
+                    <span>{wordCount(blogContent)} words · ~{readTime(blogContent)} min</span>
+                    <InlineImageUploader
+                      textareaRef={contentRef}
+                      content={blogContent}
+                      onChange={setBlogContent}
+                      onToast={onToast}
+                    />
                   </span>
                 </label>
-                <textarea className="bg-field-input bg-field-textarea tall"
+                <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall"
                   style={{ minHeight:240, resize:"vertical" }}
                   value={blogContent} onChange={e=>setBlogContent(e.target.value)} />
               </div>
@@ -913,11 +992,17 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
               <div>
                 <label className="bg-field-label">
                   Content <span style={{ color:"#e57373" }}>*</span>
-                  <span style={{ fontWeight:400, textTransform:"none", color:"var(--muted)" }}>
-                    {wordCount(blogContent)} words · ~{readTime(blogContent)} min
+                  <span style={{ fontWeight:400, textTransform:"none", color:"var(--muted)", display:"flex", alignItems:"center", gap:8 }}>
+                    <span>{wordCount(blogContent)} words · ~{readTime(blogContent)} min</span>
+                    <InlineImageUploader
+                      textareaRef={contentRef}
+                      content={blogContent}
+                      onChange={setBlogContent}
+                      onToast={onToast}
+                    />
                   </span>
                 </label>
-                <textarea className="bg-field-input bg-field-textarea tall"
+                <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall"
                   style={{ minHeight:260, resize:"vertical" }}
                   value={blogContent} onChange={e=>setBlogContent(e.target.value)}
                   placeholder="Write your full blog content here…" />

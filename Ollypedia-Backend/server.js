@@ -1,14 +1,40 @@
-const express = require("express");
+const express  = require("express");
 const mongoose = require("mongoose");
 const cors     = require("cors");
 const bcrypt   = require("bcryptjs");
 const jwt      = require("jsonwebtoken");
 const path     = require("path");
+const fs       = require("fs");
+const multer   = require("multer");
 require("dotenv").config();
+
+// ── Multer: disk storage for blog inline images ──────────────────────────────
+const UPLOADS_DIR = path.join(__dirname, "public", "blog-uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const blogImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename:    (_req, file, cb) => {
+    const ext  = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const name = `blog-img-${Date.now()}-${Math.random().toString(36).slice(2,8)}${ext}`;
+    cb(null, name);
+  },
+});
+const blogImageUpload = multer({
+  storage: blogImageStorage,
+  limits:  { fileSize: 8 * 1024 * 1024 }, // 8 MB max
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(jpeg|jpg|png|webp|gif)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Only image files are allowed (jpeg, png, webp, gif)"));
+  },
+});
 
 const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
+
+// Serve uploaded blog images publicly
+app.use("/blog-uploads", express.static(UPLOADS_DIR));
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
@@ -1804,6 +1830,16 @@ app.get("/sitemap-cast.xml", async (req, res) => {
   res.type("application/xml").send(xml + "</urlset>");
 });
 
+
+// ── Admin — POST /api/admin/upload-blog-image ─────────────────────────────────
+// Accepts a multipart/form-data upload with field name "image".
+// Returns { url } — a public URL the frontend inserts into the article HTML.
+app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No image file received" });
+  const SITE_URL_LOCAL = process.env.SITE_URL || `http://localhost:${process.env.PORT || 4000}`;
+  const url = `${SITE_URL_LOCAL}/blog-uploads/${req.file.filename}`;
+  res.json({ url, filename: req.file.filename });
+});
 
 // ── AI Article Generator (uses server-side fetch → no CORS) ─────────────────
 // ── AI Article Generator — powered by Groq (free, ~2-3s per article) ────────
