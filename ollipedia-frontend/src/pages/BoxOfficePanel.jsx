@@ -60,7 +60,7 @@ const buildAiPrompt = (movie, daysUpToN, totalNet, totalGross, targetDay) => {
     .map((d) => `Day ${d.day}${d.date ? ` (${d.date})` : ""}: Net ${fmtINR(d.net)}, Gross ${fmtINR(d.gross)}${d.note ? ` — ${d.note}` : ""}`)
     .join("\n");
 
-  return `Write an SEO-optimised blog article about the box office collection of the Odia film "${movie.title}"${year ? ` (${year})` : ""} for Day ${targetDay}.
+  return `You are an expert SEO content writer for Ollypedia, an Odia cinema website. Write a fully structured, AdSense-friendly HTML blog post about the box office collection of "${movie.title}"${year ? ` (${year})` : ""} for Day ${targetDay}.
 
 Movie: ${movie.title}${year ? ` (${year})` : ""}
 ${movie.language ? `Language: ${movie.language}` : ""}
@@ -73,13 +73,24 @@ ${tableText}
 Total Net: ${fmtINR(totalNet)}
 Total Gross: ${fmtINR(totalGross)}
 
-Requirements:
-- Write 3–4 paragraphs in flowing prose, no bullet points, no headers
-- Naturally include the day-wise figures in the text
-- Mention total net and gross collection prominently
-- Write for an Odia cinema (Ollywood) audience
-- End with: "All figures are industry estimates. Last updated: Day ${targetDay}. Source: Ollypedia."
-- Do NOT mention or calculate any verdict/hit/flop judgement`;
+CONTENT STRUCTURE — include ALL of these sections:
+1. Engaging introduction paragraph — mention "${movie.title}" and Day ${targetDay} in first sentence
+2. <h2>Day ${targetDay} Collection Highlights</h2> — 2–3 short paragraphs about today's performance
+3. <h2>Key Trends</h2> — <ul> with 3–4 bullet points (occupancy, audience response, week performance)
+4. <h2>Performance Across Odisha Theatres</h2> — short paragraph about regional performance
+5. <h2>What Makes ${movie.title} a Successful Film?</h2> — <ul> with 3–4 bullet points
+6. End with: <p><em>All figures are industry estimates. Last updated: Day ${targetDay}. Source: Ollypedia.</em></p>
+
+OUTPUT RULES — STRICTLY FOLLOW:
+- Output ONLY the prose/content HTML. Do NOT include the data table (it will be added separately).
+- Wrap everything in <section class="bo-prose">
+- Use <h2> for section headings (NOT <h1>)
+- Use <p> for paragraphs (2–3 sentences each, short and readable)
+- Use <ul><li> for bullet point lists
+- Use <strong> for key figures and film name
+- Do NOT mention or calculate any verdict/hit/flop judgement
+- Do NOT use inline styles
+- Do NOT output anything outside the <section> tag`;
 };
 
 // Builds the full HTML blog content from AI text + styled data table (no verdict)
@@ -94,13 +105,17 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, aiT
       <td style="padding:10px 14px;color:#888;font-size:0.9em">${d.note || "—"}</td>
     </tr>`).join("\n");
 
+  // AI now returns HTML wrapped in <section class="bo-prose">; use it directly
+  // Fall back to a simple paragraph if AI text is missing
   const prose = aiText?.trim()
-    ? `\n\n${aiText.trim()}\n\n`
-    : `\n\n<p><strong>${movie.title}</strong>${year ? ` (${year})` : ""} has been performing at the Odia box office since its release. Below is the complete day-wise collection breakdown updated through Day ${targetDay}.</p>\n\n`;
+    ? aiText.trim()
+    : `<section class="bo-prose"><p><strong>${movie.title}</strong>${year ? ` (${year})` : ""} has been performing at the Odia box office since its release. Below is the complete day-wise collection breakdown updated through Day ${targetDay}.</p></section>`;
 
   return `<article>
 <h1>${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection | Ollypedia</h1>
+
 ${prose}
+
 <h2>Day-wise Box Office Collection — ${movie.title}${year ? ` (${year})` : ""}</h2>
 
 <div style="overflow-x:auto;border-radius:10px;border:1px solid #2a2a2a;margin:20px 0">

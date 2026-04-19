@@ -39,16 +39,112 @@ function buildMoviePrompt(movie, type) {
   const year  = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
   const genre = (movie.genre || []).join(", ") || "Odia";
   const ctx   = `Movie: "${movie.title}" (${year}) | Genre: ${genre} | Director: ${movie.director||"N/A"} | Cast: ${cast||"N/A"} | Songs: ${songs||"N/A"} | Synopsis: ${movie.synopsis||"N/A"} | Verdict: ${movie.verdict||"Upcoming"}`;
+
+  const htmlRules = `
+OUTPUT RULES — STRICTLY FOLLOW:
+- Output ONLY clean HTML. No markdown. No plain text. No code blocks.
+- Wrap everything in <article>
+- Use <h2> for section headings (NOT <h1> — the page already has a title)
+- Use <h3> for sub-headings
+- Use <p> for paragraphs (2–3 sentences each, short and readable)
+- Use <ul><li> for bullet point lists
+- Use <ol><li> for numbered lists
+- Use <strong> for emphasis on key terms
+- Use <table> for any data/comparison (with <thead><tbody><tfoot>)
+- End with a <section class="faq-section"><h2>Frequently Asked Questions</h2> block with 4–5 <details><summary> FAQ items
+- 800–1200 words total
+- SEO-friendly: include the movie name naturally in the first 100 words
+- Short paragraphs, subheading every 150–200 words
+- Do NOT use inline styles
+- Do NOT output any text outside the <article> tag`;
+
   const map = {
-    review:   `Write a 1000+ word original engaging movie review for the Odia film "${movie.title}" (${year}). Cover introduction, story, performances, direction, music, verdict. Flowing paragraphs. No headers. No bullet points. SEO-friendly. ${ctx}`,
-    story:    `Write a 1000+ word detailed story and plot breakdown for "${movie.title}" (${year}). Narrative arc, key scenes, emotional beats, themes — no spoilers. Paragraphs only. ${ctx}`,
-    cast:     `Write a 1000+ word cast spotlight for "${movie.title}" (${year}). Profile each major cast member, role, performance, highlights. Paragraphs only. ${ctx}`,
-    music:    `Write a 1000+ word music & songs review for "${movie.title}" (${year}). Music director's work, each song's mood, lyrics, impact. Paragraphs only. ${ctx}`,
-    analysis: `Write a 1000+ word deep-dive analysis of "${movie.title}" (${year}). Themes, cinematography, direction, cultural significance. Paragraphs only. ${ctx}`,
-    trivia:   `Write a 1000+ word trivia & facts article about "${movie.title}" (${year}). Behind the scenes, production challenges, casting, box office. Paragraphs only. ${ctx}`,
-    // custom is handled separately — caller injects userPrompt directly
+    review: `You are an expert SEO content writer for Ollypedia, an Odia cinema website. Write a fully structured, AdSense-friendly HTML movie review for the Odia film "${movie.title}" (${year}).
+
+Sections to include:
+1. Engaging introduction (mention "${movie.title}" in first sentence)
+2. Story & Plot Overview
+3. Performances & Cast
+4. Direction & Screenplay
+5. Music & Soundtrack
+6. Verdict & Final Thoughts
+7. Key Highlights (as <ul>)
+8. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    story: `You are an expert SEO content writer for Ollypedia, an Odia cinema website. Write a fully structured HTML story and plot breakdown article for "${movie.title}" (${year}).
+
+Sections to include:
+1. Introduction — what the film is about
+2. Story Overview
+3. Key Plot Points & Narrative Arc
+4. Emotional Beats & Themes
+5. What Makes the Story Stand Out (as <ul>)
+6. Comparison Table — "${movie.title}" vs similar Odia films (themes, tone, style)
+7. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    cast: `You are an expert SEO content writer for Ollypedia. Write a fully structured HTML cast spotlight article for "${movie.title}" (${year}).
+
+Sections to include:
+1. Introduction
+2. Lead Cast — profile each major actor/actress (use <h3> per person)
+3. Supporting Cast Highlights
+4. Director & Key Crew
+5. Cast Performance Table (Name | Role | Highlights) using <table>
+6. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    music: `You are an expert SEO content writer for Ollypedia. Write a fully structured HTML music review for "${movie.title}" (${year}).
+
+Sections to include:
+1. Introduction — overall feel of the soundtrack
+2. Music Director's Style
+3. Song-by-Song Breakdown (use <h3> per song, short paragraph each)
+4. Songs Table (Song Title | Singer | Mood | Rating) using <table>
+5. Background Score
+6. Verdict on Soundtrack
+7. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    analysis: `You are an expert SEO content writer for Ollypedia. Write a fully structured HTML deep-dive analysis for "${movie.title}" (${year}).
+
+Sections to include:
+1. Introduction
+2. Themes & Symbolism
+3. Cinematography & Visual Style
+4. Direction & Screenplay Analysis
+5. Cultural & Social Significance
+6. Key Strengths & Weaknesses (as two <ul> lists)
+7. Comparison Table — "${movie.title}" vs recent Odia films
+8. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    trivia: `You are an expert SEO content writer for Ollypedia. Write a fully structured HTML trivia & facts article for "${movie.title}" (${year}).
+
+Sections to include:
+1. Introduction
+2. Behind the Scenes Facts (as <ul>)
+3. Casting & Production Challenges
+4. Interesting On-Set Stories
+5. Box Office & Reception
+6. Fun Facts Table (Fact | Detail) using <table>
+7. FAQ section
+
+${ctx}
+${htmlRules}`,
   };
-  return (map[type] || map.review) + "\n\nIMPORTANT: Return ONLY the article text. No headings. No markdown. No labels.";
+  return (map[type] || map.review);
 }
 
 function autoTitle(movie, type) {
@@ -468,6 +564,15 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
   const switchMode = (m) => { setMode(m); setStep(1); setErrMsg(""); setBlogContent(""); };
 
   const buildPrompt = useCallback(() => {
+    const htmlRules = `\n\nOUTPUT RULES — STRICTLY FOLLOW:
+- Output ONLY clean HTML wrapped in <article>. No markdown. No plain text outside tags.
+- Use <h2> for section headings, <h3> for sub-headings
+- Use <p> for paragraphs (2–3 sentences each)
+- Use <ul><li> for bullet lists, <ol><li> for numbered lists
+- Use <strong> for emphasis, <table> for data
+- End with a FAQ section: <section class="faq-section"><h2>Frequently Asked Questions</h2> with 4 <details><summary> items
+- Do NOT use inline styles. Do NOT output anything outside <article>.`;
+
     // Custom type — user writes their own full prompt, movie context is optional extra
     if (articleType === "custom") {
       const base = userPrompt.trim() || "Write an engaging 1000+ word blog article about Ollywood cinema.";
@@ -475,19 +580,19 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
         const cast  = (linkedMovie.cast  || []).slice(0,5).map(c => `${c.name}${c.role ? ` as ${c.role}` : ""}`).join(", ");
         const year  = linkedMovie.releaseDate ? new Date(linkedMovie.releaseDate).getFullYear() : "upcoming";
         const ctx   = `\n\n[Movie context: "${linkedMovie.title}" (${year}), Director: ${linkedMovie.director||"N/A"}, Cast: ${cast||"N/A"}, Synopsis: ${linkedMovie.synopsis||"N/A"}]`;
-        return `${base}${ctx}\n\nIMPORTANT: Return ONLY the article text. No labels.`;
+        return `${base}${ctx}${htmlRules}`;
       }
-      return `${base}\n\nIMPORTANT: Return ONLY the article text. No labels.`;
+      return `${base}${htmlRules}`;
     }
     if (linkedMovie) {
       const base = buildMoviePrompt(linkedMovie, articleType);
       return userPrompt.trim()
-        ? base.replace("\n\nIMPORTANT:", `\n\nEditor notes: ${userPrompt.trim()}\n\nIMPORTANT:`)
+        ? `${base}\n\nEditor notes: ${userPrompt.trim()}`
         : base;
     }
-    // Standalone custom prompt — AI generates title + content
+    // Standalone — AI generates title + HTML content as JSON
     const topic = userPrompt.trim() || "Write an engaging 1000+ word blog article about Ollywood cinema.";
-    return `You are a blog writer. Based on the following instructions, generate a blog post.\n\nInstructions: ${topic}\n\nIMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no extra text) in this exact format:\n{"title": "Your Blog Title Here", "content": "Full blog content here as flowing paragraphs..."}`;
+    return `You are an expert SEO blog writer for Ollypedia, an Odia cinema website.\n\nInstructions: ${topic}\n\n${htmlRules}\n\nIMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no extra text) in this exact format:\n{"title": "Your Blog Title Here", "content": "<article>...full HTML content here...</article>"}`;
   }, [linkedMovie, articleType, userPrompt]);
 
   const handleGenerate = async () => {
