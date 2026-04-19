@@ -74,7 +74,7 @@ Total Net: ${fmtINR(totalNet)}
 Total Gross: ${fmtINR(totalGross)}
 
 Requirements:
-- Write 3–4 paragraphs in flowing prose, no bullet points, no headers
+- Write 1000 -1200 words in flowing prose, no bullet points, no headers
 - Naturally include the day-wise figures in the text
 - Mention total net and gross collection prominently
 - Write for an Odia cinema (Ollywood) audience
