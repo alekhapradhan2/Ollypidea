@@ -619,7 +619,7 @@ function YoutubePicker({ value, onChange }) {
 }
 
 
-function EditModal({ article, onClose, onSaved, onToast }) {
+function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
   const [title,          setTitle]          = useState(article.title          || "");
   const [content,        setContent]        = useState(article.content        || "");
   const [excerpt,        setExcerpt]        = useState(article.excerpt        || "");
@@ -628,25 +628,83 @@ function EditModal({ article, onClose, onSaved, onToast }) {
   const [saving,         setSaving]         = useState(false);
   const contentRef = useRef(null);
 
+  // ── Link type: "none" | "movie" | "cast"
+  const initLinkType = article.castId || article.castName ? "cast" : article.movieId || article.movieTitle ? "movie" : "none";
+  const [linkType, setLinkType] = useState(initLinkType);
+
+  // ── Movie link state
+  const [linkedMovie,  setLinkedMovie]  = useState(
+    article.movieId || article.movieTitle
+      ? { _id: article.movieId, title: article.movieTitle, posterUrl: article.coverImage }
+      : null
+  );
+  const [movieQuery,   setMovieQuery]   = useState("");
+  const [movieResults, setMovieResults] = useState([]);
+  const movieTimer = useRef(null);
+
+  // ── Cast link state
+  const [linkedCast,   setLinkedCast]   = useState(
+    article.castId || article.castName
+      ? { _id: article.castId, name: article.castName, type: "", photo: "" }
+      : null
+  );
+  const [castQuery,    setCastQuery]    = useState("");
+  const [castResults,  setCastResults]  = useState([]);
+  const castTimer = useRef(null);
+
+  // Client-side movie search
+  useEffect(() => {
+    const q = movieQuery.trim().toLowerCase();
+    if (!q) { setMovieResults([]); return; }
+    clearTimeout(movieTimer.current);
+    movieTimer.current = setTimeout(() => {
+      setMovieResults(movies.filter(m => m.title.toLowerCase().includes(q)).slice(0, 6));
+    }, 150);
+    return () => clearTimeout(movieTimer.current);
+  }, [movieQuery, movies]);
+
+  // Client-side cast search
+  useEffect(() => {
+    const q = castQuery.trim().toLowerCase();
+    if (!q) { setCastResults([]); return; }
+    clearTimeout(castTimer.current);
+    castTimer.current = setTimeout(() => {
+      setCastResults(cast.filter(c => c.name.toLowerCase().includes(q)).slice(0, 6));
+    }, 150);
+    return () => clearTimeout(castTimer.current);
+  }, [castQuery, cast]);
+
+  const selectMovie = (m) => { setLinkedMovie(m); setMovieQuery(""); setMovieResults([]); };
+  const clearMovie  = () => { setLinkedMovie(null); setMovieQuery(""); setMovieResults([]); };
+  const selectCast  = (c) => { setLinkedCast(c);  setCastQuery("");  setCastResults([]); };
+  const clearCast   = () => { setLinkedCast(null); setCastQuery("");  setCastResults([]); };
+
   const save = async () => {
     setSaving(true);
     try {
       const cleanId = parseYtId(youtubeVideoId);
       const updated = await updateArticle(article._id, {
-        title: title.trim(), content: content.trim(),
-        excerpt: excerpt.trim() || content.slice(0,200).trim()+"…",
+        title:   title.trim(),
+        content: content.trim(),
+        excerpt: excerpt.trim() || content.slice(0, 200).trim() + "…",
         published: pub,
         youtubeVideoId: cleanId,
+        // Cast link
+        castId:   linkType === "cast" && linkedCast?._id  ? linkedCast._id  : null,
+        castName: linkType === "cast" && linkedCast?.name ? linkedCast.name  : "",
+        // Movie link
+        movieId:    linkType === "movie" && linkedMovie?._id   ? linkedMovie._id   : null,
+        movieTitle: linkType === "movie" && linkedMovie?.title ? linkedMovie.title : "",
       });
       onSaved(updated);
       onToast("✅ Article updated!", "success");
       onClose();
-    } catch (err) { onToast("❌ "+err.message, "error"); }
+    } catch (err) { onToast("❌ " + err.message, "error"); }
     setSaving(false);
   };
 
   return (
-    <div className="bg-overlay" onClick={e => e.target===e.currentTarget && onClose()}>
+    <div className="bg-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-modal">
         <div className="bg-modal-head">
           <span className="bg-modal-title">✏️ Edit Article</span>
@@ -654,11 +712,11 @@ function EditModal({ article, onClose, onSaved, onToast }) {
         </div>
         <div className="bg-modal-body">
           <div><label className="bg-field-label">Title</label>
-            <input className="bg-field-input" value={title} onChange={e=>setTitle(e.target.value)} /></div>
+            <input className="bg-field-input" value={title} onChange={e => setTitle(e.target.value)} /></div>
           <div><label className="bg-field-label">Excerpt</label>
-            <input className="bg-field-input" value={excerpt} onChange={e=>setExcerpt(e.target.value)} placeholder="Short teaser shown on blog cards…" /></div>
+            <input className="bg-field-input" value={excerpt} onChange={e => setExcerpt(e.target.value)} placeholder="Short teaser shown on blog cards…" /></div>
           <div>
-            <label className="bg-field-label" style={{ marginBottom:5 }}>
+            <label className="bg-field-label" style={{ marginBottom: 5 }}>
               Content
               <InlineImageUploader
                 textareaRef={contentRef}
@@ -667,17 +725,118 @@ function EditModal({ article, onClose, onSaved, onToast }) {
                 onToast={onToast}
               />
             </label>
-            <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall" value={content} onChange={e=>setContent(e.target.value)} />
+            <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall" value={content} onChange={e => setContent(e.target.value)} />
           </div>
           <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
-          <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:".84rem", color:"var(--text)" }}>
-            <input type="checkbox" checked={pub} onChange={e=>setPub(e.target.checked)} />
+
+          {/* ── Link to Cast / Movie ── */}
+          <div>
+            <label className="bg-field-label" style={{ marginBottom: 8 }}>
+              Link to
+              <span style={{ fontWeight: 400, textTransform: "none", fontSize: ".65rem", color: "var(--muted)" }}> optional</span>
+            </label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              {[["none", "📝 Standalone"], ["movie", "🎬 Movie"], ["cast", "🎭 Cast / Crew"]].map(([v, label]) => (
+                <button key={v}
+                  className="bg-btn bg-btn-ghost"
+                  style={{
+                    flex: 1, justifyContent: "center", fontSize: ".78rem",
+                    background: linkType === v ? "rgba(201,151,58,.15)" : "var(--bg3)",
+                    borderColor: linkType === v ? "var(--gold)" : "var(--border)",
+                    color: linkType === v ? "var(--gold)" : "var(--muted)",
+                    fontWeight: linkType === v ? 700 : 500,
+                  }}
+                  onClick={() => {
+                    setLinkType(v);
+                    if (v !== "movie") clearMovie();
+                    if (v !== "cast")  clearCast();
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Movie picker */}
+            {linkType === "movie" && (
+              linkedMovie ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "rgba(201,151,58,.08)", border: "1px solid rgba(201,151,58,.3)", borderRadius: 8 }}>
+                  {linkedMovie.posterUrl && (
+                    <img src={linkedMovie.posterUrl} alt={linkedMovie.title}
+                      style={{ width: 26, height: 38, objectFit: "cover", borderRadius: 3, border: "1px solid var(--border)" }}
+                      onError={e => e.target.style.display = "none"} />
+                  )}
+                  <span style={{ flex: 1, fontWeight: 700, fontSize: ".84rem", color: "var(--gold)" }}>🎬 {linkedMovie.title}</span>
+                  <button className="bg-btn bg-btn-ghost" style={{ fontSize: ".68rem", padding: "3px 8px" }} onClick={clearMovie}>✕ Remove</button>
+                </div>
+              ) : (
+                <div style={{ position: "relative" }}>
+                  <input className="bg-field-input"
+                    placeholder="Search movie to link…"
+                    value={movieQuery} onChange={e => setMovieQuery(e.target.value)} />
+                  {movieResults.length > 0 && (
+                    <div className="bg-movie-dd">
+                      {movieResults.map(m => (
+                        <div key={m._id} className="bg-movie-dd-item" onClick={() => selectMovie(m)}>
+                          🎬 {m.title}
+                          <span style={{ fontSize: ".7rem", color: "var(--muted)", marginLeft: 8 }}>
+                            {m.releaseDate ? new Date(m.releaseDate).getFullYear() : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+
+            {/* Cast picker */}
+            {linkType === "cast" && (
+              linkedCast ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "rgba(167,139,232,.08)", border: "1px solid rgba(167,139,232,.3)", borderRadius: 8 }}>
+                  {linkedCast.photo && (
+                    <img src={linkedCast.photo} alt={linkedCast.name}
+                      style={{ width: 34, height: 34, objectFit: "cover", borderRadius: "50%", border: "1px solid var(--border)" }}
+                      onError={e => e.target.style.display = "none"} />
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: ".84rem", color: "#a78be8" }}>🎭 {linkedCast.name}</div>
+                    {linkedCast.type && <div style={{ fontSize: ".68rem", color: "var(--muted)" }}>{linkedCast.type}</div>}
+                  </div>
+                  <button className="bg-btn bg-btn-ghost" style={{ fontSize: ".68rem", padding: "3px 8px" }} onClick={clearCast}>✕ Remove</button>
+                </div>
+              ) : (
+                <div style={{ position: "relative" }}>
+                  <input className="bg-field-input"
+                    placeholder="Search cast/crew member…"
+                    value={castQuery} onChange={e => setCastQuery(e.target.value)} />
+                  {castResults.length > 0 && (
+                    <div className="bg-movie-dd">
+                      {castResults.map(c => (
+                        <div key={c._id} className="bg-movie-dd-item" onClick={() => selectCast(c)}
+                          style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {c.photo
+                            ? <img src={c.photo} alt={c.name} style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover" }} onError={e => e.target.style.display = "none"} />
+                            : <span style={{ fontSize: "1rem" }}>👤</span>
+                          }
+                          <span style={{ flex: 1 }}>{c.name}</span>
+                          <span style={{ fontSize: ".7rem", color: "var(--muted)" }}>{c.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: ".84rem", color: "var(--text)" }}>
+            <input type="checkbox" checked={pub} onChange={e => setPub(e.target.checked)} />
             Published (visible on public blog)
           </label>
         </div>
         <div className="bg-modal-foot">
           <button className="bg-btn bg-btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="bg-btn bg-btn-gold" onClick={save} disabled={saving||!title.trim()||!content.trim()}>
+          <button className="bg-btn bg-btn-gold" onClick={save} disabled={saving || !title.trim() || !content.trim()}>
             {saving ? <><Spin /> Saving…</> : "💾 Save Changes"}
           </button>
         </div>
@@ -1362,7 +1521,7 @@ function GenPanel({ movie, type, onPublished, onToast }) {
 }
 
 // ─── MoviePanel ───────────────────────────────────────────────────────────────
-function MoviePanel({ movie, onToast }) {
+function MoviePanel({ movie, movies=[], cast=[], onToast }) {
   const [articles,   setArticles]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [activeType, setActiveType] = useState(null);
@@ -1439,14 +1598,14 @@ function MoviePanel({ movie, onToast }) {
         <GenPanel key={activeType} movie={movie} type={activeType} onPublished={handlePublished} onToast={onToast} />
       )}
       {editTarget && (
-        <EditModal article={editTarget} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+        <EditModal article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
       )}
     </div>
   );
 }
 
 // ─── CastPanel ────────────────────────────────────────────────────────────────
-function CastPanel({ castMember, onToast }) {
+function CastPanel({ castMember, movies=[], cast=[], onToast }) {
   const [articles,    setArticles]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [activeType,  setActiveType]  = useState(null);
@@ -1584,14 +1743,14 @@ function CastPanel({ castMember, onToast }) {
       )}
 
       {editTarget && (
-        <EditModal article={editTarget} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+        <EditModal article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
       )}
     </div>
   );
 }
 
 // ─── CastRow ──────────────────────────────────────────────────────────────────
-function CastRow({ castMember, artCount, onToast }) {
+function CastRow({ castMember, artCount, onToast, movies=[], cast=[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="bg-cast-row">
@@ -1612,13 +1771,13 @@ function CastRow({ castMember, artCount, onToast }) {
         </div>
         <div className="bg-chevron" style={{ transform:open?"rotate(90deg)":"none" }}>▶</div>
       </div>
-      {open && <CastPanel castMember={castMember} onToast={onToast} />}
+      {open && <CastPanel castMember={castMember} movies={movies} cast={cast} onToast={onToast} />}
     </div>
   );
 }
 
 // ─── CastBlogSection ─────────────────────────────────────────────────────────
-function CastBlogSection({ cast, search, castCountMap, onToast, onCountChange }) {
+function CastBlogSection({ cast, movies=[], search, castCountMap, onToast, onCountChange }) {
   const filtered = cast.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
   if (!cast.length) return <div className="bg-empty">No cast members found. Add cast first.</div>;
   if (!filtered.length) return <div className="bg-empty">No cast members match your search.</div>;
@@ -1629,6 +1788,8 @@ function CastBlogSection({ cast, search, castCountMap, onToast, onCountChange })
           key={c._id}
           castMember={c}
           artCount={castCountMap[c.name] ?? 0}
+          movies={movies}
+          cast={cast}
           onToast={onToast}
         />
       ))}
@@ -1637,7 +1798,7 @@ function CastBlogSection({ cast, search, castCountMap, onToast, onCountChange })
 }
 
 // ─── UncategorizedSection ─────────────────────────────────────────────────────
-function UncategorizedSection({ onToast, count, onCountChange }) {
+function UncategorizedSection({ onToast, count, onCountChange, movies=[], cast=[] }) {
   const [articles,   setArticles]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [editTarget, setEditTarget] = useState(null);
@@ -1698,14 +1859,14 @@ function UncategorizedSection({ onToast, count, onCountChange }) {
         ))}
       </div>
       {editTarget && (
-        <EditModal article={editTarget} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+        <EditModal article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
       )}
     </div>
   );
 }
 
 // ─── MovieRow — ★ FIX 3: artCount is a PROP, no per-row fetch ────────────────
-function MovieRow({ movie, artCount, onToast }) {
+function MovieRow({ movie, artCount, onToast, movies=[], cast=[] }) {
   const [open, setOpen] = useState(false);
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "TBA";
 
@@ -1733,7 +1894,7 @@ function MovieRow({ movie, artCount, onToast }) {
         </div>
         <div className="bg-chevron" style={{ transform:open?"rotate(90deg)":"none" }}>▶</div>
       </div>
-      {open && <MoviePanel movie={movie} onToast={onToast} />}
+      {open && <MoviePanel movie={movie} movies={movies} cast={cast} onToast={onToast} />}
     </div>
   );
 }
@@ -1852,6 +2013,8 @@ export default function BlogGenerator({ movies=[], cast=[], onToast }) {
                       key={movie._id}
                       movie={movie}
                       artCount={artCountMap[movie.title] ?? 0}
+                      movies={movies}
+                      cast={cast}
                       onToast={onToast}
                     />
                   ))
@@ -1859,6 +2022,7 @@ export default function BlogGenerator({ movies=[], cast=[], onToast }) {
               ? (
                   <CastBlogSection
                     cast={cast}
+                    movies={movies}
                     search={search}
                     castCountMap={castCountMap}
                     onToast={onToast}
@@ -1869,6 +2033,8 @@ export default function BlogGenerator({ movies=[], cast=[], onToast }) {
                   <UncategorizedSection
                     onToast={onToast}
                     count={uncatCount}
+                    movies={movies}
+                    cast={cast}
                     onCountChange={(delta) => setUncatCount(p => Math.max(0, p+delta))}
                   />
                 )

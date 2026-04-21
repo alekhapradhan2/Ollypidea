@@ -1563,7 +1563,7 @@ app.get("/api/admin/blog", adminAuth, async (req, res) => {
 // POST /api/admin/blog
 app.post("/api/admin/blog", adminAuth, async (req, res) => {
   try {
-    const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,author,published,featured,seoTitle,seoDesc,youtubeVideoId } = req.body;
+    const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,castId,castName,author,published,featured,seoTitle,seoDesc,youtubeVideoId } = req.body;
     if (!title?.trim() || !content?.trim()) return res.status(400).json({ error:"Title and content required" });
     const slug = req.body.slug?.trim()
       ? req.body.slug.trim()
@@ -1574,6 +1574,7 @@ app.post("/api/admin/blog", adminAuth, async (req, res) => {
       title:title.trim(), slug, excerpt:excerpt||"", content:content.trim(),
       category:category||"General", tags:Array.isArray(tags)?tags:(tags||"").split(",").map(t=>t.trim()).filter(Boolean),
       coverImage:coverImage||"", movieId:movieId||undefined, movieTitle:movieTitle||"",
+      castId: isOid(castId) ? castId : undefined, castName: castName||"",
       author:author||"Ollypedia Team", published:!!published, featured:!!featured, readTime,
       seoTitle:seoTitle||title, seoDesc:seoDesc||excerpt||"",
       youtubeVideoId: youtubeVideoId?.trim() || "",
@@ -1585,9 +1586,12 @@ app.post("/api/admin/blog", adminAuth, async (req, res) => {
 // PATCH /api/admin/blog/:id
 app.patch("/api/admin/blog/:id", adminAuth, async (req, res) => {
   try {
-    const allowed = ["title","excerpt","content","category","tags","coverImage","movieId","movieTitle","author","published","featured","seoTitle","seoDesc","youtubeVideoId"];
+    const allowed = ["title","excerpt","content","category","tags","coverImage","movieId","movieTitle","castId","castName","author","published","featured","seoTitle","seoDesc","youtubeVideoId"];
     const update = {};
     for (const k of allowed) if (req.body[k] !== undefined) update[k] = req.body[k];
+    // Validate ObjectId fields — reject invalid strings to prevent Mongoose cast errors
+    if (update.castId  !== undefined && !isOid(update.castId))  update.castId  = null;
+    if (update.movieId !== undefined && !isOid(update.movieId)) update.movieId = null;
     if (update.content) update.readTime = Math.max(1, Math.ceil(update.content.split(/\s+/).length/200));
     if (update.tags && !Array.isArray(update.tags)) update.tags = update.tags.split(",").map(t=>t.trim()).filter(Boolean);
     const post = await Blog.findByIdAndUpdate(req.params.id, update, { new:true });
