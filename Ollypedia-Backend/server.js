@@ -263,6 +263,8 @@ const BlogSchema = new mongoose.Schema({
   coverImage: { type: String, default: "" },
   movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie" }, // optional link
   movieTitle: { type: String, default: "" },
+  castId:     { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },  // optional cast link
+  castName:   { type: String, default: "" },
   author:     { type: String, default: "Ollypedia Team" },
   published:  { type: Boolean, default: false },
   featured:   { type: Boolean, default: false },
@@ -2060,6 +2062,298 @@ app.get("/sitemap-boxoffice.xml", async (req, res) => {
   res.type("application/xml").send(xml + "</urlset>");
 });
 // ────────────────────────────────────────────────────────────────────
+
+// ════════════════════════════════════════════════════════════════════════════
+// MERGE ROUTES
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── POST /api/admin/merge/cast/preview ──────────────────────────────────────
+// Returns a preview of what will change before the actual merge.
+app.post("/api/admin/merge/cast/preview", adminAuth, async (req, res) => {
+  try {
+    const { primaryId, duplicateIds } = req.body;
+
+    if (!isOid(primaryId)) return res.status(400).json({ error: "Invalid primaryId" });
+    if (!Array.isArray(duplicateIds) || duplicateIds.length === 0)
+      return res.status(400).json({ error: "duplicateIds must be a non-empty array" });
+    if (duplicateIds.some(id => !isOid(id)))
+      return res.status(400).json({ error: "One or more duplicateIds are invalid" });
+
+    const primary    = await Cast.findById(primaryId).lean();
+    if (!primary) return res.status(404).json({ error: "Primary cast member not found" });
+
+    const duplicates = await Cast.find({ _id: { $in: duplicateIds } }).lean();
+    if (duplicates.length === 0) return res.status(404).json({ error: "No duplicates found" });
+
+    // Movies that reference any of the duplicates in their cast array
+    const affectedMovies = await Movie.find(
+      { "cast.castId": { $in: duplicateIds } },
+      "title slug cast"
+    ).lean();
+
+    res.json({
+      primary:        { _id: primary._id, name: primary.name, type: primary.type, photo: primary.photo },
+      duplicates:     duplicates.map(d => ({ _id: d._id, name: d.name, type: d.type })),
+      moviesAffected: affectedMovies.length,
+      movieList:      affectedMovies.map(m => ({
+        _id:   m._id,
+        title: m.title,
+        slug:  m.slug,
+        castEntriesReplaced: m.cast.filter(c => duplicateIds.includes(String(c.castId))).length,
+      })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/admin/merge/cast ───────────────────────────────────────────────
+// Merges duplicate cast members into the primary:
+//  1. In every Movie.cast[], replace duplicate castId references with primaryId
+//  2. Merge the movies[] back-reference array on the primary Cast doc
+//  3. Delete the duplicate Cast docs
+app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
+  try {
+    const { primaryId, duplicateIds } = req.body;
+
+    if (!isOid(primaryId)) return res.status(400).json({ error: "Invalid primaryId" });
+    if (!Array.isArray(duplicateIds) || duplicateIds.length === 0)
+      return res.status(400).json({ error: "duplicateIds must be a non-empty array" });
+    if (duplicateIds.some(id => !isOid(id)))
+      return res.status(400).json({ error: "One or more duplicateIds are invalid" });
+    if (duplicateIds.includes(primaryId))
+      return res.status(400).json({ error: "primaryId cannot also be a duplicateId" });
+
+    const primary = await Cast.findById(primaryId);
+    if (!primary) return res.status(404).json({ error: "Primary cast member not found" });
+
+    const dupObjectIds = duplicateIds.map(id => new mongoose.Types.ObjectId(id));
+    const primaryOid   = new mongoose.Types.ObjectId(primaryId);
+
+    // 1. Find all movies that reference any duplicate
+    const affectedMovies = await Movie.find({ "cast.castId": { $in: dupObjectIds } });
+
+    let moviesUpdated = 0;
+    for (const movie of affectedMovies) {
+      let changed = false;
+      // Replace duplicate castId entries with primaryId; remove exact duplicates of primary
+      const seen = new Set();
+      const newCast = [];
+      for (const entry of movie.cast) {
+        const idStr = String(entry.castId);
+        const isPrimary   = idStr === primaryId;
+        const isDuplicate = duplicateIds.includes(idStr);
+
+        if (isPrimary) {
+          if (!seen.has(primaryId)) { newCast.push(entry); seen.add(primaryId); }
+          // else skip — already have the primary entry
+        } else if (isDuplicate) {
+          if (!seen.has(primaryId)) {
+            // Replace this duplicate entry with primary's data but keep role
+            newCast.push({
+              castId: primaryOid,
+              name:   primary.name,
+              photo:  primary.photo || entry.photo || "",
+              type:   primary.type  || entry.type  || "Actor",
+              role:   entry.role    || "",
+            });
+            seen.add(primaryId);
+            changed = true;
+          } else {
+            // Primary already added — just drop this duplicate entry
+            changed = true;
+          }
+        } else {
+          newCast.push(entry);
+        }
+      }
+
+      if (changed) {
+        movie.cast = newCast;
+        await movie.save({ validateBeforeSave: false });
+        moviesUpdated++;
+      }
+    }
+
+    // Also fix Song refs (singerRef, musicDirectorRef, lyricistRef) inside movies
+    const songMovies = await Movie.find({
+      $or: [
+        { "media.songs.singerRef":       { $in: dupObjectIds } },
+        { "media.songs.musicDirectorRef":{ $in: dupObjectIds } },
+        { "media.songs.lyricistRef":     { $in: dupObjectIds } },
+      ]
+    });
+    for (const movie of songMovies) {
+      let changed = false;
+      for (const song of (movie.media?.songs || [])) {
+        const replaceRefs = (arr) => {
+          if (!arr || !arr.length) return arr;
+          let didChange = false;
+          const next = arr.map(ref => {
+            if (duplicateIds.includes(String(ref))) { didChange = true; return primaryOid; }
+            return ref;
+          });
+          if (didChange) changed = true;
+          // de-dup
+          return [...new Set(next.map(String))].map(s => new mongoose.Types.ObjectId(s));
+        };
+        song.singerRef        = replaceRefs(song.singerRef);
+        song.musicDirectorRef = replaceRefs(song.musicDirectorRef);
+        song.lyricistRef      = replaceRefs(song.lyricistRef);
+      }
+      if (changed) await movie.save({ validateBeforeSave: false });
+    }
+
+    // 2. Collect all movie back-references from duplicates and merge into primary
+    const dupDocs = await Cast.find({ _id: { $in: dupObjectIds } }).lean();
+    const allMovieRefs = dupDocs.flatMap(d => (d.movies || []).map(String));
+    const existingRefs = (primary.movies || []).map(String);
+    const mergedRefs   = [...new Set([...existingRefs, ...allMovieRefs])];
+    primary.movies     = mergedRefs.map(id => new mongoose.Types.ObjectId(id));
+    await primary.save({ validateBeforeSave: false });
+
+    // 3. Delete duplicates
+    const deleteResult = await Cast.deleteMany({ _id: { $in: dupObjectIds } });
+
+    res.json({
+      success:       true,
+      moviesUpdated,
+      deleted:       deleteResult.deletedCount,
+      primaryId,
+      duplicateIds,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/admin/merge/movie ──────────────────────────────────────────────
+// Merges duplicate movie entries into a primary movie:
+//  1. Re-points all News docs that reference duplicates → primary
+//  2. Merges cast, songs arrays (union, no exact duplicates)
+//  3. Deletes duplicate Movie docs
+app.post("/api/admin/merge/movie", adminAuth, async (req, res) => {
+  try {
+    const { primaryId, duplicateIds } = req.body;
+
+    if (!isOid(primaryId)) return res.status(400).json({ error: "Invalid primaryId" });
+    if (!Array.isArray(duplicateIds) || duplicateIds.length === 0)
+      return res.status(400).json({ error: "duplicateIds must be a non-empty array" });
+    if (duplicateIds.some(id => !isOid(id)))
+      return res.status(400).json({ error: "One or more duplicateIds are invalid" });
+    if (duplicateIds.includes(primaryId))
+      return res.status(400).json({ error: "primaryId cannot also be a duplicateId" });
+
+    const primary = await Movie.findById(primaryId);
+    if (!primary) return res.status(404).json({ error: "Primary movie not found" });
+
+    const dupDocs = await Movie.find({ _id: { $in: duplicateIds } }).lean();
+    if (dupDocs.length === 0) return res.status(404).json({ error: "No duplicates found" });
+
+    // 1. Re-point News docs
+    await News.updateMany(
+      { movieId: { $in: duplicateIds } },
+      { $set: { movieId: primary._id, movieTitle: primary.title } }
+    );
+
+    // 2. Merge cast (union by castId string)
+    const existingCastIds = new Set(primary.cast.map(c => String(c.castId)));
+    for (const dup of dupDocs) {
+      for (const entry of (dup.cast || [])) {
+        if (!existingCastIds.has(String(entry.castId))) {
+          primary.cast.push(entry);
+          existingCastIds.add(String(entry.castId));
+        }
+      }
+    }
+
+    // 3. Merge songs (union by title+singer)
+    const songKey = (s) => `${(s.title||"").toLowerCase().trim()}|${(s.singer||"").toLowerCase().trim()}`;
+    const existingSongKeys = new Set((primary.media?.songs || []).map(songKey));
+    for (const dup of dupDocs) {
+      for (const song of (dup.media?.songs || [])) {
+        const k = songKey(song);
+        if (!existingSongKeys.has(k)) {
+          primary.media.songs.push(song);
+          existingSongKeys.add(k);
+        }
+      }
+    }
+
+    // 4. Merge news references
+    const dupNewsIds = dupDocs.flatMap(d => (d.news || []).map(String));
+    const existingNewsIds = new Set((primary.news || []).map(String));
+    for (const nid of dupNewsIds) {
+      if (!existingNewsIds.has(nid)) {
+        primary.news.push(new mongoose.Types.ObjectId(nid));
+        existingNewsIds.add(nid);
+      }
+    }
+
+    await primary.save({ validateBeforeSave: false });
+
+    // 5. Update Cast.movies[] back-references — swap duplicate movie IDs → primary
+    const dupOids = duplicateIds.map(id => new mongoose.Types.ObjectId(id));
+    const primaryOid = new mongoose.Types.ObjectId(primaryId);
+    await Cast.updateMany(
+      { movies: { $in: dupOids } },
+      { $pull:  { movies: { $in: dupOids } } }
+    );
+    await Cast.updateMany(
+      { "movies": { $nin: [primaryOid] }, _id: { $in: primary.cast.map(c => c.castId) } },
+      { $addToSet: { movies: primaryOid } }
+    );
+
+    // 6. Delete duplicates
+    const deleteResult = await Movie.deleteMany({ _id: { $in: duplicateIds } });
+
+    res.json({
+      success: true,
+      deleted: deleteResult.deletedCount,
+      primaryId,
+      duplicateIds,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/admin/merge/song ───────────────────────────────────────────────
+// Removes duplicate song entries from their respective movies.
+// The "primary" entry is kept as-is; duplicates are deleted from their movies.
+app.post("/api/admin/merge/song", adminAuth, async (req, res) => {
+  try {
+    const { primary, duplicates } = req.body;
+    // primary   = { movieId, songIndex }
+    // duplicates = [{ movieId, songIndex }, ...]
+
+    if (!primary?.movieId || !isOid(primary.movieId))
+      return res.status(400).json({ error: "primary.movieId is required and must be a valid ID" });
+    if (!Array.isArray(duplicates) || duplicates.length === 0)
+      return res.status(400).json({ error: "duplicates must be a non-empty array" });
+
+    let deleted = 0;
+
+    // Group duplicates by movieId so we can do one save per movie
+    const byMovie = {};
+    for (const dup of duplicates) {
+      if (!dup.movieId || !isOid(dup.movieId)) continue;
+      if (!byMovie[dup.movieId]) byMovie[dup.movieId] = [];
+      byMovie[dup.movieId].push(Number(dup.songIndex));
+    }
+
+    for (const [movieId, indices] of Object.entries(byMovie)) {
+      const movie = await Movie.findById(movieId);
+      if (!movie || !movie.media?.songs) continue;
+
+      // Sort descending so splicing by index doesn't shift remaining indices
+      const sortedIndices = [...new Set(indices)].sort((a, b) => b - a);
+      for (const idx of sortedIndices) {
+        if (idx >= 0 && idx < movie.media.songs.length) {
+          movie.media.songs.splice(idx, 1);
+          deleted++;
+        }
+      }
+      await movie.save({ validateBeforeSave: false });
+    }
+
+    res.json({ success: true, deleted });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build
