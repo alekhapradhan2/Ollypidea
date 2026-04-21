@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import BlogGenerator from "./BlogGenerator";
 import BoxOfficePanel from "./BoxOfficePanel"; 
+import MergePanel from "./MergePanel";
 import { API, getAdminToken } from "../api/api";
 
 
@@ -2310,6 +2311,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["blog","✍️","Blog"],
             ["boxoffice","📊","Box Office"],
             ["enquiries","✉️","Enquiries"],
+            ["merge","🔀","Merge Duplicates"],
             ["settings","⚙️","Settings"],
           ].map(([key,icon,label]) => {
             const unread = key === "enquiries" ? enquiries.filter(e => !e.read).length : 0;
@@ -2879,7 +2881,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
               {/* ── BLOG ── */}
               {tab==="blog" && (
-                <BlogGenerator movies={movies} onToast={onToast} />
+                <BlogGenerator movies={movies} cast={cast} onToast={onToast} />
               )}
              {/* ── BOX OFFICE ── */}
               {tab==="boxoffice" && (
@@ -2894,6 +2896,11 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   onToast={onToast}
                   setConfirm={setConfirm}
                 />
+              )}
+
+              {/* ── MERGE ── */}
+              {tab==="merge" && (
+                <MergePanel movies={movies} onToast={onToast} />
               )}
 
               {/* ── SETTINGS ── */}

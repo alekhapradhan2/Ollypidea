@@ -165,6 +165,84 @@ function autoCategory(type) {
   return { review:"Movie Review", story:"Movie Review", cast:"Actor Spotlight", music:"General", analysis:"Top 10", trivia:"General" }[type] || "General";
 }
 
+// ─── Cast/Crew prompt builder ────────────────────────────────────────────────
+function buildCastPrompt(castMember, type) {
+  const movies = (castMember.movies || []).slice(0,5).map(m => typeof m==="string" ? m : m.title||"").filter(Boolean).join(", ");
+  const ctx = `Name: ${castMember.name} | Type: ${castMember.type||"Actor"} | Known for: ${movies||"Ollywood films"} | Bio: ${castMember.bio||"N/A"}`;
+
+  const htmlRules = `
+OUTPUT RULES — STRICTLY FOLLOW:
+- Output ONLY clean HTML wrapped in <article>. No markdown. No plain text.
+- Use <h2> for section headings (NOT <h1>)
+- Use <h3> for sub-headings
+- Use <p> for paragraphs (2–3 sentences each)
+- Use <ul><li> for bullet lists
+- Use <strong> for emphasis
+- Use <table> for any data (with <thead><tbody>)
+- End with <section class="faq-section"><h2>Frequently Asked Questions</h2> with 4–5 <details><summary> FAQ items
+- 800–1200 words total. SEO-friendly.
+- Do NOT use inline styles. Do NOT output anything outside <article>.`;
+
+  const map = {
+    profile: `You are an expert SEO content writer for Ollypedia, an Odia cinema website. Write a fully structured HTML profile/biography article for ${castMember.type||"actor"} "${castMember.name}".
+
+Sections:
+1. Introduction — who they are and why they matter in Ollywood
+2. Early Life & Background
+3. Career Journey & Breakthrough
+4. Notable Works (as <ul>)
+5. Awards & Recognition
+6. Personal Life
+7. Legacy & Impact
+8. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    interview: `You are an expert SEO content writer for Ollypedia. Write a creative HTML Q&A-style interview feature with ${castMember.name} (${castMember.type||"actor"}) about their career in Odia cinema.
+
+Sections:
+1. Introduction
+2. 6–8 interview Q&A pairs (use <h3> for each question, <p> for the answer)
+3. Career Highlights Table (Film | Year | Role/Contribution) using <table>
+4. FAQ section
+
+${ctx}
+${htmlRules}`,
+
+    spotlight: `You are an expert SEO content writer for Ollypedia. Write a fully structured HTML spotlight/feature article on ${castMember.name} (${castMember.type||"actor"}) for fans of Odia cinema.
+
+Sections:
+1. Introduction
+2. Career Milestones (as <ul>)
+3. Why Fans Love Them
+4. Best Performances / Works
+5. What Sets Them Apart
+6. Quick Facts Table using <table>
+7. FAQ section
+
+${ctx}
+${htmlRules}`,
+  };
+  return map[type] || map.profile;
+}
+
+function autoCastTitle(castMember, type) {
+  return {
+    profile:   `${castMember.name} – Biography, Career & Films | Odia Cinema`,
+    interview: `${castMember.name} – Exclusive Interview | Ollywood`,
+    spotlight: `${castMember.name} – Actor Spotlight | Odia Cinema`,
+    custom:    `${castMember.name} – Article`,
+  }[type] || `${castMember.name} – Article`;
+}
+
+const CAST_ARTICLE_TYPES = [
+  { id: "profile",   label: "👤 Biography",      color: "#a78be8" },
+  { id: "interview", label: "🎤 Interview",       color: "#7aaae8" },
+  { id: "spotlight", label: "⭐ Spotlight",       color: "#e8c87a" },
+  { id: "custom",    label: "✏️ Custom Prompt",   color: "#a0c4a0" },
+];
+
 // ─── API calls ───────────────────────────────────────────────────────────────
 
 // ★ FIX 1: module-level blog cache — ONE fetch for all 1168 rows, filter locally
@@ -192,6 +270,16 @@ function invalidateBlogCache() { _blogCache = null; _blogCacheProm = null; }
 async function fetchMovieBlogs(movieTitle) {
   const all = await getAllBlogs();
   return all.filter(p => p.movieTitle === movieTitle);
+}
+
+async function fetchCastBlogs(castName) {
+  const all = await getAllBlogs();
+  return all.filter(p => p.castName === castName);
+}
+
+async function fetchUncategorizedBlogs() {
+  const all = await getAllBlogs();
+  return all.filter(p => !p.movieTitle && !p.castName);
 }
 
 // ★ FIX 2: 60-second AbortController timeout on every AI call
@@ -253,7 +341,7 @@ async function publishArticle(movie, article, type, youtubeVideoId = "") {
   return post;
 }
 
-async function publishBlogPost({ title, content, category, tags, coverImage, movie, published, youtubeVideoId }) {
+async function publishBlogPost({ title, content, category, tags, coverImage, movie, castMember, published, youtubeVideoId }) {
   const token   = getAdminToken();
   if (!token) throw new Error("Not logged in as admin.");
   const slug    = slugify(`${title}-${Date.now().toString(36)}`);
@@ -265,8 +353,9 @@ async function publishBlogPost({ title, content, category, tags, coverImage, mov
       title: title.trim(), slug, content: content.trim(), excerpt,
       category: category || "General",
       tags: tags ? tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-      coverImage: coverImage || (movie ? movie.posterUrl||movie.thumbnailUrl||"" : ""),
+      coverImage: coverImage || (castMember ? castMember.photo||"" : movie ? movie.posterUrl||movie.thumbnailUrl||"" : ""),
       movieTitle: movie?.title || "", movieId: movie?._id || null,
+      castName: castMember?.name || "", castId: castMember?._id || null,
       author: "OllyPedia Editorial",
       readTime: readTime(content),
       seoTitle: title.trim(), seoDesc: excerpt,
@@ -396,6 +485,23 @@ const CSS = `
 .nb-err { font-size:.76rem; color:#f88; background:rgba(220,50,50,.1); border:1px solid rgba(220,50,50,.3); border-radius:7px; padding:8px 12px; }
 
 .nb-divider { border:none; border-top:1px solid var(--border); margin:2px 0; }
+
+/* Cast & Crew rows */
+.bg-cast-row { border-bottom:1px solid var(--border); }
+.bg-cast-row:last-child { border-bottom:none; }
+.bg-cast-header { display:flex; align-items:center; gap:14px; padding:12px 18px; cursor:pointer; transition:background .15s; user-select:none; }
+.bg-cast-header:hover { background:rgba(255,255,255,.03); }
+.bg-cast-photo { width:38px; height:38px; border-radius:50%; object-fit:cover; border:1px solid var(--border); background:var(--bg3); flex-shrink:0; }
+.bg-cast-photo-ph { width:38px; height:38px; border-radius:50%; flex-shrink:0; border:1px solid var(--border); background:var(--bg3); display:flex; align-items:center; justify-content:center; font-size:1rem; }
+
+/* Main tabs inside BlogGenerator */
+.bg-main-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:0; }
+.bg-main-tab  { padding:9px 20px; border:none; cursor:pointer; font-size:.82rem; font-weight:600; background:transparent; color:var(--muted); border-bottom:2px solid transparent; transition:all .15s; }
+.bg-main-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+.bg-main-tab:hover:not(.active) { color:var(--text); }
+
+/* Uncategorized blogs list */
+.bg-uncat-list { display:flex; flex-direction:column; gap:6px; padding:14px 18px; }
 `;
 
 // ─── Spinner element ─────────────────────────────────────────────────────────
@@ -581,7 +687,7 @@ function EditModal({ article, onClose, onSaved, onToast }) {
 }
 
 // ─── New Blog Modal ───────────────────────────────────────────────────────────
-function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
+function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
   const [mode, setMode] = useState("ai");   // "ai" | "manual"
   const [step, setStep] = useState(1);      // AI only: 1=setup, 2=review
 
@@ -591,8 +697,18 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
   const [linkedMovie,  setLinkedMovie]  = useState(null);
   const movieTimer = useRef(null);
 
+  // Cast link
+  const [castQuery,    setCastQuery]    = useState("");
+  const [castResults,  setCastResults]  = useState([]);
+  const [linkedCast,   setLinkedCast]   = useState(null);
+  const castTimer = useRef(null);
+
+  // "link type" toggle — movie or cast
+  const [linkType, setLinkType] = useState("movie"); // "movie" | "cast" | "none"
+
   // AI
   const [articleType, setArticleType] = useState("review");
+  const [castArticleType, setCastArticleType] = useState("profile");
   const [userPrompt,  setUserPrompt]  = useState("");
 
   // Shared blog fields
@@ -609,7 +725,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
   const [errMsg,     setErrMsg]     = useState("");
   const contentRef = useRef(null);
 
-  // Client-side movie search — no API call
+  // Client-side movie search
   useEffect(() => {
     const q = movieQuery.trim().toLowerCase();
     if (!q) { setMovieResults([]); return; }
@@ -620,19 +736,43 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
     return () => clearTimeout(movieTimer.current);
   }, [movieQuery, movies]);
 
+  // Client-side cast search
+  useEffect(() => {
+    const q = castQuery.trim().toLowerCase();
+    if (!q) { setCastResults([]); return; }
+    clearTimeout(castTimer.current);
+    castTimer.current = setTimeout(() => {
+      setCastResults(cast.filter(c => c.name.toLowerCase().includes(q)).slice(0,6));
+    }, 150);
+    return () => clearTimeout(castTimer.current);
+  }, [castQuery, cast]);
+
   const selectMovie = (m) => {
-    setLinkedMovie(m); setMovieQuery(""); setMovieResults([]);
+    setLinkedMovie(m); setLinkedCast(null);
+    setMovieQuery(""); setMovieResults([]);
     if (!blogTitle) setBlogTitle(autoTitle(m, articleType));
     if (!coverImage && (m.posterUrl||m.thumbnailUrl)) setCoverImage(m.posterUrl||m.thumbnailUrl||"");
     setBlogCategory(autoCategory(articleType));
   };
   const clearMovie = () => { setLinkedMovie(null); setMovieQuery(""); setMovieResults([]); };
 
+  const selectCast = (c) => {
+    setLinkedCast(c); setLinkedMovie(null);
+    setCastQuery(""); setCastResults([]);
+    if (!blogTitle) setBlogTitle(autoCastTitle(c, castArticleType));
+    if (!coverImage && c.photo) setCoverImage(c.photo||"");
+    setBlogCategory("Actor Spotlight");
+  };
+  const clearCast = () => { setLinkedCast(null); setCastQuery(""); setCastResults([]); };
+
+  // Auto-update title when type changes
   useEffect(() => {
-    if (!linkedMovie) return;
-    setBlogTitle(autoTitle(linkedMovie, articleType));
-    setBlogCategory(autoCategory(articleType));
+    if (linkedMovie) { setBlogTitle(autoTitle(linkedMovie, articleType)); setBlogCategory(autoCategory(articleType)); }
   }, [articleType]); // eslint-disable-line
+
+  useEffect(() => {
+    if (linkedCast) { setBlogTitle(autoCastTitle(linkedCast, castArticleType)); setBlogCategory("Actor Spotlight"); }
+  }, [castArticleType]); // eslint-disable-line
 
   const switchMode = (m) => { setMode(m); setStep(1); setErrMsg(""); setBlogContent(""); };
 
@@ -646,57 +786,57 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
 - End with a FAQ section: <section class="faq-section"><h2>Frequently Asked Questions</h2> with 4 <details><summary> items
 - Do NOT use inline styles. Do NOT output anything outside <article>.`;
 
-    // Custom type — user writes their own full prompt, movie context is optional extra
+    // Cast member prompt
+    if (linkedCast && linkType === "cast") {
+      const base = buildCastPrompt(linkedCast, castArticleType);
+      return userPrompt.trim() ? `${base}\n\nEditor notes: ${userPrompt.trim()}` : base;
+    }
+
     if (articleType === "custom") {
       const base = userPrompt.trim() || "Write an engaging 1000+ word blog article about Ollywood cinema.";
       if (linkedMovie) {
-        const cast  = (linkedMovie.cast  || []).slice(0,5).map(c => `${c.name}${c.role ? ` as ${c.role}` : ""}`).join(", ");
+        const cast2  = (linkedMovie.cast||[]).slice(0,5).map(c => `${c.name}${c.role?` as ${c.role}`:""}`).join(", ");
         const year  = linkedMovie.releaseDate ? new Date(linkedMovie.releaseDate).getFullYear() : "upcoming";
-        const ctx   = `\n\n[Movie context: "${linkedMovie.title}" (${year}), Director: ${linkedMovie.director||"N/A"}, Cast: ${cast||"N/A"}, Synopsis: ${linkedMovie.synopsis||"N/A"}]`;
+        const ctx   = `\n\n[Movie context: "${linkedMovie.title}" (${year}), Director: ${linkedMovie.director||"N/A"}, Cast: ${cast2||"N/A"}, Synopsis: ${linkedMovie.synopsis||"N/A"}]`;
         return `${base}${ctx}${htmlRules}`;
       }
       return `${base}${htmlRules}`;
     }
     if (linkedMovie) {
       const base = buildMoviePrompt(linkedMovie, articleType);
-      return userPrompt.trim()
-        ? `${base}\n\nEditor notes: ${userPrompt.trim()}`
-        : base;
+      return userPrompt.trim() ? `${base}\n\nEditor notes: ${userPrompt.trim()}` : base;
     }
-    // Standalone — AI generates title + HTML content as JSON
     const topic = userPrompt.trim() || "Write an engaging 1000+ word blog article about Ollywood cinema.";
     return `You are an expert SEO blog writer for Ollypedia, an Odia cinema website.\n\nInstructions: ${topic}\n\n${htmlRules}\n\nIMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no extra text) in this exact format:\n{"title": "Your Blog Title Here", "content": "<article>...full HTML content here...</article>"}`;
-  }, [linkedMovie, articleType, userPrompt]);
+  }, [linkedMovie, linkedCast, linkType, articleType, castArticleType, userPrompt]);
 
   const handleGenerate = async () => {
-    // Custom mode requires a prompt
-    if (articleType === "custom" && !userPrompt.trim()) {
+    if (articleType === "custom" && !linkedCast && !userPrompt.trim()) {
       setErrMsg("Please write your custom prompt before generating.");
       return;
     }
     setErrMsg(""); setGenerating(true); setBlogContent("");
     try {
       const text = await callGenerateAPI(buildPrompt());
+      const isCastMode     = linkType === "cast" && linkedCast;
+      const isMovieLinked  = !!linkedMovie && articleType !== "custom";
 
-      // Custom mode always parses as JSON (title+content) since AI returns both
-      const isCustomStandalone = articleType === "custom" && !linkedMovie;
-      const isMovieLinked      = !!linkedMovie && articleType !== "custom";
-
-      if (isMovieLinked) {
-        // Standard movie prompt — AI returns plain text
+      if (isCastMode) {
+        setBlogContent(text);
+        if (!blogTitle) setBlogTitle(autoCastTitle(linkedCast, castArticleType));
+      } else if (isMovieLinked) {
         setBlogContent(text);
         if (!blogTitle) setBlogTitle(autoTitle(linkedMovie, articleType));
       } else {
-        // Standalone or custom — AI returns JSON {title, content}
         let parsed = null;
         try {
           const clean = text.replace(/```json|```/g, "").trim();
           parsed = JSON.parse(clean);
         } catch {
           const lines = text.split("\n").filter(Boolean);
-          parsed = { title: lines[0]?.slice(0, 100) || "New Blog Post", content: lines.slice(1).join("\n").trim() || text };
+          parsed = { title: lines[0]?.slice(0,100) || "New Blog Post", content: lines.slice(1).join("\n").trim() || text };
         }
-        setBlogTitle(parsed.title?.trim() || (linkedMovie ? autoTitle(linkedMovie, "custom") : "New Blog Post"));
+        setBlogTitle(parsed.title?.trim() || "New Blog Post");
         setBlogContent(parsed.content?.trim() || text);
       }
       setStep(2);
@@ -714,7 +854,10 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
       const post = await publishBlogPost({
         title:blogTitle, content:blogContent,
         category:blogCategory, tags:blogTags,
-        coverImage, movie:linkedMovie, published:publishNow,
+        coverImage,
+        movie: linkType==="movie" ? linkedMovie : null,
+        castMember: linkType==="cast" ? linkedCast : null,
+        published:publishNow,
         youtubeVideoId: parseYtId(youtubeVideoId),
       });
       onPublished(post); onClose();
@@ -725,41 +868,104 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
     setPublishing(false);
   };
 
-  // ── Shared: movie picker widget
-  const MoviePicker = (
+  // ── Shared: link type selector
+  const LinkTypePicker = (
     <div>
-      <label className="bg-field-label">
-        Link a Movie
+      <label className="bg-field-label" style={{ marginBottom:8 }}>
+        Link to
         <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>optional</span>
       </label>
-      {linkedMovie ? (
-        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"rgba(201,151,58,.08)", border:"1px solid rgba(201,151,58,.3)", borderRadius:8 }}>
-          {(linkedMovie.posterUrl||linkedMovie.thumbnailUrl) && (
-            <img src={linkedMovie.posterUrl||linkedMovie.thumbnailUrl} alt={linkedMovie.title}
-              style={{ width:26, height:38, objectFit:"cover", borderRadius:3, border:"1px solid var(--border)" }}
-              onError={e=>e.target.style.display="none"} />
-          )}
-          <span style={{ flex:1, fontWeight:700, fontSize:".84rem", color:"var(--gold)" }}>🎬 {linkedMovie.title}</span>
-          <button className="bg-btn bg-btn-ghost" style={{ fontSize:".68rem", padding:"3px 8px" }} onClick={clearMovie}>✕ Remove</button>
-        </div>
-      ) : (
-        <div style={{ position:"relative" }}>
-          <input className="bg-field-input"
-            placeholder="Search movie to link… (leave blank for standalone post)"
-            value={movieQuery} onChange={e=>setMovieQuery(e.target.value)} />
-          {movieResults.length > 0 && (
-            <div className="bg-movie-dd">
-              {movieResults.map(m => (
-                <div key={m._id} className="bg-movie-dd-item" onClick={()=>selectMovie(m)}>
-                  🎬 {m.title}
-                  <span style={{ fontSize:".7rem", color:"var(--muted)", marginLeft:8 }}>
-                    {m.releaseDate ? new Date(m.releaseDate).getFullYear() : ""}
-                  </span>
-                </div>
-              ))}
+      <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+        {[["none","📝 Standalone"],["movie","🎬 Movie"],["cast","🎭 Cast / Crew"]].map(([v,label]) => (
+          <button key={v}
+            className="bg-btn bg-btn-ghost"
+            style={{
+              flex:1, justifyContent:"center", fontSize:".78rem",
+              background: linkType===v ? "rgba(201,151,58,.15)" : "var(--bg3)",
+              borderColor: linkType===v ? "var(--gold)" : "var(--border)",
+              color: linkType===v ? "var(--gold)" : "var(--muted)",
+              fontWeight: linkType===v ? 700 : 500,
+            }}
+            onClick={() => {
+              setLinkType(v);
+              if (v !== "movie") clearMovie();
+              if (v !== "cast")  clearCast();
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Movie picker */}
+      {linkType === "movie" && (
+        linkedMovie ? (
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"rgba(201,151,58,.08)", border:"1px solid rgba(201,151,58,.3)", borderRadius:8 }}>
+            {(linkedMovie.posterUrl||linkedMovie.thumbnailUrl) && (
+              <img src={linkedMovie.posterUrl||linkedMovie.thumbnailUrl} alt={linkedMovie.title}
+                style={{ width:26, height:38, objectFit:"cover", borderRadius:3, border:"1px solid var(--border)" }}
+                onError={e=>e.target.style.display="none"} />
+            )}
+            <span style={{ flex:1, fontWeight:700, fontSize:".84rem", color:"var(--gold)" }}>🎬 {linkedMovie.title}</span>
+            <button className="bg-btn bg-btn-ghost" style={{ fontSize:".68rem", padding:"3px 8px" }} onClick={clearMovie}>✕ Remove</button>
+          </div>
+        ) : (
+          <div style={{ position:"relative" }}>
+            <input className="bg-field-input"
+              placeholder="Search movie to link…"
+              value={movieQuery} onChange={e=>setMovieQuery(e.target.value)} />
+            {movieResults.length > 0 && (
+              <div className="bg-movie-dd">
+                {movieResults.map(m => (
+                  <div key={m._id} className="bg-movie-dd-item" onClick={()=>selectMovie(m)}>
+                    🎬 {m.title}
+                    <span style={{ fontSize:".7rem", color:"var(--muted)", marginLeft:8 }}>
+                      {m.releaseDate ? new Date(m.releaseDate).getFullYear() : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {/* Cast picker */}
+      {linkType === "cast" && (
+        linkedCast ? (
+          <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"rgba(167,139,232,.08)", border:"1px solid rgba(167,139,232,.3)", borderRadius:8 }}>
+            {linkedCast.photo && (
+              <img src={linkedCast.photo} alt={linkedCast.name}
+                style={{ width:34, height:34, objectFit:"cover", borderRadius:"50%", border:"1px solid var(--border)" }}
+                onError={e=>e.target.style.display="none"} />
+            )}
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:".84rem", color:"#a78be8" }}>🎭 {linkedCast.name}</div>
+              <div style={{ fontSize:".68rem", color:"var(--muted)" }}>{linkedCast.type}</div>
             </div>
-          )}
-        </div>
+            <button className="bg-btn bg-btn-ghost" style={{ fontSize:".68rem", padding:"3px 8px" }} onClick={clearCast}>✕ Remove</button>
+          </div>
+        ) : (
+          <div style={{ position:"relative" }}>
+            <input className="bg-field-input"
+              placeholder="Search cast/crew member…"
+              value={castQuery} onChange={e=>setCastQuery(e.target.value)} />
+            {castResults.length > 0 && (
+              <div className="bg-movie-dd">
+                {castResults.map(c => (
+                  <div key={c._id} className="bg-movie-dd-item" onClick={()=>selectCast(c)}
+                    style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    {c.photo
+                      ? <img src={c.photo} alt={c.name} style={{ width:24, height:24, borderRadius:"50%", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
+                      : <span style={{ fontSize:"1rem" }}>👤</span>
+                    }
+                    <span style={{ flex:1 }}>{c.name}</span>
+                    <span style={{ fontSize:".7rem", color:"var(--muted)" }}>{c.type}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
       )}
     </div>
   );
@@ -791,9 +997,14 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
         )}
       </div>
       <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
-      {linkedMovie && (
+      {linkedMovie && linkType==="movie" && (
         <div style={{ padding:"7px 12px", background:"rgba(201,151,58,.06)", border:"1px solid rgba(201,151,58,.22)", borderRadius:7, fontSize:".76rem", color:"var(--gold)" }}>
-          🎬 Linked to: <b>{linkedMovie.title}</b>
+          🎬 Linked to movie: <b>{linkedMovie.title}</b>
+        </div>
+      )}
+      {linkedCast && linkType==="cast" && (
+        <div style={{ padding:"7px 12px", background:"rgba(167,139,232,.06)", border:"1px solid rgba(167,139,232,.22)", borderRadius:7, fontSize:".76rem", color:"#a78be8" }}>
+          🎭 Linked to cast: <b>{linkedCast.name}</b> ({linkedCast.type})
         </div>
       )}
       <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", fontSize:".84rem", color:"var(--text)" }}>
@@ -834,77 +1045,55 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
           {/* ════════ AI MODE — Step 1 ════════ */}
           {mode==="ai" && step===1 && (
             <>
-              {MoviePicker}
+              {LinkTypePicker}
 
-              {/* Article type chips — always shown in AI mode */}
-              <div>
-                <label className="bg-field-label">Article Type</label>
-                <div className="bg-types" style={{ marginBottom: articleType === "custom" ? 8 : 0 }}>
-                  {ARTICLE_TYPES.map(t => (
-                    <button key={t.id}
-                      className={`bg-type-chip${articleType===t.id?" active":""}`}
-                      style={{
-                        borderColor: t.color,
-                        color: articleType===t.id ? (t.id==="review"?"#000":"#fff") : t.color,
-                        background: articleType===t.id ? t.color : "transparent",
-                        // Custom chip has a dashed border to signal it's different
-                        borderStyle: t.id === "custom" ? "dashed" : "solid",
-                      }}
-                      onClick={() => setArticleType(p => p===t.id ? (linkedMovie?"review":null) : t.id)}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Custom prompt explainer */}
-                {articleType === "custom" && (
-                  <div style={{ padding:"8px 12px", background:"rgba(160,196,160,.08)", border:"1px solid rgba(160,196,160,.2)", borderRadius:7, fontSize:".72rem", color:"#a0c4a0", lineHeight:1.65 }}>
-                    ✏️ <strong>Custom mode</strong> — write any prompt you like below. No preset template is applied.
-                    {linkedMovie && " Movie data is available as optional context."}
-                    {!linkedMovie && " Link a movie above to optionally include its data in your prompt."}
-                  </div>
-                )}
-              </div>
-
-              <hr className="nb-divider" />
-
-              <div>
-                <label className="bg-field-label">
-                  {articleType === "custom"
-                    ? "Your Custom Prompt"
-                    : linkedMovie ? "Extra Notes for AI" : "What should the blog be about?"}
-                  <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>
-                    {articleType === "custom"
-                      ? "required — AI follows exactly what you write"
-                      : linkedMovie ? "optional — layered on auto-prompt" : "required — AI generates title & content from this"}
-                  </span>
-                </label>
-                <textarea className="bg-field-input bg-field-textarea"
-                  placeholder={
-                    articleType === "custom"
-                      ? `Write your full prompt here. Examples:\n• "Write a 1000-word comparison of Odia cinema in 2020 vs 2025"\n• "Write a passionate opinion piece on why Ollywood deserves national recognition"\n• "Write a detailed article about the rise of female-led Odia films"`
-                      : linkedMovie
-                        ? `e.g. "Focus on the emotional climax" or "Highlight the music score"…`
-                        : `Describe your blog topic, tone, key points and audience.\n\ne.g. "Write an 800-word opinion on why Odia cinema deserves national recognition. Tone: passionate and informative."`
-                  }
-                  value={userPrompt} onChange={e=>setUserPrompt(e.target.value)}
-                  style={{ minHeight: articleType === "custom" ? 160 : 120 }} />
-                {articleType === "custom" && !userPrompt.trim() && (
-                  <div style={{ marginTop:5, fontSize:".69rem", color:"#e57373" }}>
-                    ⚠️ Prompt is required in Custom mode.
-                  </div>
-                )}
-                {!linkedMovie && articleType !== "custom" && (
-                  <div style={{ marginTop:6, fontSize:".69rem", color:"var(--muted)", lineHeight:1.6 }}>
-                    💡 AI will automatically generate a <b style={{ color:"var(--text)" }}>title</b> and <b style={{ color:"var(--text)" }}>full blog content</b> based on your prompt above. No movie data or article templates are used.
-                  </div>
-                )}
-              </div>
-
-              {!linkedMovie && userPrompt.trim() && (
+              {/* Cast article types — only when cast is linked */}
+              {linkType === "cast" && linkedCast && (
                 <div>
-                  <label className="bg-field-label">Prompt Preview</label>
-                  <div className="bg-prompt-box">{buildPrompt()}</div>
+                  <label className="bg-field-label">Article Type</label>
+                  <div className="bg-types" style={{ marginBottom:8 }}>
+                    {CAST_ARTICLE_TYPES.map(t => (
+                      <button key={t.id}
+                        className={`bg-type-chip${castArticleType===t.id?" active":""}`}
+                        style={{
+                          borderColor: t.color,
+                          color: castArticleType===t.id ? "#fff" : t.color,
+                          background: castArticleType===t.id ? t.color : "transparent",
+                          borderStyle: t.id==="custom" ? "dashed" : "solid",
+                        }}
+                        onClick={() => setCastArticleType(t.id)}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Movie article types — only when movie is linked or standalone */}
+              {linkType !== "cast" && (
+                <div>
+                  <label className="bg-field-label">Article Type</label>
+                  <div className="bg-types" style={{ marginBottom: articleType==="custom" ? 8 : 0 }}>
+                    {ARTICLE_TYPES.map(t => (
+                      <button key={t.id}
+                        className={`bg-type-chip${articleType===t.id?" active":""}`}
+                        style={{
+                          borderColor: t.color,
+                          color: articleType===t.id ? (t.id==="review"?"#000":"#fff") : t.color,
+                          background: articleType===t.id ? t.color : "transparent",
+                          borderStyle: t.id==="custom" ? "dashed" : "solid",
+                        }}
+                        onClick={() => setArticleType(p => p===t.id ? (linkedMovie?"review":null) : t.id)}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  {articleType==="custom" && (
+                    <div style={{ padding:"8px 12px", background:"rgba(160,196,160,.08)", border:"1px solid rgba(160,196,160,.2)", borderRadius:7, fontSize:".72rem", color:"#a0c4a0", lineHeight:1.65 }}>
+                      ✏️ <strong>Custom mode</strong> — write any prompt you like below.
+                      {linkedMovie && " Movie data is available as optional context."}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -912,12 +1101,37 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
 
               <div>
                 <label className="bg-field-label">
-                  Blog Title
+                  {(linkType==="cast" && castArticleType==="custom") || (linkType!=="cast" && articleType==="custom")
+                    ? "Your Custom Prompt"
+                    : linkedMovie||linkedCast ? "Extra Notes for AI" : "What should the blog be about?"}
                   <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>
-                    {linkedMovie ? "auto-filled after generate" : "auto-generated by AI — editable after"}
+                    {(linkType==="cast" && castArticleType==="custom") || (linkType!=="cast" && articleType==="custom")
+                      ? "required"
+                      : linkedMovie||linkedCast ? "optional" : "required"}
                   </span>
                 </label>
-                {linkedMovie ? (
+                <textarea className="bg-field-input bg-field-textarea"
+                  placeholder={
+                    linkedCast && linkType==="cast"
+                      ? `e.g. "Focus on their most emotional performances" or "Highlight their contribution to Odia cinema"`
+                      : linkedMovie
+                        ? `e.g. "Focus on the emotional climax" or "Highlight the music score"…`
+                        : `Describe your blog topic, tone, key points and audience.`
+                  }
+                  value={userPrompt} onChange={e=>setUserPrompt(e.target.value)}
+                  style={{ minHeight:100 }} />
+              </div>
+
+              <hr className="nb-divider" />
+
+              <div>
+                <label className="bg-field-label">
+                  Blog Title
+                  <span style={{ fontWeight:400, textTransform:"none", fontSize:".65rem", color:"var(--muted)" }}>
+                    {linkedMovie||linkedCast ? "auto-filled" : "auto-generated by AI"}
+                  </span>
+                </label>
+                {(linkedMovie||linkedCast) ? (
                   <input className="bg-field-input" placeholder="Leave blank to auto-fill…"
                     value={blogTitle} onChange={e=>setBlogTitle(e.target.value)} />
                 ) : (
@@ -979,7 +1193,7 @@ function NewBlogModal({ movies=[], onClose, onPublished, onToast }) {
           {/* ════════ MANUAL MODE ════════ */}
           {mode==="manual" && (
             <>
-              {MoviePicker}
+              {LinkTypePicker}
 
               <div>
                 <label className="bg-field-label">
@@ -1231,6 +1445,265 @@ function MoviePanel({ movie, onToast }) {
   );
 }
 
+// ─── CastPanel ────────────────────────────────────────────────────────────────
+function CastPanel({ castMember, onToast }) {
+  const [articles,    setArticles]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [activeType,  setActiveType]  = useState(null);
+  const [editTarget,  setEditTarget]  = useState(null);
+  const [generating,  setGenerating]  = useState(false);
+  const [genContent,  setGenContent]  = useState("");
+  const [genErr,      setGenErr]      = useState("");
+  const [ytId,        setYtId]        = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    fetchCastBlogs(castMember.name)
+      .then(setArticles).catch(()=>{}).finally(()=>setLoading(false));
+  }, [castMember.name]);
+
+  const handlePublish = async () => {
+    if (!genContent.trim() || !activeType) return;
+    try {
+      const title   = autoCastTitle(castMember, activeType);
+      const slug    = slugify(`${castMember.name}-${activeType}-${Date.now().toString(36)}`);
+      const excerpt = genContent.slice(0,200).trim()+"…";
+      const token   = getAdminToken();
+      const res = await fetch(`${API_BASE}/admin/blog`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", Authorization:`Bearer ${token}` },
+        body: JSON.stringify({
+          title, slug, content:genContent, excerpt,
+          category:"Actor Spotlight",
+          tags:[castMember.name, castMember.type||"Actor", "Ollywood"],
+          coverImage: castMember.photo||"",
+          castName: castMember.name, castId: castMember._id,
+          movieTitle:"", movieId:null,
+          author:"OllyPedia Editorial",
+          readTime: readTime(genContent), seoTitle:title, seoDesc:excerpt,
+          published:true,
+          ...(ytId.trim() ? { youtubeVideoId: parseYtId(ytId) } : {}),
+        }),
+      });
+      if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.error||"Publish failed"); }
+      const post = await res.json();
+      invalidateBlogCache();
+      setArticles(prev=>[post,...prev]);
+      setActiveType(null); setGenContent(""); setYtId("");
+      onToast(`✅ Published: "${title}"`, "success");
+    } catch(err) { onToast("❌ "+err.message, "error"); }
+  };
+
+  const handleGenerate = async (type) => {
+    setGenerating(true); setGenContent(""); setGenErr("");
+    try {
+      const text = await callGenerateAPI(buildCastPrompt(castMember, type));
+      setGenContent(text);
+    } catch(err) { setGenErr(err.message); onToast("❌ "+err.message,"error"); }
+    setGenerating(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this article?")) return;
+    try { await deleteArticle(id); setArticles(prev=>prev.filter(a=>a._id!==id)); onToast("🗑 Deleted","success"); }
+    catch { onToast("❌ Delete failed","error"); }
+  };
+  const handleSaved = (updated) => setArticles(prev=>prev.map(a=>a._id===updated._id?updated:a));
+
+  return (
+    <div className="bg-panel">
+      {loading
+        ? <div style={{ fontSize:".77rem", color:"var(--muted)", padding:"6px 0 10px" }}>Loading articles…</div>
+        : articles.length>0 && (
+          <div style={{ marginBottom:14 }}>
+            <div className="bg-section-label">📄 Published Articles ({articles.length})</div>
+            <div className="bg-articles">
+              {articles.map(art => (
+                <div key={art._id} className="bg-art-item">
+                  <div className="bg-art-dot" style={{ background:art.published?"#4caf82":"#666" }} />
+                  <div className="bg-art-body">
+                    <div className="bg-art-title">{art.title}</div>
+                    <div className="bg-art-meta">
+                      <span style={{ color:art.published?"#4caf82":"#888", fontWeight:700 }}>{art.published?"● Live":"○ Draft"}</span>
+                      <span>📅 {formatDate(art.createdAt)}</span>
+                      {art.readTime && <span>⏱ {art.readTime} min</span>}
+                      {art.views>0  && <span>👁 {art.views}</span>}
+                    </div>
+                  </div>
+                  <div className="bg-art-actions">
+                    <a href={`/blog/${art.slug}`} target="_blank" rel="noreferrer" className="bg-art-btn">🔗 View</a>
+                    <button className="bg-art-btn" onClick={()=>setEditTarget(art)}>✏️</button>
+                    <button className="bg-art-btn del" onClick={()=>handleDelete(art._id)}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+
+      <div className="bg-section-label">✨ Generate New Article — Choose Type</div>
+      <div className="bg-types">
+        {CAST_ARTICLE_TYPES.map(t => (
+          <button key={t.id}
+            className={`bg-type-chip${activeType===t.id?" active":""}`}
+            style={{
+              borderColor:t.color,
+              color:activeType===t.id?"#fff":t.color,
+              background:activeType===t.id?t.color:"transparent",
+            }}
+            onClick={()=>{ setActiveType(p=>p===t.id?null:t.id); setGenContent(""); setGenErr(""); }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeType && (
+        <div className="bg-gen-box">
+          <div className="bg-gen-row">
+            <span className="bg-gen-label" style={{ color: CAST_ARTICLE_TYPES.find(t=>t.id===activeType)?.color }}>
+              {CAST_ARTICLE_TYPES.find(t=>t.id===activeType)?.label}
+            </span>
+            {genErr && <span style={{ fontSize:".69rem", color:"#f77" }}>⚠️ {genErr}</span>}
+            <button className="bg-btn bg-btn-gold"
+              onClick={()=>handleGenerate(activeType)} disabled={generating}>
+              {generating ? <><Spin />Generating…</> : genContent ? "🔄 Regenerate" : "✨ Generate"}
+            </button>
+            {genContent && (
+              <button className="bg-btn bg-btn-green" onClick={handlePublish} disabled={generating}>
+                🚀 Publish
+              </button>
+            )}
+          </div>
+          {genContent && (
+            <div style={{ marginTop:10 }}>
+              <YoutubePicker value={ytId} onChange={setYtId} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {editTarget && (
+        <EditModal article={editTarget} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+      )}
+    </div>
+  );
+}
+
+// ─── CastRow ──────────────────────────────────────────────────────────────────
+function CastRow({ castMember, artCount, onToast }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-cast-row">
+      <div className="bg-cast-header" onClick={()=>setOpen(o=>!o)}>
+        {castMember.photo
+          ? <img src={castMember.photo} alt={castMember.name} className="bg-cast-photo" onError={e=>e.target.style.opacity="0"} />
+          : <div className="bg-cast-photo-ph">👤</div>
+        }
+        <div className="bg-minfo">
+          <div className="bg-mtitle">{castMember.name}</div>
+          <div className="bg-msub">
+            <span style={{ color:"#a78be8" }}>{castMember.type||"Cast"}</span>
+            {artCount>0
+              ? <span className="bg-mcount">{artCount} article{artCount!==1?"s":""}</span>
+              : <span className="bg-mcount" style={{ background:"rgba(255,255,255,.06)", color:"var(--muted)", borderColor:"var(--border)" }}>No articles</span>
+            }
+          </div>
+        </div>
+        <div className="bg-chevron" style={{ transform:open?"rotate(90deg)":"none" }}>▶</div>
+      </div>
+      {open && <CastPanel castMember={castMember} onToast={onToast} />}
+    </div>
+  );
+}
+
+// ─── CastBlogSection ─────────────────────────────────────────────────────────
+function CastBlogSection({ cast, search, castCountMap, onToast, onCountChange }) {
+  const filtered = cast.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  if (!cast.length) return <div className="bg-empty">No cast members found. Add cast first.</div>;
+  if (!filtered.length) return <div className="bg-empty">No cast members match your search.</div>;
+  return (
+    <>
+      {filtered.map(c => (
+        <CastRow
+          key={c._id}
+          castMember={c}
+          artCount={castCountMap[c.name] ?? 0}
+          onToast={onToast}
+        />
+      ))}
+    </>
+  );
+}
+
+// ─── UncategorizedSection ─────────────────────────────────────────────────────
+function UncategorizedSection({ onToast, count, onCountChange }) {
+  const [articles,   setArticles]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [editTarget, setEditTarget] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchUncategorizedBlogs()
+      .then(setArticles).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this article? This cannot be undone.")) return;
+    try {
+      await deleteArticle(id);
+      setArticles(prev => prev.filter(a => a._id !== id));
+      onCountChange(-1);
+      onToast("🗑 Article deleted", "success");
+    } catch { onToast("❌ Delete failed", "error"); }
+  };
+  const handleSaved = (updated) => setArticles(prev => prev.map(a => a._id===updated._id ? updated : a));
+
+  if (loading) return <div className="bg-empty" style={{ padding:24 }}>Loading…</div>;
+  if (!articles.length) return (
+    <div className="bg-empty">
+      <div style={{ fontSize:"1.5rem", marginBottom:8 }}>📝</div>
+      No standalone blogs found.<br />
+      <span style={{ fontSize:".76rem", color:"var(--muted)" }}>Blogs created without a movie or cast link will appear here.</span>
+    </div>
+  );
+
+  return (
+    <div className="bg-uncat-list">
+      <div className="bg-section-label" style={{ marginBottom:10 }}>
+        📝 Standalone Blogs — {articles.length} article{articles.length!==1?"s":""}
+      </div>
+      <div className="bg-articles">
+        {articles.map(art => (
+          <div key={art._id} className="bg-art-item">
+            <div className="bg-art-dot" style={{ background:art.published?"#4caf82":"#666" }} />
+            <div className="bg-art-body">
+              <div className="bg-art-title">{art.title}</div>
+              <div className="bg-art-meta">
+                <span style={{ color:art.published?"#4caf82":"#888", fontWeight:700 }}>
+                  {art.published?"● Live":"○ Draft"}
+                </span>
+                <span>📅 {formatDate(art.createdAt)}</span>
+                {art.readTime && <span>⏱ {art.readTime} min</span>}
+                {art.views>0  && <span>👁 {art.views}</span>}
+                <span style={{ color:"rgba(255,255,255,.25)" }}>{art.category}</span>
+              </div>
+            </div>
+            <div className="bg-art-actions">
+              <a href={`/blog/${art.slug}`} target="_blank" rel="noreferrer" className="bg-art-btn">🔗 View</a>
+              <button className="bg-art-btn" onClick={()=>setEditTarget(art)}>✏️</button>
+              <button className="bg-art-btn del" onClick={()=>handleDelete(art._id)}>🗑</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {editTarget && (
+        <EditModal article={editTarget} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+      )}
+    </div>
+  );
+}
+
 // ─── MovieRow — ★ FIX 3: artCount is a PROP, no per-row fetch ────────────────
 function MovieRow({ movie, artCount, onToast }) {
   const [open, setOpen] = useState(false);
@@ -1266,22 +1739,33 @@ function MovieRow({ movie, artCount, onToast }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function BlogGenerator({ movies=[], onToast }) {
+export default function BlogGenerator({ movies=[], cast=[], onToast }) {
   const [search,       setSearch]       = useState("");
   const [generating,   setGenerating]   = useState(false);
   const [bulkProgress, setBulkProgress] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [mainTab,      setMainTab]      = useState("movies"); // "movies" | "cast" | "uncat"
 
   // ★ FIX 4: ONE fetch at top level — derive counts for all rows from cached data
   const [artCountMap,  setArtCountMap]  = useState({});
+  const [castCountMap, setCastCountMap] = useState({});
+  const [uncatCount,   setUncatCount]   = useState(0);
   const [countsLoaded, setCountsLoaded] = useState(false);
 
   useEffect(() => {
     getAllBlogs()
       .then(all => {
         const map = {};
-        all.forEach(p => { if (p.movieTitle) map[p.movieTitle] = (map[p.movieTitle]||0)+1; });
+        const castMap = {};
+        let uncat = 0;
+        all.forEach(p => {
+          if (p.movieTitle) map[p.movieTitle] = (map[p.movieTitle]||0)+1;
+          if (p.castName)   castMap[p.castName] = (castMap[p.castName]||0)+1;
+          if (!p.movieTitle && !p.castName) uncat++;
+        });
         setArtCountMap(map);
+        setCastCountMap(castMap);
+        setUncatCount(uncat);
       })
       .catch(()=>{})
       .finally(()=>setCountsLoaded(true));
@@ -1345,18 +1829,49 @@ export default function BlogGenerator({ movies=[], onToast }) {
         </div>
 
         <div className="bg-list">
+          {/* ── Main Tabs ── */}
+          <div className="bg-main-tabs">
+            <button className={`bg-main-tab${mainTab==="movies"?" active":""}`} onClick={()=>setMainTab("movies")}>
+              🎬 Movies {Object.keys(artCountMap).length>0 && <span style={{fontSize:".68rem",marginLeft:4,color:"var(--muted)"}}>({Object.values(artCountMap).reduce((a,b)=>a+b,0)})</span>}
+            </button>
+            <button className={`bg-main-tab${mainTab==="cast"?" active":""}`} onClick={()=>setMainTab("cast")}>
+              🎭 Cast & Crew {Object.keys(castCountMap).length>0 && <span style={{fontSize:".68rem",marginLeft:4,color:"var(--muted)"}}>({Object.values(castCountMap).reduce((a,b)=>a+b,0)})</span>}
+            </button>
+            <button className={`bg-main-tab${mainTab==="uncat"?" active":""}`} onClick={()=>setMainTab("uncat")}>
+              📝 Other Blogs {uncatCount>0 && <span style={{fontSize:".68rem",marginLeft:4,color:"var(--muted)"}}>({uncatCount})</span>}
+            </button>
+          </div>
+
           {!countsLoaded
             ? <div className="bg-empty" style={{ padding:20, fontSize:".85rem" }}>Loading blog counts…</div>
-            : filtered.length===0
-              ? <div className="bg-empty">{search ? "No movies match your search." : "No movies found."}</div>
-              : filtered.map(movie => (
-                  <MovieRow
-                    key={movie._id}
-                    movie={movie}
-                    artCount={artCountMap[movie.title] ?? 0}
+            : mainTab === "movies"
+              ? filtered.length===0
+                ? <div className="bg-empty">{search ? "No movies match your search." : "No movies found."}</div>
+                : filtered.map(movie => (
+                    <MovieRow
+                      key={movie._id}
+                      movie={movie}
+                      artCount={artCountMap[movie.title] ?? 0}
+                      onToast={onToast}
+                    />
+                  ))
+              : mainTab === "cast"
+              ? (
+                  <CastBlogSection
+                    cast={cast}
+                    search={search}
+                    castCountMap={castCountMap}
                     onToast={onToast}
+                    onCountChange={(name, delta) => setCastCountMap(prev => ({ ...prev, [name]: Math.max(0, (prev[name]||0)+delta) }))}
                   />
-                ))
+                )
+              : (
+                  <UncategorizedSection
+                    onToast={onToast}
+                    count={uncatCount}
+                    onCountChange={(delta) => setUncatCount(p => Math.max(0, p+delta))}
+                  />
+                )
           }
         </div>
       </div>
@@ -1364,12 +1879,17 @@ export default function BlogGenerator({ movies=[], onToast }) {
       {showNewModal && (
         <NewBlogModal
           movies={movies}
+          cast={cast}
           onClose={()=>setShowNewModal(false)}
           onPublished={(post) => {
             onToast(`✅ Blog published: "${post.title}"`, "success");
             setShowNewModal(false);
             if (post.movieTitle) {
               setArtCountMap(prev => ({ ...prev, [post.movieTitle]: (prev[post.movieTitle]||0)+1 }));
+            } else if (post.castName) {
+              setCastCountMap(prev => ({ ...prev, [post.castName]: (prev[post.castName]||0)+1 }));
+            } else {
+              setUncatCount(p => p+1);
             }
           }}
           onToast={onToast}
