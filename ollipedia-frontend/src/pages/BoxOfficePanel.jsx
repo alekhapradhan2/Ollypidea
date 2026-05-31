@@ -175,10 +175,30 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
   const [aiPrompt,  setAiPrompt]  = useState("");
   const [aiText,    setAiText]    = useState("");
   const [aiStatus,  setAiStatus]  = useState(""); // ""|"loading"|"done"|"error"
-  const [saving,    setSaving]    = useState(false);
-  const [err,       setErr]       = useState("");
+  const [saving,       setSaving]       = useState(false);
+  const [err,          setErr]          = useState("");
+  const [grossManual,  setGrossManual]  = useState(!!dayData?.gross); // true = user typed gross manually
 
-  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const GST_RATE = 1.18; // Gross = Net × 1.18  (18% entertainment tax / GST)
+
+  const set = (k) => (e) => {
+    const val = e.target.value;
+    if (k === "net") {
+      // Auto-calculate gross unless the user has manually overridden it
+      setForm((p) => {
+        const netNum = parseFloat(val.replace(/[^0-9.]/g, ""));
+        const autoGross = !isNaN(netNum) && netNum > 0
+          ? String(Math.round(netNum * GST_RATE))
+          : p.gross;
+        return { ...p, net: val, gross: grossManual ? p.gross : autoGross };
+      });
+    } else if (k === "gross") {
+      setGrossManual(val.trim() !== ""); // if user clears gross, allow auto again
+      setForm((p) => ({ ...p, gross: val }));
+    } else {
+      setForm((p) => ({ ...p, [k]: val }));
+    }
+  };
 
   // All days including the current one being entered (cumulative)
   const getDaysUpToN = useCallback(() => {
@@ -334,11 +354,34 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
               <label style={lbl}>Net Collection (₹)</label>
               <input className="form-input" style={{ width: "100%", boxSizing: "border-box" }}
                 type="text" placeholder="e.g. 45,00,000" value={form.net} onChange={set("net")} autoFocus={!isEdit} />
+              <div style={{ fontSize: "0.65rem", color: "var(--muted)", marginTop: 4 }}>
+                Gross auto-calculates at Net × 1.18 (18% GST)
+              </div>
             </div>
             <div>
-              <label style={lbl}>Gross Collection (₹)</label>
-              <input className="form-input" style={{ width: "100%", boxSizing: "border-box" }}
-                type="text" placeholder="e.g. 53,00,000" value={form.gross} onChange={set("gross")} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+                <label style={{ ...lbl, marginBottom: 0 }}>Gross Collection (₹)</label>
+                {grossManual && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGrossManual(false);
+                      const netNum = parseFloat(form.net.replace(/[^0-9.]/g, ""));
+                      const autoGross = !isNaN(netNum) && netNum > 0 ? String(Math.round(netNum * GST_RATE)) : "";
+                      setForm((p) => ({ ...p, gross: autoGross }));
+                    }}
+                    style={{ fontSize: "0.6rem", color: "var(--gold)", background: "rgba(201,151,58,0.12)", border: "1px solid rgba(201,151,58,0.3)", borderRadius: 6, padding: "2px 7px", cursor: "pointer", fontWeight: 700 }}
+                  >
+                    ↺ Auto
+                  </button>
+                )}
+              </div>
+              <input className="form-input" style={{ width: "100%", boxSizing: "border-box", borderColor: grossManual ? "rgba(201,151,58,0.5)" : undefined }}
+                type="text" placeholder="Auto-filled from Net"
+                value={form.gross} onChange={set("gross")} />
+              <div style={{ fontSize: "0.65rem", marginTop: 4, color: grossManual ? "var(--gold)" : "var(--muted)" }}>
+                {grossManual ? "✏️ Manual override — click ↺ Auto to recalculate" : "✅ Auto-calculated from Net"}
+              </div>
             </div>
           </div>
 
