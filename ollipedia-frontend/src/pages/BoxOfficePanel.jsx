@@ -52,7 +52,55 @@ const slugify = (s) =>
 const getYear = (releaseDate) =>
   releaseDate ? new Date(releaseDate).getFullYear() : "";
 
-// Builds the AI prompt for a specific target day, including all cumulative days
+// ─── Cast/Crew extractor (mirrors page.tsx logic) ─────────────────────────────
+const extractCastInfo = (movie) => {
+  const cast = Array.isArray(movie.cast) ? movie.cast : [];
+
+  const findByRole = (keywords) =>
+    cast.find((m) => {
+      const r = (m.role || m.type || "").toLowerCase();
+      return keywords.some((k) => r.includes(k));
+    })?.name || null;
+
+  // Director — pure "director" only, not music/art/action/assistant director
+  const directorEntry = cast.find((m) => {
+    const r = (m.role || m.type || "").toLowerCase().trim();
+    return r === "director" || r === "film director" || r === "movie director" ||
+      (r.includes("director") && !["music","art","action","stunt","assistant","co-","associate"].some(x => r.includes(x)));
+  });
+  const directorName = directorEntry?.name || movie.director || null;
+
+  // Producer — pure "producer" only
+  const producerEntry = cast.find((m) => {
+    const r = (m.role || m.type || "").toLowerCase().trim();
+    return r === "producer" ||
+      (r.includes("producer") && !["executive","co-","line","associate","assistant"].some(x => r.includes(x)));
+  });
+  const producerName = producerEntry?.name || movie.producer || null;
+
+  const musicDirector = findByRole(["music director"]) || null;
+  const writer        = findByRole(["writer","screenplay","story","dialogue"]) || null;
+  const dop           = findByRole(["cinematographer","dop","director of photography"]) || null;
+  const editor        = findByRole(["editor"]) || null;
+
+  // All on-screen cast (not pure crew)
+  const CREW_KW = ["director","producer","writer","screenplay","story","dialogue","music director","cinematographer","dop","editor","choreographer","art director","costume","sound","stunt","vfx"];
+  const actingKW = ["actor","actress","lead","hero","heroine","supporting","cameo","special appearance"];
+  const actors = cast.filter((m) => {
+    const r = (m.role || m.type || "").toLowerCase();
+    const isCrew = CREW_KW.some((k) => r.includes(k)) && !actingKW.some((k) => r.includes(k));
+    return !isCrew;
+  });
+
+  const leadActors    = actors.slice(0, 4).map((m) => m.name).filter(Boolean);
+  const leadActresses = actors
+    .filter((m) => { const r = (m.role || m.type || "").toLowerCase(); return r.includes("actress") || r.includes("heroine"); })
+    .slice(0, 2).map((m) => m.name).filter(Boolean);
+
+  return { directorName, producerName, musicDirector, writer, dop, editor, leadActors, leadActresses };
+};
+
+// Builds the AI prompt — returns structured JSON sections for the sample HTML template
 const buildAiPrompt = (movie, daysUpToN, totalNet, totalGross, targetDay) => {
   const year   = getYear(movie.releaseDate);
   const sorted = [...daysUpToN].sort((a, b) => a.day - b.day);
@@ -60,11 +108,23 @@ const buildAiPrompt = (movie, daysUpToN, totalNet, totalGross, targetDay) => {
     .map((d) => `Day ${d.day}${d.date ? ` (${d.date})` : ""}: Net ${fmtINR(d.net)}, Gross ${fmtINR(d.gross)}${d.note ? ` — ${d.note}` : ""}`)
     .join("\n");
 
-  return `Write an SEO-optimised blog article about the box office collection of the Odia film "${movie.title}"${year ? ` (${year})` : ""} for Day ${targetDay}.
+  const ci = extractCastInfo(movie);
+  const castLine = [
+    ci.directorName ? `Director: ${ci.directorName}` : "",
+    ci.producerName ? `Producer: ${ci.producerName}` : "",
+    ci.musicDirector ? `Music Director: ${ci.musicDirector}` : "",
+    ci.writer ? `Writer: ${ci.writer}` : "",
+    ci.leadActors.length ? `Cast: ${ci.leadActors.join(", ")}` : "",
+    ci.leadActresses.length ? `Actresses: ${ci.leadActresses.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+
+  return `You are writing a box office collection article for the Odia film website Ollypedia.
 
 Movie: ${movie.title}${year ? ` (${year})` : ""}
-${movie.language ? `Language: ${movie.language}` : ""}
-${movie.director ? `Director: ${movie.director}` : ""}
+${movie.language ? `Language: ${movie.language}` : "Language: Odia"}
+Genre: ${Array.isArray(movie.genre) ? movie.genre.join(", ") : (movie.genre || "Drama")}
+Release Date: ${movie.releaseDate ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : ""}
+${castLine}
 ${movie.budget ? `Budget: ${movie.budget}` : ""}
 
 Day-wise collection data (all days up to Day ${targetDay}):
@@ -73,82 +133,341 @@ ${tableText}
 Total Net: ${fmtINR(totalNet)}
 Total Gross: ${fmtINR(totalGross)}
 
-Requirements:
-- Write 1000 -1200 words in flowing prose, no bullet points, no headers
-- Naturally include the day-wise figures in the text
-- Mention total net and gross collection prominently
+You must respond ONLY with a valid JSON object (no markdown, no code fences, no extra text). The JSON must have exactly these keys:
+
+{
+  "seoHeadline": "A compelling 10-15 word headline for the h1 tag",
+  "introParagraph": "2-3 sentences introducing the film and Day ${targetDay} performance. Mention the net and gross figures naturally.",
+  "boxOfficeAnalysis": "2-3 paragraphs (plain text, no HTML tags) covering the day-wise journey, trending up or down, weekend/weekday patterns. Mention each day's figures naturally.",
+  "audienceResponse": "1-2 paragraphs about how Odia audiences are responding — word of mouth, social media buzz, repeat viewing. Keep it positive and engaging.",
+  "performanceAnalysis": "2 paragraphs analysing the film's performance relative to its budget and typical Odia cinema benchmarks. Mention total net ${fmtINR(totalNet)} and gross ${fmtINR(totalGross)}.",
+  "prediction": "1-2 paragraphs predicting upcoming weekend/week performance based on current trend.",
+  "finalVerdict": "2-3 sentences summarising the film's box office status after Day ${targetDay}. Do NOT use words like Hit, Flop, Average, Super-Hit — just describe the collection factually."
+}
+
+Rules:
+- All values must be plain text only — no HTML, no bullet points, no markdown
 - Write for an Odia cinema (Ollywood) audience
-- End with: "All figures are industry estimates. Last updated: Day ${targetDay}. Source: Ollypedia."
-- convert it to perfect HTML for blog UI
-- Do NOT mention or calculate any verdict/hit/flop judgement`;
+- Keep each section concise but informative
+- Do not invent or fabricate collection figures — only use the data provided above`;
 };
 
-// Builds the full HTML blog content from AI text + styled data table (no verdict)
+// Parse AI JSON response into sections (with safe fallbacks)
+const parseAiSections = (aiText, movie, targetDay, totalNet, totalGross) => {
+  const year = getYear(movie.releaseDate);
+  const fallback = (key) => {
+    const defaults = {
+      seoHeadline:       `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection Report`,
+      introParagraph:    `${movie.title}${year ? ` (${year})` : ""} continues its theatrical run. On Day ${targetDay}, the film has collected a total net of ${fmtINR(totalNet)} and gross of ${fmtINR(totalGross)} at the Odia box office.`,
+      boxOfficeAnalysis: `${movie.title} has shown a consistent run at the box office. The day-wise figures indicate steady audience interest across the state of Odisha.`,
+      audienceResponse:  `Audiences across Odisha have given ${movie.title} a warm response. The film continues to attract viewers with positive word of mouth.`,
+      performanceAnalysis:`With a total net collection of ${fmtINR(totalNet)} and gross of ${fmtINR(totalGross)}, ${movie.title} has delivered a notable performance for Odia cinema.`,
+      prediction:        `Based on current trends, ${movie.title} is expected to maintain momentum in the coming days, especially during weekends.`,
+      finalVerdict:      `${movie.title} has collected ${fmtINR(totalNet)} net and ${fmtINR(totalGross)} gross after ${targetDay} days. All figures are industry estimates. Source: Ollypedia.`,
+    };
+    return defaults[key] || "";
+  };
+
+  if (!aiText?.trim()) {
+    return Object.fromEntries(["seoHeadline","introParagraph","boxOfficeAnalysis","audienceResponse","performanceAnalysis","prediction","finalVerdict"].map(k => [k, fallback(k)]));
+  }
+
+  try {
+    // Strip markdown code fences if present
+    const clean = aiText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    const parsed = JSON.parse(clean);
+    return {
+      seoHeadline:       parsed.seoHeadline       || fallback("seoHeadline"),
+      introParagraph:    parsed.introParagraph     || fallback("introParagraph"),
+      boxOfficeAnalysis: parsed.boxOfficeAnalysis  || fallback("boxOfficeAnalysis"),
+      audienceResponse:  parsed.audienceResponse   || fallback("audienceResponse"),
+      performanceAnalysis: parsed.performanceAnalysis || fallback("performanceAnalysis"),
+      prediction:        parsed.prediction         || fallback("prediction"),
+      finalVerdict:      parsed.finalVerdict       || fallback("finalVerdict"),
+    };
+  } catch {
+    // AI returned prose instead of JSON — use it as the analysis section, rest as fallbacks
+    return {
+      seoHeadline:        fallback("seoHeadline"),
+      introParagraph:     fallback("introParagraph"),
+      boxOfficeAnalysis:  aiText.trim(),
+      audienceResponse:   fallback("audienceResponse"),
+      performanceAnalysis: fallback("performanceAnalysis"),
+      prediction:         fallback("prediction"),
+      finalVerdict:       fallback("finalVerdict"),
+    };
+  }
+};
+
+// Converts plain text with paragraphs into <p> tags
+const toParagraphs = (text) =>
+  String(text || "")
+    .trim()
+    .split(/\n{2,}/)
+    .map(chunk => chunk.split(/\n/).map(l => l.trim()).filter(Boolean).join(" ").trim())
+    .filter(Boolean)
+    .map(p => `<p>${p}</p>`)
+    .join("\n");
+
+// Builds the full HTML blog matching the sample_html.txt template exactly
 const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, aiText) => {
-  const year   = getYear(movie.releaseDate);
-  const sorted = [...daysUpToN].sort((a, b) => a.day - b.day);
+  const year        = getYear(movie.releaseDate);
+  const sorted      = [...daysUpToN].sort((a, b) => a.day - b.day);
+  const sections    = parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
+  const movieName   = movie.title || "Unknown Movie";
+  const releaseDate = movie.releaseDate
+    ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const genreArr       = Array.isArray(movie.genre) ? movie.genre : (movie.genre ? [movie.genre] : []);
+  const genre          = genreArr.join(", ") || "Drama";
+  const movieSlug      = slugify(`${movieName}${year ? ` (${year})` : ""}`);
+  const boxOfficeUrl   = `/box-office/${movieSlug}`;
+  const movieNameNoSpace = movieName.replace(/\s+/g, "");
 
-  const rows = sorted.map((d) => `    <tr>
-      <td style="padding:10px 14px;font-weight:700;color:#c9973a;white-space:nowrap">Day ${d.day}${d.date ? `<br><small style="color:#888;font-weight:400">${d.date}</small>` : ""}</td>
-      <td style="padding:10px 14px;font-weight:600">${fmtINR(d.net)}</td>
-      <td style="padding:10px 14px;font-weight:600;color:#7ec8e3">${fmtINR(d.gross)}</td>
-      <td style="padding:10px 14px;color:#888;font-size:0.9em">${d.note || "—"}</td>
-    </tr>`).join("\n");
+  // ── Extract cast/crew for rich keywords
+  const crew = extractCastInfo(movie);
+  const { directorName, producerName, musicDirector, writer, dop, editor, leadActors, leadActresses } = crew;
 
-  // Convert plain AI prose into <p> tags — split on double newlines or single newlines
-  const proseHtml = aiText?.trim()
-    ? aiText.trim()
-        .split(/\n{2,}/)
-        .map(chunk => chunk.trim())
-        .filter(Boolean)
-        .map(chunk => {
-          // Already an HTML tag — keep as-is
-          if (/^<[a-z]/i.test(chunk)) return chunk;
-          // Split single-newline lines within a chunk into one paragraph
-          const text = chunk.split(/\n/).map(l => l.trim()).filter(Boolean).join(" ");
-          return `<p>${text}</p>`;
-        })
-        .join("\n")
-    : `<p><strong>${movie.title}</strong>${year ? ` (${year})` : ""} has been performing at the Odia box office since its release. Below is the complete day-wise collection breakdown updated through Day ${targetDay}.</p>`;
+  // ── Shared inline style tokens (dark-theme safe, all inline so no <style> needed)
+  const S = {
+    section:  `background:#1a1a1a;border-radius:12px;padding:24px 28px;margin-bottom:28px;`,
+    h2:       `font-size:1.15rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 18px;line-height:1.3;`,
+    tbl:      `width:100%;border-collapse:collapse;font-size:0.93rem;`,
+    th:       `background:#ff6b00;color:#fff;padding:11px 14px;text-align:left;font-weight:700;`,
+    tdLabel:  `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#bbb;font-weight:600;width:50%;`,
+    tdValue:  `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#fff;font-weight:700;`,
+    tdDay:    `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:700;`,
+    tdNet:    `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#fff;font-weight:600;`,
+    tdGross:  `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:600;`,
+    tfootTd:  `padding:12px 14px;background:#252008;color:#c9973a;font-weight:800;font-size:1rem;border-top:2px solid #c9973a;`,
+    tfootGross:`padding:12px 14px;background:#252008;color:#7ec8e3;font-weight:800;font-size:1rem;border-top:2px solid #c9973a;`,
+    hero:     `background:linear-gradient(135deg,#1a0e00 0%,#1a1200 100%);border:1px solid #3a2800;border-radius:12px;padding:28px;margin-bottom:28px;`,
+    highlight:`background:#1a0e00;border-left:5px solid #ff9800;border-radius:0 8px 8px 0;padding:16px 20px;margin:0 0 28px;`,
+    btn:      `display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.95rem;`,
+    tag:      `display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 12px;margin:4px;font-size:0.8rem;font-weight:600;`,
+    p:        `color:#ccc;line-height:1.85;margin:0 0 14px;font-size:0.97rem;`,
+  };
 
-  return `<article>
-<h1>${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection | Ollypedia</h1>
+  // Day-wise table rows
+  const rows = sorted.map((d) => `<tr>
+    <td style="${S.tdDay}">Day ${d.day}${d.date ? `<br><small style="color:#888;font-size:0.78em;font-weight:400">${new Date(d.date).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</small>` : ""}</td>
+    <td style="${S.tdNet}">${d.net ? fmtINR(d.net) : "—"}</td>
+    <td style="${S.tdGross}">${d.gross ? fmtINR(d.gross) : "—"}</td>
+    ${d.note ? `<td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#888;font-size:0.82rem;">${d.note}</td>` : `<td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#555;">—</td>`}
+  </tr>`).join("\n");
 
-${proseHtml}
+  // Current day figures
+  const currentDay  = sorted.find(d => d.day === targetDay) || sorted[sorted.length - 1] || {};
+  const dayNet      = currentDay.net   ? fmtINR(currentDay.net)   : "—";
+  const dayGross    = currentDay.gross ? fmtINR(currentDay.gross) : "—";
+  const totalNetStr   = fmtINR(totalNet);
+  const totalGrossStr = fmtINR(totalGross);
 
-<h2>Day-wise Box Office Collection — ${movie.title}${year ? ` (${year})` : ""}</h2>
+  // Tags array
+  const tags = [
+    `#${movieNameNoSpace}`, `#${movieNameNoSpace}Collection`,
+    `#${movieNameNoSpace}BoxOffice`, `#${movieNameNoSpace}Day${targetDay}`,
+    directorName   ? `#${directorName.replace(/\s+/g,"")}` : null,
+    producerName   ? `#${producerName.replace(/\s+/g,"")}` : null,
+    musicDirector  ? `#${musicDirector.replace(/\s+/g,"")}` : null,
+    ...leadActors.map(a => `#${a.replace(/\s+/g,"")}`),
+    ...leadActresses.map(a => `#${a.replace(/\s+/g,"")}`),
+    "#OdiaMovie", "#Ollywood", "#OdiaCinema", "#Ollypedia",
+    "#BoxOfficeCollection", "#OllywoodBoxOffice", "#OllywoodNews", "#EntertainmentNews",
+    year ? `#OdiaMovie${year}` : null,
+  ].filter(Boolean);
 
-<div style="overflow-x:auto;border-radius:10px;border:1px solid #2a2a2a;margin:20px 0">
-  <table style="width:100%;border-collapse:collapse;font-size:0.92em">
+  // Helper: wrap plain text sections into <p> tags with inline style
+  const pWrap = (text) => toParagraphs(text)
+    .replace(/<p>/g, `<p style="${S.p}">`);
+
+  // ── Build rich keyword list from all available crew/cast data
+  const buildKeywords = () => {
+    const kw = [];
+    // Movie name variants
+    kw.push(
+      `${movieName} Movie`, `${movieName} Odia Movie`, `${movieName} Movie Details`,
+      `${movieName} Cast`, `${movieName} Cast and Crew`, `${movieName} Story`,
+      `${movieName} Review`, `${movieName} Trailer`, `${movieName} Teaser`,
+      `${movieName} Songs`, `${movieName} Music`, `${movieName} Release Date`,
+      `${movieName} Box Office Collection`, `${movieName} Day ${targetDay} Collection`,
+      `${movieName} Total Collection`, `${movieName} Gross Collection`,
+      `${movieName} Net Collection`, `${movieName} Audience Response`,
+      `${movieName} Movie Update`, `${movieName} Latest News`, `${movieName} Movie Collection`,
+      year ? `${movieName} (${year})` : null,
+    );
+    // Director
+    if (directorName) kw.push(directorName, `${directorName} Movie`, `${directorName} Odia Movie`, `${directorName} Director`);
+    // Producer
+    if (producerName) kw.push(producerName, `${producerName} Producer`);
+    // Lead Actors (up to 4)
+    leadActors.forEach(a => kw.push(a, `${a} Movie`, `${a} Odia Movie`));
+    // Lead Actresses
+    leadActresses.forEach(a => kw.push(a, `${a} Movie`, `${a} Odia Actress`));
+    // Music Director
+    if (musicDirector) kw.push(musicDirector, `${musicDirector} Music Director`);
+    // Writer
+    if (writer) kw.push(writer, `${writer} Writer`);
+    // DOP
+    if (dop) kw.push(dop, `${dop} Cinematographer`);
+    // Editor
+    if (editor) kw.push(editor, `${editor} Editor`);
+    // Genre
+    genreArr.forEach(g => kw.push(`${g} Odia Movie`, `Odia ${g} Film`));
+    // General Ollywood keywords
+    kw.push(
+      "Odia Movie Collection", "Odia Movie Details", "Odia Movie Cast",
+      "Odia Movie Review", "Odia Movie Trailer", "Odia Movie Release Date",
+      "Odia Movie Box Office", "Odia Box Office Collection",
+      "Ollywood Box Office Collection", "Ollywood Movie Collection",
+      "Ollywood Movie Details", "Ollywood News",
+      "Latest Odia Movie News", "Odia Cinema News", "Odia Film Industry",
+      "Trending Odia Movie", year ? `New Odia Movie ${year}` : "New Odia Movie",
+      "Best Odia Movies", "Ollywood Updates",
+    );
+    return kw.filter(Boolean).join(",\n");
+  };
+
+  return `<!-- ═══ SEO META ═══
+  title: ${movieName} Box Office Collection Day ${targetDay}${year ? ` (${year})` : ""} | Total Net, Gross Collection | Ollypedia
+  description: ${movieName} Box Office Collection Day ${targetDay}: Net ${totalNetStr}, Gross ${totalGrossStr}. Day-wise report, audience response & analysis.
+  keywords: ${buildKeywords()}
+  og:title: ${movieName} Box Office Collection Day ${targetDay}
+  og:description: ${movieName} has collected ${totalGrossStr} gross after ${targetDay} days in theatres.
+  schema:Movie: {"name":"${movieName}","datePublished":"${releaseDate}","inLanguage":"Odia","genre":"${genre}"}
+  schema:NewsArticle: {"headline":"${movieName} Box Office Collection Day ${targetDay}","datePublished":"${new Date().toISOString().slice(0,10)}"}
+═══ END SEO META ═══ -->
+
+<!-- ── Movie Details ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— ${movieName} Movie Details</h2>
+  <table style="${S.tbl}">
+    <tr><td style="${S.tdLabel}">Movie Name</td><td style="${S.tdValue}">${movieName}</td></tr>
+    <tr><td style="${S.tdLabel}">Language</td><td style="${S.tdValue}">Odia</td></tr>
+    <tr><td style="${S.tdLabel}">Industry</td><td style="${S.tdValue}">Ollywood</td></tr>
+    <tr><td style="${S.tdLabel}">Genre</td><td style="${S.tdValue}">${genre}</td></tr>
+    ${releaseDate ? `<tr><td style="${S.tdLabel}">Release Date</td><td style="${S.tdValue}">${releaseDate}</td></tr>` : ""}
+    ${directorName  ? `<tr><td style="${S.tdLabel}">Director</td><td style="${S.tdValue}">${directorName}</td></tr>` : ""}
+    ${producerName  ? `<tr><td style="${S.tdLabel}">Producer</td><td style="${S.tdValue}">${producerName}</td></tr>` : ""}
+    ${musicDirector ? `<tr><td style="${S.tdLabel}">Music Director</td><td style="${S.tdValue}">${musicDirector}</td></tr>` : ""}
+    ${writer        ? `<tr><td style="${S.tdLabel}">Writer</td><td style="${S.tdValue}">${writer}</td></tr>` : ""}
+    ${dop           ? `<tr><td style="${S.tdLabel}">Cinematographer</td><td style="${S.tdValue}">${dop}</td></tr>` : ""}
+    ${editor        ? `<tr><td style="${S.tdLabel}">Editor</td><td style="${S.tdValue}">${editor}</td></tr>` : ""}
+    ${leadActors.length ? `<tr><td style="${S.tdLabel}">Cast</td><td style="${S.tdValue}">${leadActors.join(", ")}</td></tr>` : ""}
+    <tr><td style="${S.tdLabel}">Total Net Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:800;font-size:1.05rem;">${totalNetStr}</td></tr>
+    <tr><td style="${S.tdLabel}">Total Gross Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:800;font-size:1.05rem;">${totalGrossStr}</td></tr>
+  </table>
+  <div style="text-align:center;margin-top:22px;">
+    <a href="${boxOfficeUrl}" style="${S.btn}">🎬 View Latest Collection Updates</a>
+  </div>
+</section>
+
+<!-- ── Hero ── -->
+<div style="${S.hero}">
+  <h1 style="color:#fff;font-size:1.45rem;line-height:1.35;font-weight:800;margin:0 0 14px;">${movieName} Box Office Collection Day ${targetDay}: ${sections.seoHeadline}</h1>
+  <p style="${S.p}">${sections.introParagraph}</p>
+  <p style="${S.p}">According to trade estimates, the film has collected approximately <strong style="color:#c9973a;">${totalNetStr} Net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} Gross</strong> over ${targetDay} days in theatres.</p>
+</div>
+
+<!-- ── Highlight box ── -->
+<div style="${S.highlight}">
+  <strong style="color:#ff9800;">📊 Box Office Update:</strong>
+  <span style="color:#ddd;"> ${movieName} has collected an estimated <strong style="color:#c9973a;">${totalNetStr} net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> after ${targetDay} days in theatres.</span>
+</div>
+
+<!-- ── Day N Collection Report ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— ${movieName} Day ${targetDay} Collection Report</h2>
+  <table style="${S.tbl}">
     <thead>
-      <tr style="background:#141414">
-        <th style="padding:11px 14px;text-align:left;font-size:0.7em;color:#888;text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid #2a2a2a">Day</th>
-        <th style="padding:11px 14px;text-align:left;font-size:0.7em;color:#888;text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid #2a2a2a">Net Collection</th>
-        <th style="padding:11px 14px;text-align:left;font-size:0.7em;color:#888;text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid #2a2a2a">Gross Collection</th>
-        <th style="padding:11px 14px;text-align:left;font-size:0.7em;color:#888;text-transform:uppercase;letter-spacing:0.07em;border-bottom:2px solid #2a2a2a">Notes</th>
+      <tr>
+        <th style="${S.th}">Metric</th>
+        <th style="${S.th}">Collection</th>
       </tr>
     </thead>
     <tbody>
-${rows}
+      <tr><td style="${S.tdLabel}">Day ${targetDay} Net Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:700;">${dayNet}</td></tr>
+      <tr><td style="${S.tdLabel}">Day ${targetDay} Gross Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:700;">${dayGross}</td></tr>
+      <tr><td style="${S.tdLabel}">Total Net Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:800;font-size:1.05rem;">${totalNetStr}</td></tr>
+      <tr><td style="${S.tdLabel}">Total Gross Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:800;font-size:1.05rem;">${totalGrossStr}</td></tr>
     </tbody>
-    <tfoot>
-      <tr style="background:rgba(201,151,58,0.06);border-top:2px solid #2a2a2a">
-        <td style="padding:11px 14px;font-weight:800;color:#c9973a;font-size:0.78em;text-transform:uppercase;letter-spacing:0.06em" colspan="1">
-          TOTAL (${sorted.length} day${sorted.length !== 1 ? "s" : ""})
-        </td>
-        <td style="padding:11px 14px;font-weight:800;color:#c9973a;font-size:1em">${fmtINR(totalNet)}</td>
-        <td style="padding:11px 14px;font-weight:800;color:#7ec8e3;font-size:1em">${fmtINR(totalGross)}</td>
-        <td></td>
-      </tr>
-    </tfoot>
   </table>
-</div>
+</section>
 
-<h2>${movie.title} Total Box Office Collection</h2>
-<p><strong>${movie.title}</strong>${year ? ` (${year})` : ""} has collected a cumulative net of <strong>${fmtINR(totalNet)}</strong> and a total gross of <strong>${fmtINR(totalGross)}</strong> over ${sorted.length} day${sorted.length !== 1 ? "s" : ""} of its theatrical run.</p>
+<!-- ── Day-wise Breakdown ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— ${movieName} Day-wise Box Office Collection</h2>
+  <div style="overflow-x:auto;">
+    <table style="${S.tbl}">
+      <thead>
+        <tr>
+          <th style="${S.th}">Day</th>
+          <th style="${S.th}">Net Collection</th>
+          <th style="${S.th}">Gross Collection</th>
+          <th style="${S.th}">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td style="${S.tfootTd}">Total (${sorted.length} day${sorted.length !== 1 ? "s" : ""})</td>
+          <td style="${S.tfootTd}">${totalNetStr}</td>
+          <td style="${S.tfootGross}">${totalGrossStr}</td>
+          <td style="padding:12px 14px;background:#252008;border-top:2px solid #c9973a;"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
 
-<p><em>All figures are industry estimates from Odia trade circles. Final verified numbers may vary slightly. Last updated: Day ${targetDay}. Source: Ollypedia Box Office Tracker.</em></p>
-</article>`;
+<!-- ── Box Office Journey ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— Box Office Journey</h2>
+  ${pWrap(sections.boxOfficeAnalysis)}
+</section>
+
+<!-- ── Audience Response ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— Audience Response</h2>
+  ${pWrap(sections.audienceResponse)}
+</section>
+
+<!-- ── Performance Analysis ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— Performance Analysis</h2>
+  ${pWrap(sections.performanceAnalysis)}
+</section>
+
+<!-- ── Future Box Office Prediction ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— Future Box Office Prediction</h2>
+  ${pWrap(sections.prediction)}
+</section>
+
+<!-- ── Final Verdict ── -->
+<section style="${S.section}">
+  <h2 style="${S.h2}">— Final Verdict</h2>
+  ${pWrap(sections.finalVerdict)}
+</section>
+
+<!-- ── Tags ── -->
+<section style="background:#111;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+  <h2 style="${S.h2}">— Tags</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
+    ${tags.map(t => `<span style="${S.tag}">${t}</span>`).join("\n    ")}
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<div style="border-top:1px solid #2a2a2a;padding-top:18px;margin-top:8px;">
+  <p style="color:#666;font-size:0.82rem;line-height:1.7;margin:0;">
+    <strong style="color:#888;">Source:</strong> Ollypedia Box Office Tracking &nbsp;·&nbsp;
+    <strong style="color:#888;">Last Updated:</strong> Day ${targetDay} &nbsp;·&nbsp;
+    <em>All collection figures are industry estimates and may vary from official figures.</em>
+  </p>
+</div>`;
 };
 
 // ─── Shared label style ────────────────────────────────────────────────────────
@@ -233,6 +552,7 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
+      // Store raw response — parseAiSections() handles JSON parsing when building the blog
       setAiText(data.text || "");
       setAiStatus("done");
     } catch (e) {
@@ -274,17 +594,33 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
         const blogTitle  = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection`;
         const blogSlug   = slugify(blogTitle);
         const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, aiText);
-        const excerpt    = `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} day${daysUpToN.length !== 1 ? "s" : ""}.`;
+        const parsedSecs = parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
+        const excerpt    = parsedSecs.introParagraph ||
+          `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} days.`;
+        const seoTitle   = `${movie.title}${year ? ` (${year})` : ""} Box Office Collection Day ${targetDay} | Total Net, Gross | Ollypedia`;
+        const seoDesc    = `${movie.title} Box Office Collection Day ${targetDay}: Net ${fmtINR(totalNet)}, Gross ${fmtINR(totalGross)}. Full day-wise report and analysis.`;
 
         const blogPayload = {
           title: blogTitle, slug: blogSlug, excerpt, content,
           category:   "Box Office",
-          tags:       [movie.title, "Box Office", "Odia Cinema", "Ollywood", `Day ${targetDay}`, year ? String(year) : ""].filter(Boolean),
+          tags: [
+            movie.title, "Box Office", "Odia Cinema", "Ollywood",
+            `Day ${targetDay}`, year ? String(year) : null,
+            ...parsedSecs && movie.cast
+              ? (() => {
+                  const ci = extractCastInfo(movie);
+                  return [
+                    ci.directorName, ci.producerName, ci.musicDirector,
+                    ...ci.leadActors, ...ci.leadActresses,
+                  ].filter(Boolean);
+                })()
+              : [],
+          ].filter(Boolean),
           coverImage: movie.bannerUrl || movie.posterUrl || "",
           movieId:    movie._id, movieTitle: movie.title,
           published:  true, featured: false,
-          seoTitle:   `${blogTitle} | Ollypedia`,
-          seoDesc:    excerpt,
+          seoTitle,
+          seoDesc,
         };
 
         // Look for existing blog with this exact slug (per-day, not per-movie)
@@ -442,21 +778,54 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
                 </div>
               )}
 
-              {aiStatus === "done" && aiText && (
-                <div style={{ marginTop: 14 }}>
-                  <label style={{ ...lbl, color: "#c9973a" }}>Generated Content (editable)</label>
-                  <textarea
-                    className="form-input"
-                    value={aiText}
-                    onChange={(e) => setAiText(e.target.value)}
-                    rows={8}
-                    style={{ width: "100%", boxSizing: "border-box", fontSize: "0.77rem", lineHeight: 1.7, resize: "vertical" }}
-                  />
-                  <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 4 }}>
-                    ✏️ Edit freely. This will be wrapped in the styled HTML table and published as an article.
+              {aiStatus === "done" && aiText && (() => {
+                const daysUpToN  = getDaysUpToN();
+                const tNet   = daysUpToN.reduce((s, d) => s + parseNum(d.net),   0);
+                const tGross = daysUpToN.reduce((s, d) => s + parseNum(d.gross), 0);
+                const parsed = parseAiSections(aiText, movie, targetDay, tNet, tGross);
+                const sections = [
+                  { label: "SEO Headline",         key: "seoHeadline"         },
+                  { label: "Intro",                key: "introParagraph"      },
+                  { label: "Box Office Journey",   key: "boxOfficeAnalysis"   },
+                  { label: "Audience Response",    key: "audienceResponse"    },
+                  { label: "Performance Analysis", key: "performanceAnalysis" },
+                  { label: "Prediction",           key: "prediction"          },
+                  { label: "Final Verdict",        key: "finalVerdict"        },
+                ];
+                return (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: "0.72rem", color: "var(--gold)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+                      ✅ Generated Sections — Edit any section below
+                    </div>
+                    {sections.map(({ label, key }) => (
+                      <div key={key} style={{ marginBottom: 12 }}>
+                        <label style={{ display: "block", fontSize: "0.68rem", color: "var(--muted)", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
+                        <textarea
+                          className="form-input"
+                          value={parsed[key]}
+                          onChange={(e) => {
+                            // Rebuild JSON with updated section
+                            try {
+                              const clean = aiText.trim().replace(/^```json\s*/i,"").replace(/^```\s*/i,"").replace(/```\s*$/i,"").trim();
+                              const obj = JSON.parse(clean);
+                              obj[key] = e.target.value;
+                              setAiText(JSON.stringify(obj));
+                            } catch {
+                              // If not valid JSON, just set raw text (fallback mode)
+                              setAiText(e.target.value);
+                            }
+                          }}
+                          rows={key === "seoHeadline" ? 1 : key === "introParagraph" ? 3 : 4}
+                          style={{ width: "100%", boxSizing: "border-box", fontSize: "0.77rem", lineHeight: 1.7, resize: "vertical" }}
+                        />
+                      </div>
+                    ))}
+                    <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 4 }}>
+                      ✏️ Edit any section above. The final blog will be published with full SEO meta tags, schema markup, hero, highlight box, day-wise table, and all sections — matching the Ollypedia template exactly.
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
