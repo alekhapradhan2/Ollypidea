@@ -210,10 +210,12 @@ const toParagraphs = (text) =>
     .join("\n");
 
 // Builds the full HTML blog matching the sample_html.txt template exactly
-const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, aiText) => {
+const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw) => {
   const year        = getYear(movie.releaseDate);
   const sorted      = [...daysUpToN].sort((a, b) => a.day - b.day);
-  const sections    = parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
+  const sections = (sectionsOrRaw && typeof sectionsOrRaw === "object" && "seoHeadline" in sectionsOrRaw)
+    ? sectionsOrRaw
+    : parseAiSections(sectionsOrRaw, movie, targetDay, totalNet, totalGross);
   const movieName   = movie.title || "Unknown Movie";
   const releaseDate = movie.releaseDate
     ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
@@ -490,10 +492,11 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
     note:  String(dayData?.note  ?? ""),
   });
 
-  const [showAi,    setShowAi]    = useState(false);
-  const [aiPrompt,  setAiPrompt]  = useState("");
-  const [aiText,    setAiText]    = useState("");
-  const [aiStatus,  setAiStatus]  = useState(""); // ""|"loading"|"done"|"error"
+  const [showAi,     setShowAi]    = useState(false);
+  const [aiPrompt,   setAiPrompt]  = useState("");
+  const [aiText,     setAiText]    = useState("");
+  const [aiSections, setAiSections] = useState(null); // parsed object, avoids re-parsing JSON
+  const [aiStatus,   setAiStatus]  = useState(""); // ""|"loading"|"done"|"error"
   const [saving,       setSaving]       = useState(false);
   const [err,          setErr]          = useState("");
   const [grossManual,  setGrossManual]  = useState(!!dayData?.gross); // true = user typed gross manually
@@ -543,6 +546,7 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
     if (!aiPrompt.trim()) return;
     setAiStatus("loading");
     setAiText("");
+    setAiSections(null);
     try {
       const token = getAdminToken();
       const res   = await fetch(`${BASE}/admin/generate-article`, {
@@ -552,8 +556,13 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
-      // Store raw response — parseAiSections() handles JSON parsing when building the blog
-      setAiText(data.text || "");
+      const rawText = data.text || "";
+      setAiText(rawText);
+      // Parse ONCE right now — store clean object so textarea edits never touch JSON again
+      const _days = getDaysUpToN();
+      const _tN   = _days.reduce((s,d)=>s+parseNum(d.net),0);
+      const _tG   = _days.reduce((s,d)=>s+parseNum(d.gross),0);
+      setAiSections(parseAiSections(rawText, movie, parseInt(form.day,10), _tN, _tG));
       setAiStatus("done");
     } catch (e) {
       setAiStatus("error");
@@ -593,8 +602,8 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
         const targetDay  = payload.day;
         const blogTitle  = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection`;
         const blogSlug   = slugify(blogTitle);
-        const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, aiText);
-        const parsedSecs = parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
+        const parsedSecs = aiSections || parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
+        const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs);
         const excerpt    = parsedSecs.introParagraph ||
           `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} days.`;
         const seoTitle   = `${movie.title}${year ? ` (${year})` : ""} Box Office Collection Day ${targetDay} | Total Net, Gross | Ollypedia`;
@@ -778,50 +787,35 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
                 </div>
               )}
 
-              {aiStatus === "done" && aiText && (() => {
-                const daysUpToN  = getDaysUpToN();
-                const tNet   = daysUpToN.reduce((s, d) => s + parseNum(d.net),   0);
-                const tGross = daysUpToN.reduce((s, d) => s + parseNum(d.gross), 0);
-                const parsed = parseAiSections(aiText, movie, targetDay, tNet, tGross);
-                const sections = [
-                  { label: "SEO Headline",         key: "seoHeadline"         },
-                  { label: "Intro",                key: "introParagraph"      },
-                  { label: "Box Office Journey",   key: "boxOfficeAnalysis"   },
-                  { label: "Audience Response",    key: "audienceResponse"    },
-                  { label: "Performance Analysis", key: "performanceAnalysis" },
-                  { label: "Prediction",           key: "prediction"          },
-                  { label: "Final Verdict",        key: "finalVerdict"        },
+              {aiStatus === "done" && aiSections && (() => {
+                const SECTION_META = [
+                  { label: "SEO Headline",         key: "seoHeadline",         rows: 1 },
+                  { label: "Intro Paragraph",      key: "introParagraph",      rows: 3 },
+                  { label: "Box Office Journey",   key: "boxOfficeAnalysis",   rows: 5 },
+                  { label: "Audience Response",    key: "audienceResponse",    rows: 4 },
+                  { label: "Performance Analysis", key: "performanceAnalysis", rows: 4 },
+                  { label: "Future Prediction",    key: "prediction",          rows: 3 },
+                  { label: "Final Verdict",        key: "finalVerdict",        rows: 3 },
                 ];
                 return (
                   <div style={{ marginTop: 14 }}>
-                    <div style={{ fontSize: "0.72rem", color: "var(--gold)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-                      ✅ Generated Sections — Edit any section below
+                    <div style={{ fontSize: "0.72rem", color: "var(--gold)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
+                      ✅ Generated — Edit any section below before saving
                     </div>
-                    {sections.map(({ label, key }) => (
-                      <div key={key} style={{ marginBottom: 12 }}>
+                    {SECTION_META.map(({ label, key, rows }) => (
+                      <div key={key} style={{ marginBottom: 14 }}>
                         <label style={{ display: "block", fontSize: "0.68rem", color: "var(--muted)", fontWeight: 700, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
                         <textarea
                           className="form-input"
-                          value={parsed[key]}
-                          onChange={(e) => {
-                            // Rebuild JSON with updated section
-                            try {
-                              const clean = aiText.trim().replace(/^```json\s*/i,"").replace(/^```\s*/i,"").replace(/```\s*$/i,"").trim();
-                              const obj = JSON.parse(clean);
-                              obj[key] = e.target.value;
-                              setAiText(JSON.stringify(obj));
-                            } catch {
-                              // If not valid JSON, just set raw text (fallback mode)
-                              setAiText(e.target.value);
-                            }
-                          }}
-                          rows={key === "seoHeadline" ? 1 : key === "introParagraph" ? 3 : 4}
+                          value={aiSections[key] || ""}
+                          onChange={(e) => setAiSections((prev) => ({ ...prev, [key]: e.target.value }))}
+                          rows={rows}
                           style={{ width: "100%", boxSizing: "border-box", fontSize: "0.77rem", lineHeight: 1.7, resize: "vertical" }}
                         />
                       </div>
                     ))}
-                    <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 4 }}>
-                      ✏️ Edit any section above. The final blog will be published with full SEO meta tags, schema markup, hero, highlight box, day-wise table, and all sections — matching the Ollypedia template exactly.
+                    <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 4, lineHeight: 1.6 }}>
+                      ✏️ Edit any section above. Blog publishes with full SEO, schema, hero, day-wise table &amp; all sections.
                     </div>
                   </div>
                 );

@@ -1880,16 +1880,17 @@ app.post("/api/admin/generate-article", adminAuth, async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You are an expert Odia cinema journalist. Write detailed, accurate, SEO-friendly blog articles about Odia (Ollywood) movies. Always write in flowing paragraphs. Never use bullet points or section headers. Never include fake facts.",
+            content: "You are an expert Odia cinema journalist writing for Ollypedia. When asked to return JSON, you MUST return ONLY a valid JSON object with no extra text, no markdown, no code fences. All string values must be plain text — no HTML tags, no bullet points.",
           },
           {
             role: "user",
             content: prompt,
           },
         ],
-        max_tokens:  1200,
-        temperature: 0.75,
+        max_tokens:  1500,
+        temperature: 0.7,
         top_p:       0.9,
+        response_format: { type: "json_object" },
       }),
     });
 
