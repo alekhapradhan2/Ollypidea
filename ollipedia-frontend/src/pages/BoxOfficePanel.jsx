@@ -934,14 +934,14 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
         <div style="font-size:0.72rem;color:#666;margin-top:2px;">Latest Odia movie collections</div>
       </div>
     </a>
-    <a href="/movies/${movieSlug}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+    <a href="/movie/${movieSlug}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
       <span style="font-size:1.3rem;flex-shrink:0;">🎭</span>
       <div>
         <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">${movieName} — Cast, Story & Details</div>
         <div style="font-size:0.72rem;color:#666;margin-top:2px;">Full movie info on Ollypedia</div>
       </div>
     </a>
-    <a href="/blog?category=box-office" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+    <a href="/blog?category=Box%20Office" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
       <span style="font-size:1.3rem;flex-shrink:0;">📰</span>
       <div>
         <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">More Box Office Reports</div>
