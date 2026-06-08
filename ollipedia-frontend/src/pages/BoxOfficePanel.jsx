@@ -1,4 +1,4 @@
-// src/components/admin/BoxOfficePanel.jsx
+﻿// src/components/admin/BoxOfficePanel.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 //  Complete rewrite — User-friendly Box Office Panel
 //
@@ -210,266 +210,670 @@ const toParagraphs = (text) =>
     .join("\n");
 
 // Builds the full HTML blog matching the sample_html.txt template exactly
+// ─── DROP-IN REPLACEMENT for buildBlogContent() ──────────────────────────────
+// Paste this entire function in place of the existing buildBlogContent in BoxOfficePanel.jsx
+// All helpers (fmtINR, slugify, getYear, extractCastInfo, toParagraphs, parseAiSections) remain unchanged.
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DROP-IN REPLACEMENT  →  buildBlogContent()
+//  Paste inside BoxOfficePanel.jsx in place of the existing function.
+//  All other helpers stay unchanged:
+//    fmtINR · parseNum · slugify · getYear · extractCastInfo
+//    toParagraphs · parseAiSections
+// ═══════════════════════════════════════════════════════════════════════════════
+
 const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw) => {
-  const year        = getYear(movie.releaseDate);
-  const sorted      = [...daysUpToN].sort((a, b) => a.day - b.day);
-  const sections = (sectionsOrRaw && typeof sectionsOrRaw === "object" && "seoHeadline" in sectionsOrRaw)
+
+  // ── Core data ───────────────────────────────────────────────────────────────
+  const year          = getYear(movie.releaseDate);
+  const sorted        = [...daysUpToN].sort((a, b) => a.day - b.day);
+  const sections      = (sectionsOrRaw && typeof sectionsOrRaw === "object" && "seoHeadline" in sectionsOrRaw)
     ? sectionsOrRaw
     : parseAiSections(sectionsOrRaw, movie, targetDay, totalNet, totalGross);
-  const movieName   = movie.title || "Unknown Movie";
-  const releaseDate = movie.releaseDate
+
+  const movieName        = movie.title || "Unknown Movie";
+  const movieNameNoSpace = movieName.replace(/\s+/g, "");
+  const releaseDate      = movie.releaseDate
     ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
     : "";
-  const genreArr       = Array.isArray(movie.genre) ? movie.genre : (movie.genre ? [movie.genre] : []);
-  const genre          = genreArr.join(", ") || "Drama";
-  const movieSlug      = slugify(`${movieName}${year ? ` (${year})` : ""}`);
-  const boxOfficeUrl   = `/box-office/${movieSlug}`;
-  const movieNameNoSpace = movieName.replace(/\s+/g, "");
+  const genreArr    = Array.isArray(movie.genre) ? movie.genre : (movie.genre ? [movie.genre] : []);
+  const genre       = genreArr.join(", ") || "Drama";
+  const movieSlug   = slugify(`${movieName}${year ? ` (${year})` : ""}`);
+  const boxOfficeUrl = `/box-office/${movieSlug}`;
 
-  // ── Extract cast/crew for rich keywords
   const crew = extractCastInfo(movie);
   const { directorName, producerName, musicDirector, writer, dop, editor, leadActors, leadActresses } = crew;
 
-  // ── Shared inline style tokens (dark-theme safe, all inline so no <style> needed)
-  const S = {
-    section:  `background:#1a1a1a;border-radius:12px;padding:24px 28px;margin-bottom:28px;`,
-    h2:       `font-size:1.15rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 18px;line-height:1.3;`,
-    tbl:      `width:100%;border-collapse:collapse;font-size:0.93rem;`,
-    th:       `background:#ff6b00;color:#fff;padding:11px 14px;text-align:left;font-weight:700;`,
-    tdLabel:  `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#bbb;font-weight:600;width:50%;`,
-    tdValue:  `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#fff;font-weight:700;`,
-    tdDay:    `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:700;`,
-    tdNet:    `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#fff;font-weight:600;`,
-    tdGross:  `padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:600;`,
-    tfootTd:  `padding:12px 14px;background:#252008;color:#c9973a;font-weight:800;font-size:1rem;border-top:2px solid #c9973a;`,
-    tfootGross:`padding:12px 14px;background:#252008;color:#7ec8e3;font-weight:800;font-size:1rem;border-top:2px solid #c9973a;`,
-    hero:     `background:linear-gradient(135deg,#1a0e00 0%,#1a1200 100%);border:1px solid #3a2800;border-radius:12px;padding:28px;margin-bottom:28px;`,
-    highlight:`background:#1a0e00;border-left:5px solid #ff9800;border-radius:0 8px 8px 0;padding:16px 20px;margin:0 0 28px;`,
-    btn:      `display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.95rem;`,
-    tag:      `display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 12px;margin:4px;font-size:0.8rem;font-weight:600;`,
-    p:        `color:#ccc;line-height:1.85;margin:0 0 14px;font-size:0.97rem;`,
-  };
-
-  // Day-wise table rows
-  const rows = sorted.map((d) => `<tr>
-    <td style="${S.tdDay}">Day ${d.day}${d.date ? `<br><small style="color:#888;font-size:0.78em;font-weight:400">${new Date(d.date).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</small>` : ""}</td>
-    <td style="${S.tdNet}">${d.net ? fmtINR(d.net) : "—"}</td>
-    <td style="${S.tdGross}">${d.gross ? fmtINR(d.gross) : "—"}</td>
-    ${d.note ? `<td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#888;font-size:0.82rem;">${d.note}</td>` : `<td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#555;">—</td>`}
-  </tr>`).join("\n");
-
-  // Current day figures
-  const currentDay  = sorted.find(d => d.day === targetDay) || sorted[sorted.length - 1] || {};
-  const dayNet      = currentDay.net   ? fmtINR(currentDay.net)   : "—";
-  const dayGross    = currentDay.gross ? fmtINR(currentDay.gross) : "—";
+  const currentDay    = sorted.find(d => d.day === targetDay) || sorted[sorted.length - 1] || {};
+  const dayNet        = currentDay.net   ? fmtINR(currentDay.net)   : "—";
+  const dayGross      = currentDay.gross ? fmtINR(currentDay.gross) : "—";
   const totalNetStr   = fmtINR(totalNet);
   const totalGrossStr = fmtINR(totalGross);
 
-  // Tags array
+  // ── Paragraph helper ────────────────────────────────────────────────────────
+  const pWrap = (text) =>
+    toParagraphs(text)
+      .replace(/<p>/g, `<p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">`);
+
+  // ── SEO Keywords  (exact structure you requested) ───────────────────────────
+  // ORDER: Movie variants → Cast/Crew → General Ollywood
+  const buildKeywordsArr = () => {
+    const kw = [];
+
+    // 1. Movie name — info variants
+    kw.push(
+      `${movieName} Odia Movie`,
+      `${movieName} Movie Details`,
+      `${movieName} Cast`,
+      `${movieName} Cast and Crew`,
+      `${movieName} Story`,
+      `${movieName} Review`,
+      `${movieName} Trailer`,
+      `${movieName} Teaser`,
+      `${movieName} Songs`,
+      `${movieName} Music`,
+      `${movieName} Release Date`,
+    );
+
+    // 2. Movie name — box office variants
+    kw.push(
+      `${movieName} Box Office Collection`,
+      `${movieName} Day ${targetDay} Collection`,
+      `${movieName} Day ${targetDay} Box Office Collection`,
+      `${movieName} Total Collection`,
+      `${movieName} Total Box Office Collection`,
+      `${movieName} Gross Collection`,
+      `${movieName} Net Collection`,
+      `${movieName} Opening Day Collection`,
+      `${movieName} First Day Collection`,
+      `${movieName} Week 1 Collection`,
+      `${movieName} Box Office Report`,
+      `${movieName} Box Office Prediction`,
+      `${movieName} Worldwide Collection`,
+      `${movieName} Audience Response`,
+      `${movieName} Movie Update`,
+      `${movieName} Latest News`,
+      `${movieName} Movie Collection`,
+      year ? `${movieName} (${year})` : null,
+      year ? `${movieName} (${year}) Box Office Collection` : null,
+      year ? `${movieName} (${year}) Total Collection` : null,
+    );
+
+    // 3. Director
+    if (directorName) {
+      kw.push(
+        directorName,
+        `${directorName} Movie`,
+        `${directorName} Odia Movie`,
+        `${directorName} Director`,
+      );
+    }
+
+    // 4. Producer
+    if (producerName) {
+      kw.push(
+        producerName,
+        `${producerName} Producer`,
+      );
+    }
+
+    // 5. Lead Actors (each with 3 variants)
+    leadActors.forEach(a => kw.push(
+      a,
+      `${a} Movie`,
+      `${a} Odia Movie`,
+    ));
+
+    // 6. Lead Actresses (each with 3 variants)
+    leadActresses.forEach(a => kw.push(
+      a,
+      `${a} Movie`,
+      `${a} Odia Movie`,
+    ));
+
+    // 7. Music Director
+    if (musicDirector) {
+      kw.push(
+        musicDirector,
+        `${musicDirector} Music Director`,
+      );
+    }
+
+    // 8. Writer
+    if (writer) {
+      kw.push(
+        writer,
+        `${writer} Writer`,
+      );
+    }
+
+    // 9. DOP / Cinematographer
+    if (dop) {
+      kw.push(
+        dop,
+        `${dop} Cinematographer`,
+      );
+    }
+
+    // 10. Editor
+    if (editor) {
+      kw.push(
+        editor,
+        `${editor} Editor`,
+      );
+    }
+
+    // 11. Genre variants
+    genreArr.forEach(g => kw.push(
+      `${g} Odia Movie`,
+      `Odia ${g} Film`,
+    ));
+
+    // 12. General Ollywood / industry keywords
+    kw.push(
+      "Odia Movie Collection",
+      "Odia Movie Details",
+      "Odia Movie Cast",
+      "Odia Movie Review",
+      "Odia Movie Trailer",
+      "Odia Movie Release Date",
+      "Odia Movie Box Office",
+      "Odia Box Office Collection",
+      "Ollywood Box Office Collection",
+      "Ollywood Movie Collection",
+      "Ollywood Movie Details",
+      "Ollywood News",
+      "Latest Odia Movie News",
+      "Odia Cinema News",
+      "Odia Film Industry",
+      "Trending Odia Movie",
+      year ? `New Odia Movie ${year}` : "New Odia Movie",
+      "Best Odia Movies",
+      "Ollywood Updates",
+    );
+
+    return kw.filter(Boolean);
+  };
+
+  const keywordsArr = buildKeywordsArr();
+  const keywordsStr = keywordsArr.join(",\n");
+
+  // ── Hashtags ────────────────────────────────────────────────────────────────
   const tags = [
-    `#${movieNameNoSpace}`, `#${movieNameNoSpace}Collection`,
-    `#${movieNameNoSpace}BoxOffice`, `#${movieNameNoSpace}Day${targetDay}`,
-    directorName   ? `#${directorName.replace(/\s+/g,"")}` : null,
-    producerName   ? `#${producerName.replace(/\s+/g,"")}` : null,
-    musicDirector  ? `#${musicDirector.replace(/\s+/g,"")}` : null,
+    `#${movieNameNoSpace}`,
+    `#${movieNameNoSpace}Collection`,
+    `#${movieNameNoSpace}BoxOffice`,
+    `#${movieNameNoSpace}Day${targetDay}`,
+    directorName  ? `#${directorName.replace(/\s+/g,"")}` : null,
+    producerName  ? `#${producerName.replace(/\s+/g,"")}` : null,
+    musicDirector ? `#${musicDirector.replace(/\s+/g,"")}` : null,
     ...leadActors.map(a => `#${a.replace(/\s+/g,"")}`),
     ...leadActresses.map(a => `#${a.replace(/\s+/g,"")}`),
     "#OdiaMovie", "#Ollywood", "#OdiaCinema", "#Ollypedia",
-    "#BoxOfficeCollection", "#OllywoodBoxOffice", "#OllywoodNews", "#EntertainmentNews",
+    "#BoxOfficeCollection", "#OllywoodBoxOffice", "#OllywoodNews",
     year ? `#OdiaMovie${year}` : null,
   ].filter(Boolean);
 
-  // Helper: wrap plain text sections into <p> tags with inline style
-  const pWrap = (text) => toParagraphs(text)
-    .replace(/<p>/g, `<p style="${S.p}">`);
+  // ── Movie info rows ─────────────────────────────────────────────────────────
+  const infoRows = [
+    ["Movie Name",       movieName],
+    ["Language",         "Odia"],
+    ["Industry",         "Ollywood"],
+    ["Genre",            genre],
+    releaseDate          ? ["Release Date",     releaseDate]               : null,
+    directorName         ? ["Director",         directorName]              : null,
+    producerName         ? ["Producer",         producerName]              : null,
+    musicDirector        ? ["Music Director",   musicDirector]             : null,
+    writer               ? ["Writer",           writer]                    : null,
+    dop                  ? ["Cinematographer",  dop]                       : null,
+    editor               ? ["Editor",           editor]                    : null,
+    leadActors.length    ? ["Cast",             leadActors.join(", ")]     : null,
+    leadActresses.length ? ["Actress",          leadActresses.join(", ")]  : null,
+    movie.budget         ? ["Budget",           movie.budget]              : null,
+  ].filter(Boolean);
 
-  // ── Build rich keyword list from all available crew/cast data
-  const buildKeywords = () => {
-    const kw = [];
-    // Movie name variants
-    kw.push(
-      `${movieName} Movie`, `${movieName} Odia Movie`, `${movieName} Movie Details`,
-      `${movieName} Cast`, `${movieName} Cast and Crew`, `${movieName} Story`,
-      `${movieName} Review`, `${movieName} Trailer`, `${movieName} Teaser`,
-      `${movieName} Songs`, `${movieName} Music`, `${movieName} Release Date`,
-      `${movieName} Box Office Collection`, `${movieName} Day ${targetDay} Collection`,
-      `${movieName} Total Collection`, `${movieName} Gross Collection`,
-      `${movieName} Net Collection`, `${movieName} Audience Response`,
-      `${movieName} Movie Update`, `${movieName} Latest News`, `${movieName} Movie Collection`,
-      year ? `${movieName} (${year})` : null,
-    );
-    // Director
-    if (directorName) kw.push(directorName, `${directorName} Movie`, `${directorName} Odia Movie`, `${directorName} Director`);
-    // Producer
-    if (producerName) kw.push(producerName, `${producerName} Producer`);
-    // Lead Actors (up to 4)
-    leadActors.forEach(a => kw.push(a, `${a} Movie`, `${a} Odia Movie`));
-    // Lead Actresses
-    leadActresses.forEach(a => kw.push(a, `${a} Movie`, `${a} Odia Actress`));
-    // Music Director
-    if (musicDirector) kw.push(musicDirector, `${musicDirector} Music Director`);
-    // Writer
-    if (writer) kw.push(writer, `${writer} Writer`);
-    // DOP
-    if (dop) kw.push(dop, `${dop} Cinematographer`);
-    // Editor
-    if (editor) kw.push(editor, `${editor} Editor`);
-    // Genre
-    genreArr.forEach(g => kw.push(`${g} Odia Movie`, `Odia ${g} Film`));
-    // General Ollywood keywords
-    kw.push(
-      "Odia Movie Collection", "Odia Movie Details", "Odia Movie Cast",
-      "Odia Movie Review", "Odia Movie Trailer", "Odia Movie Release Date",
-      "Odia Movie Box Office", "Odia Box Office Collection",
-      "Ollywood Box Office Collection", "Ollywood Movie Collection",
-      "Ollywood Movie Details", "Ollywood News",
-      "Latest Odia Movie News", "Odia Cinema News", "Odia Film Industry",
-      "Trending Odia Movie", year ? `New Odia Movie ${year}` : "New Odia Movie",
-      "Best Odia Movies", "Ollywood Updates",
-    );
-    return kw.filter(Boolean).join(",\n");
-  };
+  // ── GRAPH 1: Horizontal bar chart (net collection per day) ──────────────────
+  const maxNet = Math.max(
+    ...sorted.map(d => parseNum(d.net)),
+    1
+  );
 
-  return `<!-- ═══ SEO META ═══
-  title: ${movieName} Box Office Collection Day ${targetDay}${year ? ` (${year})` : ""} | Total Net, Gross Collection | Ollypedia
-  description: ${movieName} Box Office Collection Day ${targetDay}: Net ${totalNetStr}, Gross ${totalGrossStr}. Day-wise report, audience response & analysis.
-  keywords: ${buildKeywords()}
-  og:title: ${movieName} Box Office Collection Day ${targetDay}
-  og:description: ${movieName} has collected ${totalGrossStr} gross after ${targetDay} days in theatres.
-  schema:Movie: {"name":"${movieName}","datePublished":"${releaseDate}","inLanguage":"Odia","genre":"${genre}"}
-  schema:NewsArticle: {"headline":"${movieName} Box Office Collection Day ${targetDay}","datePublished":"${new Date().toISOString().slice(0,10)}"}
-═══ END SEO META ═══ -->
+  const barRows = sorted.map((d, i) => {
+    const netNum    = parseNum(d.net);
+    const grossNum  = parseNum(d.gross);
+    const pct       = Math.round((netNum / maxNet) * 100);
+    const grossPct  = grossNum > 0 ? Math.round((grossNum / maxNet) * 100) : 0;
+    const isToday   = d.day === targetDay;
+    const dateStr   = d.date
+      ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+      : "";
+    const dayLabel  = `Day ${d.day}${d.day === 1 ? " (Opening)" : ""}`;
+    const netColor  = isToday ? "#c9973a" : (i % 2 === 0 ? "#8a6fc4" : "#4a9fd4");
+    const bgRow     = isToday ? "rgba(201,151,58,0.06)" : "transparent";
 
-<!-- ── Movie Details ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— ${movieName} Movie Details</h2>
-  <table style="${S.tbl}">
-    <tr><td style="${S.tdLabel}">Movie Name</td><td style="${S.tdValue}">${movieName}</td></tr>
-    <tr><td style="${S.tdLabel}">Language</td><td style="${S.tdValue}">Odia</td></tr>
-    <tr><td style="${S.tdLabel}">Industry</td><td style="${S.tdValue}">Ollywood</td></tr>
-    <tr><td style="${S.tdLabel}">Genre</td><td style="${S.tdValue}">${genre}</td></tr>
-    ${releaseDate ? `<tr><td style="${S.tdLabel}">Release Date</td><td style="${S.tdValue}">${releaseDate}</td></tr>` : ""}
-    ${directorName  ? `<tr><td style="${S.tdLabel}">Director</td><td style="${S.tdValue}">${directorName}</td></tr>` : ""}
-    ${producerName  ? `<tr><td style="${S.tdLabel}">Producer</td><td style="${S.tdValue}">${producerName}</td></tr>` : ""}
-    ${musicDirector ? `<tr><td style="${S.tdLabel}">Music Director</td><td style="${S.tdValue}">${musicDirector}</td></tr>` : ""}
-    ${writer        ? `<tr><td style="${S.tdLabel}">Writer</td><td style="${S.tdValue}">${writer}</td></tr>` : ""}
-    ${dop           ? `<tr><td style="${S.tdLabel}">Cinematographer</td><td style="${S.tdValue}">${dop}</td></tr>` : ""}
-    ${editor        ? `<tr><td style="${S.tdLabel}">Editor</td><td style="${S.tdValue}">${editor}</td></tr>` : ""}
-    ${leadActors.length ? `<tr><td style="${S.tdLabel}">Cast</td><td style="${S.tdValue}">${leadActors.join(", ")}</td></tr>` : ""}
-    <tr><td style="${S.tdLabel}">Total Net Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:800;font-size:1.05rem;">${totalNetStr}</td></tr>
-    <tr><td style="${S.tdLabel}">Total Gross Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:800;font-size:1.05rem;">${totalGrossStr}</td></tr>
+    return `
+    <tr style="background:${bgRow};">
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;min-width:90px;vertical-align:middle;">
+        <div style="font-size:0.8rem;font-weight:700;color:${isToday ? "#c9973a" : "#aaa"};">${dayLabel}</div>
+        ${dateStr ? `<div style="font-size:0.7rem;color:#555;">${dateStr}</div>` : ""}
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;width:55%;">
+        <div style="margin-bottom:5px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <div style="font-size:0.65rem;color:#666;width:36px;flex-shrink:0;">Net</div>
+            <div style="flex:1;background:#1a1a1a;border-radius:999px;height:7px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:${netColor};border-radius:999px;transition:width 0.3s;"></div>
+            </div>
+            <div style="font-size:0.78rem;font-weight:700;color:${isToday ? "#c9973a" : "#ccc"};min-width:68px;text-align:right;">${d.net ? fmtINR(d.net) : "—"}</div>
+          </div>
+          ${grossNum > 0 ? `
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="font-size:0.65rem;color:#666;width:36px;flex-shrink:0;">Gross</div>
+            <div style="flex:1;background:#1a1a1a;border-radius:999px;height:5px;overflow:hidden;">
+              <div style="width:${grossPct}%;height:100%;background:#3a6a8a;border-radius:999px;"></div>
+            </div>
+            <div style="font-size:0.72rem;color:#7ec8e3;min-width:68px;text-align:right;">${fmtINR(d.gross)}</div>
+          </div>` : ""}
+        </div>
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;vertical-align:middle;text-align:right;">
+        ${d.note ? `<span style="display:inline-block;background:#1e1e1e;color:#777;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;font-size:0.7rem;">${d.note}</span>` : ""}
+      </td>
+    </tr>`;
+  }).join("");
+
+  // ── GRAPH 2: Structured data table with cumulative + trend ──────────────────
+  let cumulativeNet   = 0;
+  let cumulativeGross = 0;
+
+  const dataTableRows = sorted.map((d, i) => {
+    const netNum    = parseNum(d.net);
+    const grossNum  = parseNum(d.gross);
+    cumulativeNet   += netNum;
+    cumulativeGross += grossNum;
+
+    const prevNetNum = i > 0 ? parseNum(sorted[i - 1].net) : null;
+    let trendHtml = "";
+    if (prevNetNum !== null && prevNetNum > 0 && netNum > 0) {
+      const pctChange = ((netNum - prevNetNum) / prevNetNum) * 100;
+      const isUp      = pctChange >= 0;
+      trendHtml = `<span style="display:inline-block;background:${isUp ? "rgba(40,120,60,0.25)" : "rgba(180,40,40,0.25)"};color:${isUp ? "#5dba7d" : "#e07070"};border-radius:4px;padding:2px 7px;font-size:0.72rem;font-weight:700;">
+        ${isUp ? "▲" : "▼"} ${Math.abs(pctChange).toFixed(1)}%
+      </span>`;
+    } else if (i === 0) {
+      trendHtml = `<span style="display:inline-block;background:rgba(201,151,58,0.2);color:#c9973a;border-radius:4px;padding:2px 7px;font-size:0.72rem;font-weight:700;">Opening</span>`;
+    }
+
+    const isToday = d.day === targetDay;
+    const dateStr = d.date
+      ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+      : "—";
+
+    return `
+    <tr style="background:${isToday ? "rgba(201,151,58,0.05)" : (i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)")};">
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isToday ? "#c9973a" : "#aaa"};font-weight:700;white-space:nowrap;">
+        Day ${d.day}${isToday ? ` <span style="font-size:0.65rem;background:rgba(201,151,58,0.2);color:#c9973a;padding:1px 6px;border-radius:4px;vertical-align:middle;">Latest</span>` : ""}
+      </td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.82rem;">${dateStr}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isToday ? "#c9973a" : "#ddd"};font-weight:700;">${d.net ? fmtINR(d.net) : "—"}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#7ec8e3;font-weight:600;">${d.gross ? fmtINR(d.gross) : "—"}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#c9973a;font-weight:700;">${fmtINR(cumulativeNet)}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;">${trendHtml}</td>
+    </tr>`;
+  }).join("");
+
+  // ── Tag chips ───────────────────────────────────────────────────────────────
+  const tagChips = tags
+    .map(t => `<span style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">${t}</span>`)
+    .join("\n    ");
+
+  // ── Section card style shorthand ────────────────────────────────────────────
+  const card  = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:26px;`;
+  const h2    = `font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 20px;line-height:1.3;`;
+  const h3    = `font-size:0.85rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.09em;margin:0 0 12px;`;
+  const tdL   = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:42%;vertical-align:top;`;
+  const tdR   = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+  const th    = `padding:11px 14px;background:#1f1f1f;color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;text-align:left;border-bottom:2px solid #2a2a2a;`;
+
+  // ════════════════════════════════════════════════════════════════════════════
+  //  FULL BLOG HTML OUTPUT
+  // ════════════════════════════════════════════════════════════════════════════
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — READ BY CMS
+  title:          ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${totalGrossStr} gross | Ollypedia
+  description:    ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection: Collected ${totalNetStr} net and ${totalGrossStr} gross in ${targetDay} day${targetDay !== 1 ? "s" : ""}. Complete day-wise breakdown, audience response, performance analysis & predictions on Ollypedia.
+  keywords:       ${keywordsStr}
+  og:title:       ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${totalGrossStr} gross | Ollypedia
+  og:description: ${movieName} has collected ${totalNetStr} net and ${totalGrossStr} gross after ${targetDay} days. Full report on Ollypedia.
+  schema:Movie:       {"name":"${movieName}","datePublished":"${releaseDate}","inLanguage":"Odia","genre":"${genre}"}
+  schema:NewsArticle: {"headline":"${movieName} Box Office Collection Day ${targetDay}","datePublished":"${new Date().toISOString().slice(0,10)}","publisher":"Ollypedia"}
+════════════════════════════════════════════════════════════════ -->
+
+
+<!-- ─────────────────────────────────────────────
+  HERO BANNER
+───────────────────────────────────────────── -->
+<div style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+
+  <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="display:inline-block;background:#2a1500;color:#c9973a;font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #3a2200;">📊 Box Office Report</span>
+    <span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">Day ${targetDay} Update</span>
+    ${year ? `<span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${year}</span>` : ""}
+  </div>
+
+  <h1 style="color:#fff;font-size:1.6rem;line-height:1.3;font-weight:800;margin:0 0 14px;">
+    ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection — ${sections.seoHeadline}
+  </h1>
+
+  <p style="color:#bbb;font-size:0.98rem;line-height:1.85;margin:0 0 24px;">${sections.introParagraph}</p>
+
+  <p style="color:#aaa;font-size:0.93rem;line-height:1.7;margin:0 0 24px;">
+    According to industry trade estimates, <strong style="color:#fff;">${movieName}</strong> has collected approximately
+    <strong style="color:#c9973a;">${totalNetStr} Net</strong> and
+    <strong style="color:#7ec8e3;">${totalGrossStr} Gross</strong> in its first ${targetDay} day${targetDay !== 1 ? "s" : ""} of theatrical release.
+    ${directorName ? `Directed by <strong style="color:#ddd;">${directorName}</strong>, the` : "The"} film has been running across Odisha with
+    ${leadActors.length ? `<strong style="color:#ddd;">${leadActors.slice(0,2).join(" and ")}</strong> in the lead roles.` : "strong audience support."}
+  </p>
+
+  <!-- Stat chips -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #2e2000;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Net</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
+    </div>
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #1a2a3a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Gross</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#7ec8e3;">${totalGrossStr}</div>
+    </div>
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #222;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Day ${targetDay} Net</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#fff;">${dayNet}</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────
+  KEY HIGHLIGHT CALLOUT
+───────────────────────────────────────────── -->
+<div style="background:#180e00;border-left:4px solid #ff9800;border-radius:0 10px 10px 0;padding:14px 20px;margin-bottom:22px;">
+  <strong style="color:#ff9800;">📊 Box Office Update:</strong>
+  <span style="color:#ccc;"> <strong style="color:#fff;">${movieName}</strong> has collected an estimated
+  <strong style="color:#c9973a;">${totalNetStr} net</strong> and
+  <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> after
+  <strong style="color:#fff;">${targetDay} day${targetDay !== 1 ? "s" : ""}</strong> in theatres.
+  ${totalNet >= 1_00_00_000 ? `The film has crossed the <strong style="color:#c9973a;">₹${(totalNet / 1_00_00_000).toFixed(0)} Cr mark</strong> at the Odia box office.` : ""}</span>
+</div>
+
+
+<!-- ─────────────────────────────────────────────
+  MOVIE DETAILS TABLE
+───────────────────────────────────────────── -->
+<section style="${card}">
+  <h2 style="${h2}">${movieName} Movie Details</h2>
+  <table style="width:100%;border-collapse:collapse;">
+    <tbody>
+      ${infoRows.map(([label, val]) => `
+      <tr>
+        <td style="${tdL}">${label}</td>
+        <td style="${tdR}">${val}</td>
+      </tr>`).join("")}
+      <tr>
+        <td style="${tdL}">Total Net Collection</td>
+        <td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#c9973a;font-weight:800;font-size:1.05rem;">${totalNetStr}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 0;color:#888;font-size:0.87rem;width:42%;vertical-align:top;">Total Gross Collection</td>
+        <td style="padding:10px 0;color:#7ec8e3;font-weight:800;font-size:1.05rem;">${totalGrossStr}</td>
+      </tr>
+    </tbody>
   </table>
   <div style="text-align:center;margin-top:22px;">
-    <a href="${boxOfficeUrl}" style="${S.btn}">🎬 View Latest Collection Updates</a>
+    <a href="${boxOfficeUrl}" style="display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.93rem;">
+      🎬 View Latest Box Office Updates
+    </a>
   </div>
 </section>
 
-<!-- ── Hero ── -->
-<div style="${S.hero}">
-  <h1 style="color:#fff;font-size:1.45rem;line-height:1.35;font-weight:800;margin:0 0 14px;">${movieName} Box Office Collection Day ${targetDay}: ${sections.seoHeadline}</h1>
-  <p style="${S.p}">${sections.introParagraph}</p>
-  <p style="${S.p}">According to trade estimates, the film has collected approximately <strong style="color:#c9973a;">${totalNetStr} Net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} Gross</strong> over ${targetDay} days in theatres.</p>
-</div>
 
-<!-- ── Highlight box ── -->
-<div style="${S.highlight}">
-  <strong style="color:#ff9800;">📊 Box Office Update:</strong>
-  <span style="color:#ddd;"> ${movieName} has collected an estimated <strong style="color:#c9973a;">${totalNetStr} net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> after ${targetDay} days in theatres.</span>
-</div>
 
-<!-- ── Day N Collection Report ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— ${movieName} Day ${targetDay} Collection Report</h2>
-  <table style="${S.tbl}">
-    <thead>
-      <tr>
-        <th style="${S.th}">Metric</th>
-        <th style="${S.th}">Collection</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td style="${S.tdLabel}">Day ${targetDay} Net Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:700;">${dayNet}</td></tr>
-      <tr><td style="${S.tdLabel}">Day ${targetDay} Gross Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:700;">${dayGross}</td></tr>
-      <tr><td style="${S.tdLabel}">Total Net Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#c9973a;font-weight:800;font-size:1.05rem;">${totalNetStr}</td></tr>
-      <tr><td style="${S.tdLabel}">Total Gross Collection</td><td style="padding:11px 14px;border-bottom:1px solid #2e2e2e;color:#7ec8e3;font-weight:800;font-size:1.05rem;">${totalGrossStr}</td></tr>
-    </tbody>
-  </table>
-</section>
-
-<!-- ── Day-wise Breakdown ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— ${movieName} Day-wise Box Office Collection</h2>
+<!-- ─────────────────────────────────────────────
+  GRAPH 2: STRUCTURED DATA TABLE  (Net · Gross · Cumulative · Trend)
+  Best for: exact figures + running total + day-on-day trend
+───────────────────────────────────────────── -->
+<section style="${card}">
+  <h2 style="${h2}">${movieName} Complete Box Office Data — Day-wise Breakdown</h2>
+  <p style="color:#666;font-size:0.82rem;margin:0 0 18px;line-height:1.6;">
+    Net · Gross · Cumulative net total after each day · Trend vs previous day
+  </p>
   <div style="overflow-x:auto;">
-    <table style="${S.tbl}">
+    <table style="width:100%;border-collapse:collapse;font-size:0.88rem;min-width:520px;">
       <thead>
         <tr>
-          <th style="${S.th}">Day</th>
-          <th style="${S.th}">Net Collection</th>
-          <th style="${S.th}">Gross Collection</th>
-          <th style="${S.th}">Notes</th>
+          <th style="${th}">Day</th>
+          <th style="${th}">Date</th>
+          <th style="${th}">Net</th>
+          <th style="${th}">Gross</th>
+          <th style="${th}">Cumulative Net</th>
+          <th style="${th}">Trend</th>
         </tr>
       </thead>
       <tbody>
-        ${rows}
+        ${dataTableRows}
       </tbody>
       <tfoot>
         <tr>
-          <td style="${S.tfootTd}">Total (${sorted.length} day${sorted.length !== 1 ? "s" : ""})</td>
-          <td style="${S.tfootTd}">${totalNetStr}</td>
-          <td style="${S.tfootGross}">${totalGrossStr}</td>
-          <td style="padding:12px 14px;background:#252008;border-top:2px solid #c9973a;"></td>
+          <td colspan="2" style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#c9973a;font-weight:800;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;">
+            TOTAL (${sorted.length} days)
+          </td>
+          <td style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#c9973a;font-weight:800;font-size:1rem;">${totalNetStr}</td>
+          <td style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#7ec8e3;font-weight:800;font-size:1rem;">${totalGrossStr}</td>
+          <td style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#c9973a;font-weight:800;font-size:1rem;">${totalNetStr}</td>
+          <td style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;"></td>
         </tr>
       </tfoot>
     </table>
   </div>
 </section>
 
-<!-- ── Box Office Journey ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— Box Office Journey</h2>
+
+<!-- ─────────────────────────────────────────────
+  EDITORIAL SECTIONS (AI-written)
+───────────────────────────────────────────── -->
+<section style="${card}">
+  <h2 style="${h2}">Box Office Journey — ${movieName}</h2>
   ${pWrap(sections.boxOfficeAnalysis)}
 </section>
 
-<!-- ── Audience Response ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— Audience Response</h2>
+<section style="${card}">
+  <h2 style="${h2}">Audience Response</h2>
   ${pWrap(sections.audienceResponse)}
 </section>
 
-<!-- ── Performance Analysis ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— Performance Analysis</h2>
+<section style="${card}">
+  <h2 style="${h2}">Performance Analysis</h2>
+  <div style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Net</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
+    </div>
+    <div>
+      <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Gross</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#7ec8e3;">${totalGrossStr}</div>
+    </div>
+    <div>
+      <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Days Tracked</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#fff;">${sorted.length}</div>
+    </div>
+  </div>
   ${pWrap(sections.performanceAnalysis)}
 </section>
 
-<!-- ── Future Box Office Prediction ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— Future Box Office Prediction</h2>
+<section style="${card}">
+  <h2 style="${h2}">Future Box Office Prediction</h2>
   ${pWrap(sections.prediction)}
 </section>
 
-<!-- ── Final Verdict ── -->
-<section style="${S.section}">
-  <h2 style="${S.h2}">— Final Verdict</h2>
-  ${pWrap(sections.finalVerdict)}
+<section style="${card}">
+  <h2 style="${h2}">Final Verdict</h2>
+  <div style="border-left:4px solid #c9973a;padding-left:16px;margin-bottom:16px;">
+    ${pWrap(sections.finalVerdict)}
+  </div>
+  <p style="color:#555;font-size:0.8rem;line-height:1.6;margin:0;">
+    <em>* All collection figures are industry estimates sourced by Ollypedia Box Office Tracking. Figures may differ from official studio numbers.</em>
+  </p>
 </section>
 
-<!-- ── Tags ── -->
-<section style="background:#111;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
-  <h2 style="${S.h2}">— Tags</h2>
-  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
-    ${tags.map(t => `<span style="${S.tag}">${t}</span>`).join("\n    ")}
+
+<!-- ─────────────────────────────────────────────
+  FAQ SECTION — Structured Q&A for SEO
+  Uses FAQ schema-friendly markup. Google often
+  pulls these into rich results / People Also Ask.
+───────────────────────────────────────────── -->
+<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 22px;line-height:1.3;">
+    Frequently Asked Questions — ${movieName} Box Office
+  </h2>
+
+  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+      What is the total box office collection of ${movieName}${year ? ` (${year})` : ""}?
+    </h3>
+    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+        As of Day ${targetDay}, <strong style="color:#fff;">${movieName}</strong> has collected a total of
+        <strong style="color:#c9973a;">${totalNetStr} net</strong> and
+        <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> at the Odia box office.
+        These are industry estimates and figures are updated daily on Ollypedia.
+      </p>
+    </div>
+  </div>
+
+  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+      How much did ${movieName} collect on Day ${targetDay}?
+    </h3>
+    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+        On Day ${targetDay}, <strong style="color:#fff;">${movieName}</strong> collected
+        <strong style="color:#c9973a;">${dayNet} net</strong> and
+        <strong style="color:#7ec8e3;">${dayGross} gross</strong>.
+        The cumulative total stands at <strong style="color:#c9973a;">${totalNetStr} net</strong> after ${targetDay} day${targetDay !== 1 ? "s" : ""} in theatres.
+      </p>
+    </div>
+  </div>
+
+  ${directorName ? `
+  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+      Who directed ${movieName}?
+    </h3>
+    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+        <strong style="color:#fff;">${movieName}</strong> is directed by
+        <strong style="color:#ddd;">${directorName}</strong>.
+        ${producerName ? `The film is produced by <strong style="color:#ddd;">${producerName}</strong>.` : ""}
+        It is an Odia language film released in ${year || "2026"} under the Ollywood banner.
+      </p>
+    </div>
+  </div>` : ""}
+
+  ${leadActors.length ? `
+  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+      Who are the lead actors in ${movieName}?
+    </h3>
+    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+        <strong style="color:#fff;">${movieName}</strong> stars
+        <strong style="color:#ddd;">${leadActors.join(", ")}</strong>${leadActresses.length ? ` alongside <strong style="color:#ddd;">${leadActresses.join(", ")}</strong>` : ""}.
+        ${musicDirector ? `The music is composed by <strong style="color:#ddd;">${musicDirector}</strong>.` : ""}
+      </p>
+    </div>
+  </div>` : ""}
+
+  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="padding-bottom:4px;">
+    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+      Is ${movieName} a hit or flop at the box office?
+    </h3>
+    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+        Based on ${targetDay} day${targetDay !== 1 ? "s" : ""} of data, <strong style="color:#fff;">${movieName}</strong> has collected
+        <strong style="color:#c9973a;">${totalNetStr} net</strong> at the Odia box office.
+        ${movie.budget ? `The film had an estimated budget of <strong style="color:#ddd;">${movie.budget}</strong>.` : ""}
+        A detailed performance analysis is available above. Ollypedia updates collection figures daily based on industry trade estimates.
+      </p>
+    </div>
   </div>
 </section>
 
-<!-- ── Footer ── -->
-<div style="border-top:1px solid #2a2a2a;padding-top:18px;margin-top:8px;">
-  <p style="color:#666;font-size:0.82rem;line-height:1.7;margin:0;">
-    <strong style="color:#888;">Source:</strong> Ollypedia Box Office Tracking &nbsp;·&nbsp;
-    <strong style="color:#888;">Last Updated:</strong> Day ${targetDay} &nbsp;·&nbsp;
-    <em>All collection figures are industry estimates and may vary from official figures.</em>
+
+<!-- ─────────────────────────────────────────────
+  ALSO READ — Internal links section
+  Signals site structure to Google, passes
+  PageRank to related pages, reduces bounce rate.
+───────────────────────────────────────────── -->
+<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 20px;line-height:1.3;">
+    Also Read
+  </h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <a href="${boxOfficeUrl}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+      <span style="font-size:1.3rem;flex-shrink:0;">📊</span>
+      <div>
+        <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">${movieName} Full Box Office Report</div>
+        <div style="font-size:0.72rem;color:#666;margin-top:2px;">All days · Running total</div>
+      </div>
+    </a>
+    <a href="/box-office" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+      <span style="font-size:1.3rem;flex-shrink:0;">🎬</span>
+      <div>
+        <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">Ollywood Box Office Collection</div>
+        <div style="font-size:0.72rem;color:#666;margin-top:2px;">Latest Odia movie collections</div>
+      </div>
+    </a>
+    <a href="/movie/${movieSlug}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+      <span style="font-size:1.3rem;flex-shrink:0;">🎭</span>
+      <div>
+        <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">${movieName} — Cast, Story & Details</div>
+        <div style="font-size:0.72rem;color:#666;margin-top:2px;">Full movie info on Ollypedia</div>
+      </div>
+    </a>
+    <a href="/blog?category=Box%20Office" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+      <span style="font-size:1.3rem;flex-shrink:0;">📰</span>
+      <div>
+        <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">More Box Office Reports</div>
+        <div style="font-size:0.72rem;color:#666;margin-top:2px;">Latest Ollywood collection news</div>
+      </div>
+    </a>
+  </div>
+</section>
+
+
+<!-- ─────────────────────────────────────────────
+  HASHTAGS / SOCIAL TAGS
+───────────────────────────────────────────── -->
+<section style="background:#111;border-radius:14px;padding:20px 26px;margin-bottom:22px;">
+  <h2 style="font-size:0.7rem;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 12px;">Tags</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:5px;">
+    ${tagChips}
+  </div>
+</section>
+
+
+<!-- ─────────────────────────────────────────────
+  FOOTER
+───────────────────────────────────────────── -->
+<div style="border-top:1px solid #1c1c1c;padding-top:16px;margin-top:4px;">
+  <p style="color:#444;font-size:0.8rem;line-height:1.8;margin:0;">
+    <strong style="color:#555;">Source:</strong> Ollypedia Box Office Tracking &nbsp;·&nbsp;
+    <strong style="color:#555;">Last Updated:</strong> Day ${targetDay}, ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} &nbsp;·&nbsp;
+    <a href="${boxOfficeUrl}" style="color:#c9973a;text-decoration:none;">View full collection report →</a><br>
+    <em style="color:#3a3a3a;">All collection figures are industry estimates and may vary from official figures.</em>
   </p>
 </div>`;
+
 };
 
 // ─── Shared label style ────────────────────────────────────────────────────────
@@ -600,14 +1004,15 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
         const totalNet   = daysUpToN.reduce((s, d) => s + parseNum(d.net),   0);
         const totalGross = daysUpToN.reduce((s, d) => s + parseNum(d.gross), 0);
         const targetDay  = payload.day;
-        const blogTitle  = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection`;
-        const blogSlug   = slugify(blogTitle);
+        const blogTitle  = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross`;
+        const blogSlugBase = `${movie.title}${year ? ` (${year})` : ""} day ${targetDay} box office collection`;
+        const blogSlug   = slugify(blogSlugBase);
         const parsedSecs = aiSections || parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
         const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs);
         const excerpt    = parsedSecs.introParagraph ||
           `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} days.`;
-        const seoTitle   = `${movie.title}${year ? ` (${year})` : ""} Box Office Collection Day ${targetDay} | Total Net, Gross | Ollypedia`;
-        const seoDesc    = `${movie.title} Box Office Collection Day ${targetDay}: Net ${fmtINR(totalNet)}, Gross ${fmtINR(totalGross)}. Full day-wise report and analysis.`;
+        const seoTitle   = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross | Ollypedia`;
+        const seoDesc    = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection: The film has collected ${fmtINR(totalNet)} net and ${fmtINR(totalGross)} gross in ${targetDay} day${targetDay !== 1 ? "s" : ""}. Check complete day-wise breakdown, audience response, and performance analysis on Ollypedia.`;
 
         const blogPayload = {
           title: blogTitle, slug: blogSlug, excerpt, content,

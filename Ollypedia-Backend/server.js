@@ -237,6 +237,9 @@ const MovieSchema = new mongoose.Schema({
   slug:     { type: String, default: "", index: true },
   interestedYes: { type: Number, default: 0 },
   interestedNo:  { type: Number, default: 0 },   // SEO slug e.g. "bindusagar-2026"
+  streamingOn:   { type: String, default: "" },  // OTT platform name e.g. "Aao NXT"
+  streamingUrl:  { type: String, default: "" },  // Direct link to stream the movie
+  ottReleaseDate:{ type: String, default: "" },  // OTT release date (ISO string or "TBA")
 }, { timestamps: true });
 
 const NewsSchema = new mongoose.Schema({
@@ -836,7 +839,7 @@ app.patch("/api/movies/:id", auth, async (req, res) => {
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Not found" });
     if (!canEdit(movie, req.prodId)) return res.status(403).json({ error: "Forbidden" });
-    const allowed = ["title","category","genre","releaseDate","releaseTBA","director","producer","budget","language","synopsis","posterUrl","thumbnailUrl","verdict","status"];
+    const allowed = ["title","category","genre","releaseDate","releaseTBA","director","producer","budget","language","synopsis","posterUrl","thumbnailUrl","verdict","status","streamingOn","streamingUrl","ottReleaseDate"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     if (req.body.verdict) update.status = req.body.verdict === "Upcoming" ? "Upcoming" : "Released";
@@ -1192,6 +1195,9 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       runtime:       String(b.runtime      || ""),
       bannerUrl:     String(b.bannerUrl    || ""),
       boxOffice:    b.boxOffice || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
+      streamingOn:   String(b.streamingOn  || ""),
+      streamingUrl:  String(b.streamingUrl || ""),
+      ottReleaseDate:String(b.ottReleaseDate|| ""),
       media,
       productionId:  validProdId,
       collaborators: collabIds,
@@ -1219,7 +1225,8 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     // Scalar fields
     const scalars = ["title","category","genre","releaseDate","releaseTBA","director","producer",
       "budget","language","synopsis","posterUrl","thumbnailUrl","verdict","status",
-      "imdbId","imdbRating","imdbVotes","contentRating","runtime","bannerUrl"];
+      "imdbId","imdbRating","imdbVotes","contentRating","runtime","bannerUrl",
+      "streamingOn","streamingUrl","ottReleaseDate"];
     scalars.forEach(k => { if (b[k] !== undefined) update[k] = b[k]; });
     if (b.verdict) update.status = b.verdict === "Upcoming" ? "Upcoming" : "Released";
     if (b.boxOffice) update.boxOffice = b.boxOffice;

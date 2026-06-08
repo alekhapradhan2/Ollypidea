@@ -20,6 +20,19 @@ const CAST_TYPES = [
   "Stunt Director","Voice Artist","Other"
 ];
 const VERDICTS   = ["Upcoming","Hit","Super Hit","Blockbuster","Average","Flop","Disaster","Released"];
+const OTT_PLATFORMS = [
+  { name: "Aao NXT",      url: "https://www.aaonxt.com",         logo: "🎬" },
+  { name: "Tarang Plus",  url: "https://www.tarangplus.in",      logo: "📺" },
+  { name: "Kanccha Lannka", url: "https://www.kancchalannka.com", logo: "🎥" },
+  { name: "SonyLIV",      url: "https://www.sonyliv.com",        logo: "🔴" },
+  { name: "Disney+ Hotstar", url: "https://www.hotstar.com",     logo: "⭐" },
+  { name: "Netflix",      url: "https://www.netflix.com",        logo: "🎞" },
+  { name: "Amazon Prime", url: "https://www.primevideo.com",     logo: "📦" },
+  { name: "ZEE5",         url: "https://www.zee5.com",           logo: "🟣" },
+  { name: "MX Player",    url: "https://www.mxplayer.in",        logo: "▶️" },
+  { name: "YouTube",      url: "https://www.youtube.com",        logo: "🔴" },
+  { name: "Other",        url: "",                               logo: "🌐" },
+];
 const NEWS_CATS  = ["Update","Announcement","Review","Interview","Event","Award","Other"];
 
 const isOid = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
@@ -482,6 +495,9 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     bannerUrl:     initial?.bannerUrl     || "",
     boxOffice:   initial?.boxOffice    || { opening:"TBA", firstWeek:"TBA", total:"TBA" },
     trivia:      initial?.trivia       || [],
+    streamingOn:    initial?.streamingOn    || "",
+    streamingUrl:   initial?.streamingUrl   || "",
+    ottReleaseDate: initial?.ottReleaseDate || "",
   });
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x=>x!==g) : [...form.genre,g]);
@@ -580,6 +596,9 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       bannerUrl:     form.bannerUrl,
       boxOffice:    form.boxOffice,
       trivia:       form.trivia,
+      streamingOn:    form.streamingOn,
+      streamingUrl:   form.streamingUrl,
+      ottReleaseDate: form.ottReleaseDate,
       productions:  productions.map(p=>String(p._id)).filter(isOid),
       cast:         castPayload,
       media: { trailer: trailerYtId ? { ytId:trailerYtId, url:trailerUrl } : (initial?.media?.trailer||{}), songs },
@@ -745,6 +764,95 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
               </div>
             ))}
           </div>
+
+          {/* OTT Platform */}
+          <hr className="divider" />
+          <p style={{ fontSize:"0.78rem", fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:12 }}>📺 OTT / Streaming</p>
+          <div className="form-group">
+            <label className="form-label">Platform</label>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:12 }}>
+              {OTT_PLATFORMS.map(p => {
+                const sel = form.streamingOn === p.name;
+                return (
+                  <button key={p.name} type="button" onClick={() => {
+                    if (sel) {
+                      set("streamingOn", ""); set("streamingUrl", ""); set("ottReleaseDate", "");
+                    } else {
+                      set("streamingOn", p.name);
+                      if (p.url) set("streamingUrl", p.url);
+                    }
+                  }} style={{
+                    display:"flex", alignItems:"center", gap:6,
+                    padding:"6px 14px", borderRadius:20, fontSize:"0.8rem",
+                    fontWeight:600, cursor:"pointer", border:"1px solid",
+                    background: sel ? "var(--gold)" : "rgba(255,255,255,0.04)",
+                    color:      sel ? "#000"        : "var(--muted)",
+                    borderColor: sel ? "var(--gold)" : "var(--border)",
+                    transition:"all 0.15s",
+                  }}>
+                    <span>{p.logo}</span> {p.name}
+                    {sel && <span style={{ fontSize:"0.65rem" }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {form.streamingOn && (
+            <>
+              <div className="form-group">
+                <label className="form-label">Streaming URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(direct link to the movie)</span></label>
+                <input className="form-input" value={form.streamingUrl} onChange={e=>set("streamingUrl",e.target.value)}
+                  placeholder="https://www.aaonxt.com/movie/…" />
+                {form.streamingUrl && (
+                  <a href={form.streamingUrl} target="_blank" rel="noreferrer"
+                    style={{ display:"inline-flex", alignItems:"center", gap:5, marginTop:6, fontSize:"0.75rem", color:"var(--gold)", textDecoration:"none" }}>
+                    ↗ Preview link
+                  </a>
+                )}
+              </div>
+              <div className="form-group">
+                <label className="form-label">OTT Release Date
+                  <span style={{ color:"var(--muted)", fontWeight:400, marginLeft:6, fontSize:"0.72rem" }}>
+                    — when it streams; leave blank if unknown
+                  </span>
+                </label>
+                <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={form.ottReleaseDate === "TBA" ? "" : form.ottReleaseDate}
+                    onChange={e => set("ottReleaseDate", e.target.value)}
+                    disabled={form.ottReleaseDate === "TBA"}
+                    style={{ flex:1, minWidth:140 }}
+                  />
+                  <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:"0.82rem", color:"var(--muted)", cursor:"pointer", whiteSpace:"nowrap" }}>
+                    <input
+                      type="checkbox"
+                      checked={form.ottReleaseDate === "TBA"}
+                      onChange={e => set("ottReleaseDate", e.target.checked ? "TBA" : "")}
+                    />
+                    TBA (announced, date unknown)
+                  </label>
+                </div>
+                {/* Smart status preview */}
+                {form.ottReleaseDate && (
+                  <div style={{ marginTop:8, display:"inline-flex", alignItems:"center", gap:6, fontSize:"0.75rem", padding:"4px 12px", borderRadius:20, fontWeight:700,
+                    ...(form.ottReleaseDate === "TBA"
+                      ? { background:"rgba(201,151,58,0.12)", color:"var(--gold)", border:"1px solid rgba(201,151,58,0.3)" }
+                      : new Date(form.ottReleaseDate) <= new Date()
+                        ? { background:"rgba(76,175,130,0.12)", color:"#4caf82", border:"1px solid rgba(76,175,130,0.3)" }
+                        : { background:"rgba(99,179,237,0.12)", color:"#63b3ed", border:"1px solid rgba(99,179,237,0.3)" })
+                  }}>
+                    {form.ottReleaseDate === "TBA"
+                      ? "🕐 Will show: Coming Soon (TBA)"
+                      : new Date(form.ottReleaseDate) <= new Date()
+                        ? "✅ Will show: Available Now"
+                        : `📅 Will show: Coming ${new Date(form.ottReleaseDate).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}`}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -823,6 +931,8 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
             ["Productions",productions.map(p=>p.name).join(", ")||"None"],
             ["Cast count",String(cast.length)],["Songs",String(songs.length)],
             ["Trailer",extractYtId(trailerUrl)?"✓ Added":"—"],
+            ["OTT Platform",form.streamingOn||"—"],
+            ["OTT Release",form.ottReleaseDate||"—"],
           ].map(([label,value]) => (
             <div key={label} style={{ display:"flex", gap:14, padding:"8px 0", borderBottom:"1px solid var(--border)" }}>
               <span style={{ color:"var(--muted)", fontSize:"0.72rem", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", width:130, flexShrink:0 }}>{label}</span>
