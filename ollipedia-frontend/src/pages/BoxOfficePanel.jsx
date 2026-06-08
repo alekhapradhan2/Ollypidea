@@ -222,7 +222,7 @@ const toParagraphs = (text) =>
 //    toParagraphs · parseAiSections
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw) => {
+const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw, blogSlug) => {
 
   // ── Core data ───────────────────────────────────────────────────────────────
   const year          = getYear(movie.releaseDate);
@@ -535,6 +535,12 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   const tdR   = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
   const th    = `padding:11px 14px;background:#1f1f1f;color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;text-align:left;border-bottom:2px solid #2a2a2a;`;
 
+  // ── Prev / Next slugs (pre-computed to avoid nested template literals) ───────
+  const prevSlug     = slugify(`${movieName}${year ? ` (${year})` : ""} day ${targetDay - 1} box office collection`);
+  const nextSlug     = slugify(`${movieName}${year ? ` (${year})` : ""} day ${targetDay + 1} box office collection`);
+  const prevDayLabel = `${movieName} Day ${targetDay - 1}`;
+  const nextDayLabel = `${movieName} Day ${targetDay + 1}`;
+
   // ════════════════════════════════════════════════════════════════════════════
   //  FULL BLOG HTML OUTPUT
   // ════════════════════════════════════════════════════════════════════════════
@@ -543,12 +549,79 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   OLLYPEDIA SEO META — READ BY CMS
   title:          ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${totalGrossStr} gross | Ollypedia
   description:    ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection: Collected ${totalNetStr} net and ${totalGrossStr} gross in ${targetDay} day${targetDay !== 1 ? "s" : ""}. Complete day-wise breakdown, audience response, performance analysis & predictions on Ollypedia.
-  keywords:       ${keywordsStr}
   og:title:       ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${totalGrossStr} gross | Ollypedia
   og:description: ${movieName} has collected ${totalNetStr} net and ${totalGrossStr} gross after ${targetDay} days. Full report on Ollypedia.
-  schema:Movie:       {"name":"${movieName}","datePublished":"${releaseDate}","inLanguage":"Odia","genre":"${genre}"}
-  schema:NewsArticle: {"headline":"${movieName} Box Office Collection Day ${targetDay}","datePublished":"${new Date().toISOString().slice(0,10)}","publisher":"Ollypedia"}
 ════════════════════════════════════════════════════════════════ -->
+
+<!-- ─────────────────────────────────────────────
+  JSON-LD SCHEMA — NewsArticle + Movie + BreadcrumbList
+  Injected into <head> by CMS. Enables Google rich results:
+  - NewsArticle → headline in search + Google News
+  - Movie       → movie knowledge panel association
+  - BreadcrumbList → breadcrumb path shown in search results
+───────────────────────────────────────────── -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": "${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${totalGrossStr} gross",
+      "description": "${movieName}${year ? ` (${year})` : ""} Day ${targetDay} box office collection: Collected ${totalNetStr} net and ${totalGrossStr} gross in ${targetDay} day${targetDay !== 1 ? "s" : ""}.",
+      "datePublished": "${new Date().toISOString().slice(0,10)}",
+      "dateModified": "${new Date().toISOString().slice(0,10)}",
+      "author": { "@type": "Organization", "name": "Ollypedia", "url": "https://ollypedia.in" },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Ollypedia",
+        "url": "https://ollypedia.in",
+        "logo": { "@type": "ImageObject", "url": "https://ollypedia.in/logo.png" }
+      },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "https://ollypedia.in/blog/${blogSlug}" },
+      "about": {
+        "@type": "Movie",
+        "name": "${movieName}",
+        "inLanguage": "Odia",
+        "genre": "${genre}"${releaseDate ? `,
+        "datePublished": "${releaseDate}"` : ""}${directorName ? `,
+        "director": { "@type": "Person", "name": "${directorName}" }` : ""}${producerName ? `,
+        "producer": { "@type": "Person", "name": "${producerName}" }` : ""}${leadActors.length ? `,
+        "actor": [${leadActors.map(a => `{ "@type": "Person", "name": "${a}" }`).join(", ")}]` : ""}
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home",        "item": "https://ollypedia.in" },
+        { "@type": "ListItem", "position": 2, "name": "Box Office",  "item": "https://ollypedia.in/box-office" },
+        { "@type": "ListItem", "position": 3, "name": "${movieName}", "item": "https://ollypedia.in${boxOfficeUrl}" },
+        { "@type": "ListItem", "position": 4, "name": "Day ${targetDay} Collection", "item": "https://ollypedia.in/blog/${blogSlug}" }
+      ]
+    }
+  ]
+}
+</script>
+
+
+<!-- ─────────────────────────────────────────────
+  BREADCRUMB + TIMESTAMP
+  Breadcrumb: visual trail matches BreadcrumbList schema above.
+  <time>: machine-readable freshness signal for Google.
+───────────────────────────────────────────── -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/box-office" style="color:#777;text-decoration:none;">Box Office</a>
+    <span style="color:#333;">›</span>
+    <a href="${boxOfficeUrl}" style="color:#777;text-decoration:none;">${movieName}${year ? ` (${year})` : ""}</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#c9973a;">Day ${targetDay} Collection</span>
+  </nav>
+  <time datetime="${new Date().toISOString().slice(0,10)}" style="font-size:0.73rem;color:#444;white-space:nowrap;">
+    🕐 Updated: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+  </time>
+</div>
 
 
 <!-- ─────────────────────────────────────────────
@@ -727,6 +800,34 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 
 
 <!-- ─────────────────────────────────────────────
+  PREV / NEXT DAY NAVIGATION
+  Signals article series to Google. Passes PageRank
+  through the day chain. Helps crawlers find all posts.
+───────────────────────────────────────────── -->
+<nav aria-label="Day navigation" style="display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap;">
+  ${targetDay > 1
+    ? `<a href="/blog/${prevSlug}" rel="prev" style="flex:1;min-width:140px;display:flex;align-items:center;gap:10px;background:#181818;border:1px solid #242424;border-radius:12px;padding:14px 18px;text-decoration:none;">
+    <span style="font-size:1.1rem;color:#555;">←</span>
+    <div>
+      <div style="font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Previous</div>
+      <div style="font-size:0.85rem;font-weight:700;color:#aaa;">${prevDayLabel}</div>
+      <div style="font-size:0.72rem;color:#555;">Box Office Collection</div>
+    </div>
+  </a>`
+    : `<div style="flex:1;min-width:140px;"></div>`
+  }
+  <a href="/blog/${nextSlug}" rel="next" style="flex:1;min-width:140px;display:flex;align-items:center;justify-content:flex-end;gap:10px;background:#181818;border:1px solid #242424;border-radius:12px;padding:14px 18px;text-decoration:none;text-align:right;">
+    <div>
+      <div style="font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Next</div>
+      <div style="font-size:0.85rem;font-weight:700;color:#aaa;">${nextDayLabel}</div>
+      <div style="font-size:0.72rem;color:#555;">Box Office Collection</div>
+    </div>
+    <span style="font-size:1.1rem;color:#555;">→</span>
+  </a>
+</nav>
+
+
+<!-- ─────────────────────────────────────────────
   FAQ SECTION — Structured Q&A for SEO
   Uses FAQ schema-friendly markup. Google often
   pulls these into rich results / People Also Ask.
@@ -833,14 +934,14 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
         <div style="font-size:0.72rem;color:#666;margin-top:2px;">Latest Odia movie collections</div>
       </div>
     </a>
-    <a href="/movie/${movieSlug}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+    <a href="/movies/${movieSlug}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
       <span style="font-size:1.3rem;flex-shrink:0;">🎭</span>
       <div>
         <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">${movieName} — Cast, Story & Details</div>
         <div style="font-size:0.72rem;color:#666;margin-top:2px;">Full movie info on Ollypedia</div>
       </div>
     </a>
-    <a href="/blog?category=Box%20Office" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
+    <a href="/blog?category=box-office" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
       <span style="font-size:1.3rem;flex-shrink:0;">📰</span>
       <div>
         <div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">More Box Office Reports</div>
@@ -868,7 +969,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 <div style="border-top:1px solid #1c1c1c;padding-top:16px;margin-top:4px;">
   <p style="color:#444;font-size:0.8rem;line-height:1.8;margin:0;">
     <strong style="color:#555;">Source:</strong> Ollypedia Box Office Tracking &nbsp;·&nbsp;
-    <strong style="color:#555;">Last Updated:</strong> Day ${targetDay}, ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} &nbsp;·&nbsp;
+    <strong style="color:#555;">Last Updated:</strong> <time datetime="${new Date().toISOString().slice(0,10)}" style="color:#444;">Day ${targetDay}, ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</time> &nbsp;·&nbsp;
     <a href="${boxOfficeUrl}" style="color:#c9973a;text-decoration:none;">View full collection report →</a><br>
     <em style="color:#3a3a3a;">All collection figures are industry estimates and may vary from official figures.</em>
   </p>
@@ -1008,7 +1109,7 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
         const blogSlugBase = `${movie.title}${year ? ` (${year})` : ""} day ${targetDay} box office collection`;
         const blogSlug   = slugify(blogSlugBase);
         const parsedSecs = aiSections || parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
-        const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs);
+        const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs, blogSlug);
         const excerpt    = parsedSecs.introParagraph ||
           `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} days.`;
         const seoTitle   = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross | Ollypedia`;

@@ -2382,6 +2382,220 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
+const _autoIndexKeyFile = process.env.GOOGLE_KEY_FILE || "./google-service-account.json";
+const _bingApiKey       = process.env.BING_API_KEY    || "";
+let   _googleAccessToken    = null;
+let   _googleTokenExpiresAt = 0;
+ 
+async function _getGoogleToken() {
+  if (_googleAccessToken && Date.now() < _googleTokenExpiresAt - 60000) {
+    return _googleAccessToken;
+  }
+  try {
+    if (!fs.existsSync(_autoIndexKeyFile)) {
+      console.warn("⚠️  [AutoIndex] Google key file not found:", _autoIndexKeyFile);
+      return null;
+    }
+    const key = JSON.parse(fs.readFileSync(_autoIndexKeyFile, "utf8"));
+    const now = Math.floor(Date.now() / 1000);
+    const { createSign } = require("crypto");
+    const hdr = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const pld = Buffer.from(JSON.stringify({
+      iss: key.client_email,
+      scope: "https://www.googleapis.com/auth/indexing",
+      aud: "https://oauth2.googleapis.com/token",
+      exp: now + 3600, iat: now,
+    })).toString("base64url");
+    const sign = createSign("RSA-SHA256");
+    sign.update(`${hdr}.${pld}`);
+    const sig = sign.sign(key.private_key, "base64url");
+    const jwt = `${hdr}.${pld}.${sig}`;
+ 
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      _googleAccessToken    = data.access_token;
+      _googleTokenExpiresAt = Date.now() + (data.expires_in * 1000);
+      return _googleAccessToken;
+    }
+    console.warn("⚠️  [AutoIndex] Google token error:", data.error || JSON.stringify(data));
+    return null;
+  } catch (e) {
+    console.warn("⚠️  [AutoIndex] Google auth failed:", e.message);
+    return null;
+  }
+}
+ 
+/**
+ * autoIndexUrl(slugOrFullUrl)
+ *
+ * Call this after saving any new blog post to DB.
+ * Accepts slug like "/mehermunda-2026-day-1-box-office-collection"
+ * or a full URL.
+ *
+ * Usage:
+ *   await autoIndexUrl(`/${movieSlug}-day-${dayNum}-box-office-collection`);
+ */
+async function autoIndexUrl(slugOrFullUrl) {
+  const siteBase = process.env.SITE_URL || "https://www.ollypedia.in";
+  const fullUrl  = slugOrFullUrl.startsWith("http")
+    ? slugOrFullUrl
+    : `${siteBase}${slugOrFullUrl.startsWith("/") ? "" : "/"}${slugOrFullUrl}`;
+ 
+  console.log(`📡 [AutoIndex] Indexing: ${fullUrl}`);
+ 
+  // ── Google Indexing API ──
+  try {
+    const token = await _getGoogleToken();
+    if (token) {
+      const gRes = await fetch("https://indexing.googleapis.com/v3/urlNotifications:publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: fullUrl, type: "URL_UPDATED" }),
+      });
+      const gData = await gRes.json();
+      if (gRes.ok) {
+        console.log(`✅ [AutoIndex] Google: ${fullUrl}`);
+      } else {
+        console.warn(`⚠️  [AutoIndex] Google failed (${gRes.status}):`, gData.error?.message || JSON.stringify(gData));
+      }
+    }
+  } catch (e) {
+    console.warn("⚠️  [AutoIndex] Google error:", e.message);
+  }
+ 
+  // ── Bing URL Submission ──
+  if (_bingApiKey) {
+    try {
+      const bRes = await fetch(
+        `https://ssl.bing.com/webmaster/api.svc/json/SubmitUrl?apikey=${_bingApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify({ siteUrl: siteBase, url: fullUrl }),
+        }
+      );
+      if (bRes.ok) {
+        console.log(`✅ [AutoIndex] Bing: ${fullUrl}`);
+      } else {
+        console.warn(`⚠️  [AutoIndex] Bing failed (${bRes.status})`);
+      }
+    } catch (e) {
+      console.warn("⚠️  [AutoIndex] Bing error:", e.message);
+    }
+  }
+ 
+  // ── Sitemap ping (free, no setup needed) ──
+  try {
+    const sitemapUrl = `${siteBase}/sitemap-boxoffice.xml`;
+    await fetch(`https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`);
+    console.log(`✅ [AutoIndex] Sitemap pinged`);
+  } catch {}
+}
+// ── END Auto-Index Helper ─────────────────────────────────────────────────────
+ 
+ 
+ 
+ 
+// ═══════════════════════════════════════════════════════════════════════════
+// HOW TO WIRE IT: paste this replacement for your existing
+// POST /api/admin/blog route (adds one autoIndexUrl call at the end)
+// ═══════════════════════════════════════════════════════════════════════════
+ 
+// REPLACE your existing:  app.post("/api/admin/blog", adminAuth, async (req, res) => {
+// WITH THIS:
+ 
+app.post("/api/admin/blog", adminAuth, async (req, res) => {
+  try {
+    const {
+      title, excerpt, content, category, tags, coverImage,
+      movieId, movieTitle, castId, castName, author,
+      published, featured, seoTitle, seoDesc, youtubeVideoId
+    } = req.body;
+ 
+    if (!title?.trim() || !content?.trim())
+      return res.status(400).json({ error: "Title and content required" });
+ 
+    const slug = req.body.slug?.trim()
+      ? req.body.slug.trim()
+      : title.toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .replace(/-+/g, "-")
+          .trim()
+        + "-" + Date.now().toString(36);
+ 
+    const readTime = Math.max(1, Math.ceil((content || "").split(/\s+/).length / 200));
+    const post = await Blog.create({
+      title: title.trim(), slug,
+      excerpt: excerpt || "", content: content.trim(),
+      category: category || "General",
+      tags: Array.isArray(tags) ? tags : (tags || "").split(",").map(t => t.trim()).filter(Boolean),
+      coverImage: coverImage || "",
+      movieId: movieId || undefined,
+      movieTitle: movieTitle || "",
+      castId: isOid(castId) ? castId : undefined,
+      castName: castName || "",
+      author: author || "Ollypedia Team",
+      published: !!published,
+      featured: !!featured,
+      readTime,
+      seoTitle: seoTitle || title,
+      seoDesc: seoDesc || excerpt || "",
+      youtubeVideoId: youtubeVideoId?.trim() || "",
+    });
+ 
+    // ── AUTO-INDEX: ping Google + Bing immediately after publishing ──
+    if (post.published) {
+      // Fire-and-forget — don't await so the API responds fast
+      autoIndexUrl(`/blog/${post.slug}`).catch(() => {});
+    }
+ 
+    res.status(201).json(post);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+ 
+ 
+// ═══════════════════════════════════════════════════════════════════════════
+// ALSO WIRE TO: POST /api/admin/movies/:id/boxoffice-days
+// Every time a box office day is added, auto-index the blog if it was
+// created via BoxOfficePanel (the panel calls adminCreateBlog after saving).
+// The panel already handles blog creation — no change needed there.
+//
+// OPTIONAL: If you want to auto-index directly when a day is added
+// (without relying on a blog), use this pattern inside the route:
+//
+//   // Inside app.post("/api/admin/movies/:id/boxoffice-days", ...) 
+//   // After movie.save():
+//   const dayBlogSlug = `/${movie.slug}-day-${dayNum}-box-office-collection`;
+//   autoIndexUrl(dayBlogSlug).catch(() => {});
+//
+// ═══════════════════════════════════════════════════════════════════════════
+ 
+ 
+// ── Admin route: manual trigger from AutoIndexPanel UI ───────────────────────
+// POST /api/admin/auto-index
+// Body: { url: "/slug" }  OR  { urls: ["/slug1", "/slug2"] }
+app.post("/api/admin/auto-index", adminAuth, async (req, res) => {
+  try {
+    const { url, urls } = req.body;
+    const list = urls || (url ? [url] : []);
+    if (!list.length) return res.status(400).json({ error: "Provide url or urls array" });
+ 
+    // Index all in parallel
+    await Promise.all(list.map(u => autoIndexUrl(u).catch(e => ({ error: e.message }))));
+ 
+    res.json({ success: true, indexed: list.length, urls: list });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(process.env.PORT || 4000, () =>
   console.log(`🚀 Server running on port ${process.env.PORT || 4000}`)
 );

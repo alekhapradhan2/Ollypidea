@@ -4,6 +4,8 @@ import BlogGenerator from "./BlogGenerator";
 import BoxOfficePanel from "./BoxOfficePanel"; 
 import MergePanel from "./MergePanel";
 import { API, getAdminToken } from "../api/api";
+import AutoIndexPanel from "./AutoIndexPanel"; 
+
 
 
 // ════════════════════════════════════════════════════════════════
@@ -2422,6 +2424,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["boxoffice","📊","Box Office"],
             ["enquiries","✉️","Enquiries"],
             ["merge","🔀","Merge Duplicates"],
+            ["autoindex","📡","Auto-Indexing"],
             ["settings","⚙️","Settings"],
           ].map(([key,icon,label]) => {
             const unread = key === "enquiries" ? enquiries.filter(e => !e.read).length : 0;
@@ -3012,6 +3015,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {tab==="merge" && (
                 <MergePanel movies={movies} onToast={onToast} />
               )}
+
+              {/* ── AUTO-INDEXING ── */}
+{tab==="autoindex" && (
+  <div style={{ padding: 28 }}>
+    <AutoIndexPanel onToast={onToast} />
+  </div>
+)}
 
               {/* ── SETTINGS ── */}
               {tab==="settings" && <div style={{padding:28}}><AdminSettings admin={admin} onToast={onToast} /></div>}
