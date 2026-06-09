@@ -186,4 +186,11 @@ export const API = {
   adminAddBoxOfficeDay:    (id, body)       => post(`/admin/movies/${id}/boxoffice-days`, body, _adminToken),
   adminUpdateBoxOfficeDay: (id, day, body)  => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}`, body, _adminToken),
   adminDeleteBoxOfficeDay: (id, day)        => del(`/admin/movies/${id}/boxoffice-days/${day}`, _adminToken),
+
+  // ── Admin — BMS Tracker
+  trackerGetSessions:    (movieId)    => get(`/admin/tracker/sessions/${movieId}`, _adminToken),
+  trackerGetSnapshot:    (id)         => get(`/admin/tracker/snapshot/${id}`, _adminToken),
+  trackerSaveSnapshot:   (body)       => post(`/admin/tracker/save-snapshot`, body, _adminToken),
+  trackerDeleteSnapshot: (id)         => del(`/admin/tracker/snapshot/${id}`, _adminToken),
+  trackerGetAllActive:   ()           => get(`/admin/tracker/all-active`, _adminToken),
 };

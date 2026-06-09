@@ -2367,6 +2367,152 @@ app.post("/api/admin/merge/song", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// BMS OCCUPANCY TRACKER — Schema + Routes
+// ════════════════════════════════════════════════════════════════════════════
+
+const OccupancySnapshotSchema = new mongoose.Schema({
+  movieId:      { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
+  movieTitle:   { type: String, default: "" },
+  bmsUrl:       { type: String, default: "" },
+  runAt:        { type: Date, default: Date.now, index: true },
+  status:       { type: String, enum: ["running","done","error"], default: "running" },
+  errorMsg:     { type: String, default: "" },
+  // Overall aggregates
+  totalShows:   { type: Number, default: 0 },
+  totalSeats:   { type: Number, default: 0 },
+  totalSold:    { type: Number, default: 0 },
+  avgOccupancy: { type: Number, default: 0 }, // 0-100
+  estCollection:{ type: Number, default: 0 }, // rupees
+  cityCount:    { type: Number, default: 0 },
+  theatreCount: { type: Number, default: 0 },
+  // City-wise breakdown
+  cities: [{
+    name:         String,
+    shows:        Number,
+    totalSeats:   Number,
+    soldSeats:    Number,
+    occupancy:    Number, // 0-100
+    estCollection:Number,
+    theatres: [{
+      name:         String,
+      location:     String,
+      shows:        Number,
+      totalSeats:   Number,
+      soldSeats:    Number,
+      occupancy:    Number,
+      estCollection:Number,
+    }],
+  }],
+}, { timestamps: true });
+
+const OccupancySnapshot = mongoose.models.OccupancySnapshot ||
+  mongoose.model("OccupancySnapshot", OccupancySnapshotSchema);
+
+// ── GET /api/admin/tracker/sessions/:movieId ─────────────────────────────────
+// Returns last 50 snapshots for a movie (summary only, no cities array)
+app.get("/api/admin/tracker/sessions/:movieId", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.movieId)) return res.status(400).json({ error: "Invalid ID" });
+    const snaps = await OccupancySnapshot
+      .find({ movieId: req.params.movieId }, "-cities")
+      .sort({ runAt: -1 }).limit(50).lean();
+    res.json(snaps);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/admin/tracker/snapshot/:id ──────────────────────────────────────
+// Returns a single snapshot with full city/theatre breakdown
+app.get("/api/admin/tracker/snapshot/:id", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+    const snap = await OccupancySnapshot.findById(req.params.id).lean();
+    if (!snap) return res.status(404).json({ error: "Snapshot not found" });
+    res.json(snap);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/admin/tracker/save-snapshot ────────────────────────────────────
+// Frontend sends scraped data; backend stores it and optionally updates boxOfficeDays
+app.post("/api/admin/tracker/save-snapshot", adminAuth, async (req, res) => {
+  try {
+    const { movieId, bmsUrl, cities = [], status = "done", errorMsg = "" } = req.body;
+    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+
+    const movie = await Movie.findById(movieId, "title").lean();
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+
+    // Aggregate totals from cities
+    let totalShows = 0, totalSeats = 0, totalSold = 0, estCollection = 0;
+    const theatreSet = new Set();
+    const processedCities = (cities || []).map(city => {
+      let cShows = 0, cSeats = 0, cSold = 0, cColl = 0;
+      const theatres = (city.theatres || []).map(th => {
+        theatreSet.add(`${city.name}::${th.name}`);
+        cShows   += (th.shows || 0);
+        cSeats   += (th.totalSeats || 0);
+        cSold    += (th.soldSeats  || 0);
+        cColl    += (th.estCollection || 0);
+        const occ = th.totalSeats > 0 ? Math.round((th.soldSeats / th.totalSeats) * 100) : 0;
+        return { ...th, occupancy: occ };
+      });
+      cShows = city.shows || cShows;
+      cSeats = city.totalSeats || cSeats;
+      cSold  = city.soldSeats  || cSold;
+      cColl  = city.estCollection || cColl;
+      const occ = cSeats > 0 ? Math.round((cSold / cSeats) * 100) : 0;
+      totalShows   += cShows;
+      totalSeats   += cSeats;
+      totalSold    += cSold;
+      estCollection+= cColl;
+      return { name: city.name, shows: cShows, totalSeats: cSeats, soldSeats: cSold,
+               occupancy: occ, estCollection: cColl, theatres };
+    });
+
+    const avgOccupancy = totalSeats > 0 ? Math.round((totalSold / totalSeats) * 100) : 0;
+
+    const snap = await OccupancySnapshot.create({
+      movieId, movieTitle: movie.title, bmsUrl: bmsUrl || "",
+      runAt: new Date(), status, errorMsg,
+      totalShows, totalSeats, totalSold, avgOccupancy,
+      estCollection, cityCount: processedCities.length,
+      theatreCount: theatreSet.size, cities: processedCities,
+    });
+
+    res.status(201).json({ success: true, snapshotId: snap._id, avgOccupancy, estCollection });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/admin/tracker/snapshot/:id ───────────────────────────────────
+app.delete("/api/admin/tracker/snapshot/:id", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+    await OccupancySnapshot.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/admin/tracker/all-active ────────────────────────────────────────
+// Returns movies released in last 30 days with their latest snapshot summary
+app.get("/api/admin/tracker/all-active", adminAuth, async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const movies = await Movie
+      .find({ releaseDate: { $gte: cutoff.toISOString().slice(0,10) }, status: { $ne: "Upcoming" } },
+            "title slug posterUrl thumbnailUrl releaseDate")
+      .sort({ releaseDate: -1 }).lean();
+
+    // Attach latest snapshot to each movie
+    const result = await Promise.all(movies.map(async (m) => {
+      const latest = await OccupancySnapshot
+        .findOne({ movieId: m._id, status: "done" }, "-cities")
+        .sort({ runAt: -1 }).lean();
+      return { ...m, latestSnapshot: latest || null };
+    }));
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build
 // command is: cd frontend && npm run build  (or wherever your React app lives)
@@ -2381,7 +2527,588 @@ app.get("*", (req, res) => {
   }
   res.sendFile(path.join(distPath, "index.html"));
 });
+// ════════════════════════════════════════════════════════════════════════════
+//  SACNILK SCRAPER — Schema + Routes + Cron
+//  Paste this entire block into server.js, just before the app.listen() call.
+//
+//  Dependencies to install (if not already present):
+//    npm install node-cron node-fetch
+//  Or if you're on Node 18+ with built-in fetch, remove the node-fetch import.
+//
+//  Note: The scraping is done server-side using a simple HTTP fetch +
+//  regex approach. Sacnilk's India Net figure appears in the page HTML
+//  as text next to the "India Net:" label. We use two strategies:
+//    1. XPath-equivalent: regex targeting the span right after "India Net:"
+//    2. Fallback: look for any ₹ figure near "India Net" in the raw HTML
+// ════════════════════════════════════════════════════════════════════════════
 
+const cron = require("node-cron");
+
+// ── SacnilkConfig Schema ─────────────────────────────────────────────────────
+// One doc per movie. Stores the Sacnilk URL and schedule config.
+
+const SacnilkConfigSchema = new mongoose.Schema({
+  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, unique: true, index: true },
+  movieTitle: { type: String, default: "" },
+  sacnilkUrl: { type: String, default: "" },   // e.g. https://www.sacnilk.com/movie/Mantra_Muugdha_2026
+  active:     { type: Boolean, default: true }, // if false, cron skips it
+  lastLog:    {
+    runAt:    { type: Date,   default: null },
+    status:   { type: String, default: "" },   // "success" | "error"
+    net:      { type: String, default: "" },   // e.g. "₹2.10 Cr"
+    day:      { type: Number, default: null },
+    blogSlug: { type: String, default: "" },
+    error:    { type: String, default: "" },
+  },
+}, { timestamps: true });
+
+const SacnilkConfig = mongoose.models.SacnilkConfig ||
+  mongoose.model("SacnilkConfig", SacnilkConfigSchema);
+
+// ── SacnilkLog Schema ────────────────────────────────────────────────────────
+// Detailed per-run logs. Kept last 30 per movie.
+
+const SacnilkLogSchema = new mongoose.Schema({
+  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
+  runAt:      { type: Date, default: Date.now },
+  status:     { type: String, enum: ["success", "error", "skipped"], default: "error" },
+  net:        { type: String, default: "" },
+  day:        { type: Number, default: null },
+  blogSlug:   { type: String, default: "" },
+  error:      { type: String, default: "" },
+  rawSnippet: { type: String, default: "" }, // first 500 chars of scraped HTML for debug
+}, { timestamps: false });
+
+const SacnilkLog = mongoose.models.SacnilkLog ||
+  mongoose.model("SacnilkLog", SacnilkLogSchema);
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CORE SCRAPE FUNCTION
+//  Fetches the Sacnilk page, extracts "India Net" value,
+//  stores it as a new boxOfficeDay, generates & publishes a blog post.
+// ════════════════════════════════════════════════════════════════════════════
+
+async function scrapeSacnilkForMovie(movieId) {
+  const cfg = await SacnilkConfig.findOne({ movieId });
+  if (!cfg || !cfg.sacnilkUrl) throw new Error("No Sacnilk URL configured");
+
+  // ── 1. Fetch the Sacnilk page ──────────────────────────────────────────────
+  let html = "";
+  try {
+    const resp = await fetch(cfg.sacnilkUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.sacnilk.com/",
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    html = await resp.text();
+  } catch (e) {
+    throw new Error(`Fetch failed: ${e.message}`);
+  }
+
+  // ── 2. Extract India Net value ─────────────────────────────────────────────
+  // Sacnilk HTML structure (simplified):
+  //   <span>India Net:</span><span>₹2.10 Cr</span>
+  //   OR: India Net:</span>\n<span class="...">₹ 2.10 Cr</span>
+  //   OR: India Net:&nbsp;</span><span ...>2,10,00,000</span>
+  //
+  // Strategy: find "India Net" in HTML, grab the next ₹ figure within ~300 chars.
+
+  let netRaw = "";
+
+  // Strategy A: span immediately after "India Net:" label span
+  const stratA = html.match(
+    /India\s*Net\s*:?<\/span>\s*<span[^>]*>\s*([^<]{2,40}?)\s*<\/span>/i
+  );
+  if (stratA) netRaw = stratA[1].trim();
+
+  // Strategy B: broader — any rupee-like figure in the 300 chars after "India Net"
+  if (!netRaw) {
+    const idx = html.search(/India\s*Net/i);
+    if (idx !== -1) {
+      const slice = html.slice(idx, idx + 400).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      const mB = slice.match(/(?:₹|Rs\.?|INR)?\s*(\d[\d,\.]+\s*(?:Cr|L|Lakh|Crore)?)/i);
+      if (mB) netRaw = mB[0].trim();
+    }
+  }
+
+  if (!netRaw) {
+    throw new Error("Could not find 'India Net' value on page. The page structure may have changed.");
+  }
+
+  // Normalise: remove non-breaking spaces / HTML entities
+  netRaw = netRaw.replace(/&nbsp;/gi, " ").replace(/\s+/g, " ").trim();
+
+  // ── 3. Parse numeric value (in raw rupees) for cumulative calc ────────────
+  const parseToRupees = (str) => {
+    const s = str.replace(/[₹,\s]/g, "").toLowerCase();
+    const n = parseFloat(s);
+    if (isNaN(n)) return 0;
+    if (s.includes("cr") || s.includes("crore")) return Math.round(n * 1_00_00_000);
+    if (s.includes("l") || s.includes("lakh")) return Math.round(n * 1_00_000);
+    return Math.round(n);
+  };
+
+  const netNum = parseToRupees(netRaw);
+
+  // ── 4. Load movie ──────────────────────────────────────────────────────────
+  const movie = await Movie.findById(movieId);
+  if (!movie) throw new Error("Movie not found");
+
+  // Determine next day number
+  const existingDays = (movie.boxOfficeDays || []).map(d => d.day);
+  const maxDay = existingDays.length > 0 ? Math.max(...existingDays) : 0;
+  const newDay = maxDay + 1;
+
+  // Today's date string (IST)
+  const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000)); // UTC+5:30
+  const todayStr = nowIST.toISOString().slice(0, 10);
+
+  // ── 5. Push the new boxOfficeDay ───────────────────────────────────────────
+  movie.boxOfficeDays = movie.boxOfficeDays || [];
+
+  // If today's day already exists (re-scrape same day), update it instead
+  const todayEntry = movie.boxOfficeDays.find(d => d.date === todayStr);
+  if (todayEntry) {
+    todayEntry.net = netRaw;
+  } else {
+    movie.boxOfficeDays.push({
+      day:  newDay,
+      net:  netRaw,
+      gross: "",
+      date: todayStr,
+      note: "via Sacnilk",
+    });
+  }
+
+  // Update boxOffice.total
+  const totalNet = (movie.boxOfficeDays || []).reduce((sum, d) => {
+    return sum + parseToRupees(d.net || "0");
+  }, 0);
+
+  const formatINR = (n) => {
+    if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
+    if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
+    return `₹${n.toLocaleString("en-IN")}`;
+  };
+
+  movie.boxOffice = movie.boxOffice || {};
+  movie.boxOffice.total = formatINR(totalNet);
+
+  await movie.save({ validateBeforeSave: false });
+
+  // ── 6. Generate blog post (same style as BoxOfficePanel) ───────────────────
+  const actualDay = todayEntry ? todayEntry.day : newDay;
+  const daysUpToN = (movie.boxOfficeDays || []).filter(d => d.day <= actualDay);
+  const totalGross = 0; // Sacnilk only gives net; gross stays 0
+
+  // Slugify helper (same as BoxOfficePanel)
+  const slugify = (s) =>
+    String(s || "").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
+
+  const getYear = (d) => d ? new Date(d).getFullYear() : "";
+  const movieYear = getYear(movie.releaseDate);
+
+  const blogSlugBase = slugify(`${movie.title}${movieYear ? `-${movieYear}` : ""}-day-${actualDay}-box-office-collection`);
+  const blogSlug = `${blogSlugBase}-${Date.now().toString(36)}`;
+
+  const blogTitle = `${movie.title}${movieYear ? ` (${movieYear})` : ""} Day ${actualDay} Box Office Collection`;
+  const totalNetStr   = formatINR(totalNet);
+  const totalGrossStr = totalGross > 0 ? formatINR(totalGross) : "—";
+
+  // Build a simple content without AI (AI call is optional — see below)
+  // We use the same HTML template style. Quick version here; for AI-enhanced
+  // content set GROQ_API_KEY in .env and uncomment the AI section below.
+  const tableRows = [...daysUpToN].sort((a, b) => a.day - b.day).map(d => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;font-size:0.82rem;font-weight:700;color:#aaa;">Day ${d.day}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;color:#c9973a;font-weight:700;">${d.net || "—"}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;color:#7ec8e3;">${d.gross || "—"}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;font-size:0.75rem;color:#555;">${d.date || ""}</td>
+    </tr>`).join("");
+
+  // ── Optional: AI-enhanced content via Groq ─────────────────────────────────
+  let introPara = `${movie.title}${movieYear ? ` (${movieYear})` : ""} has reported its Day ${actualDay} box office figures from Sacnilk. The film collected an estimated <strong style="color:#c9973a;">${netRaw}</strong> net on Day ${actualDay}, taking its total India net collection to approximately <strong style="color:#c9973a;">${totalNetStr}</strong>.`;
+
+  let analysisPara = `The film has been running across Odisha since its release${movie.releaseDate ? " on " + new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : ""}. All figures are industry estimates sourced from Sacnilk and may be subject to revision.`;
+
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama3-8b-8192",
+          temperature: 0.7,
+          max_tokens: 400,
+          messages: [{
+            role: "user",
+            content: `Write a 2-sentence intro and 2-sentence analysis for this box office article.
+Movie: ${movie.title}${movieYear ? ` (${movieYear})` : ""}
+Language: Odia / Ollywood
+Day ${actualDay} Net: ${netRaw}
+Total Net so far: ${totalNetStr}
+All days: ${daysUpToN.sort((a,b)=>a.day-b.day).map(d=>`Day ${d.day}: ${d.net}`).join(", ")}
+Director: ${movie.director || "N/A"}
+
+Respond ONLY with JSON: {"intro":"...","analysis":"..."}
+No markdown, no code fences.`,
+          }],
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (groqRes.ok) {
+        const gr = await groqRes.json();
+        const raw = (gr?.choices?.[0]?.message?.content || "").trim()
+          .replace(/^```json?\s*/i, "").replace(/```\s*$/i, "").trim();
+        const parsed = JSON.parse(raw);
+        if (parsed.intro)    introPara    = parsed.intro;
+        if (parsed.analysis) analysisPara = parsed.analysis;
+      }
+    } catch { /* AI failed — use fallback paragraphs above */ }
+  }
+
+  const blogContent = `<!-- ═══════════ SACNILK AUTO-GENERATED ═══════════ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": "${blogTitle}",
+  "description": "${movie.title} Day ${actualDay} box office collection: Net ${netRaw}. Total ${totalNetStr} in ${actualDay} day${actualDay !== 1 ? "s" : ""}.",
+  "datePublished": "${todayStr}",
+  "author": { "@type": "Organization", "name": "Ollypedia", "url": "https://ollypedia.in" },
+  "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "https://ollypedia.in", "logo": { "@type": "ImageObject", "url": "https://ollypedia.in/logo.png" } },
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://ollypedia.in/blog/${blogSlug}" }
+}
+</script>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/box-office" style="color:#777;text-decoration:none;">Box Office</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#c9973a;">${movie.title} Day ${actualDay}</span>
+  </nav>
+  <time datetime="${todayStr}" style="font-size:0.73rem;color:#444;">🕐 Updated: ${nowIST.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</time>
+</div>
+
+<div style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+  <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="display:inline-block;background:#2a1500;color:#c9973a;font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #3a2200;">📊 Box Office Report</span>
+    <span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">Day ${actualDay} Update</span>
+    ${movieYear ? `<span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${movieYear}</span>` : ""}
+  </div>
+  <h1 style="color:#fff;font-size:1.6rem;line-height:1.3;font-weight:800;margin:0 0 14px;">${blogTitle}</h1>
+  <p style="color:#bbb;font-size:0.98rem;line-height:1.85;margin:0 0 24px;">${introPara}</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #2e2000;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Net</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
+    </div>
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #222;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Day ${actualDay} Net</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#fff;">${netRaw}</div>
+    </div>
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #1a2a1a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Days Reported</div>
+      <div style="font-size:1.3rem;font-weight:800;color:#4caf82;">${actualDay}</div>
+    </div>
+  </div>
+</div>
+
+<div style="background:#180e00;border-left:4px solid #ff9800;border-radius:0 10px 10px 0;padding:14px 20px;margin-bottom:22px;">
+  <strong style="color:#ff9800;">📊 Box Office Update:</strong>
+  <span style="color:#ccc;"> <strong style="color:#fff;">${movie.title}</strong> has collected an estimated <strong style="color:#c9973a;">${totalNetStr} net</strong> after <strong style="color:#fff;">${actualDay} day${actualDay !== 1 ? "s" : ""}</strong> in theatres. Day ${actualDay} net collection: <strong style="color:#c9973a;">${netRaw}</strong>.</span>
+</div>
+
+<section style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:24px;margin-bottom:22px;">
+  <h2 style="color:#fff;font-size:1.1rem;font-weight:800;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid #1e1e1e;">📅 Day-wise Box Office Collection</h2>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:360px;">
+      <thead>
+        <tr style="background:#0a0a0a;">
+          <th style="padding:10px 12px;border-bottom:2px solid #2a2a2a;text-align:left;font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.08em;">Day</th>
+          <th style="padding:10px 12px;border-bottom:2px solid #2a2a2a;text-align:left;font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.08em;">Net Collection</th>
+          <th style="padding:10px 12px;border-bottom:2px solid #2a2a2a;text-align:left;font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.08em;">Gross</th>
+          <th style="padding:10px 12px;border-bottom:2px solid #2a2a2a;text-align:left;font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.08em;">Date</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot>
+        <tr style="background:#0d0d0d;">
+          <td style="padding:12px;font-weight:800;color:#c9973a;font-size:0.88rem;">Total</td>
+          <td style="padding:12px;font-weight:800;color:#c9973a;font-size:1rem;">${totalNetStr}</td>
+          <td style="padding:12px;color:#555;">—</td>
+          <td style="padding:12px;"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <p style="font-size:0.72rem;color:#444;margin-top:10px;">* All figures are industry estimates sourced from Sacnilk. Subject to revision.</p>
+</section>
+
+<section style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:24px;margin-bottom:22px;">
+  <h2 style="color:#fff;font-size:1.1rem;font-weight:800;margin:0 0 14px;">📈 Performance Analysis</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${analysisPara}</p>
+</section>
+
+<p style="font-size:0.75rem;color:#444;margin-top:16px;border-top:1px solid #1a1a1a;padding-top:12px;">
+  Source: <a href="${cfg.sacnilkUrl}" target="_blank" rel="nofollow noreferrer" style="color:#555;">Sacnilk</a> · Data as of ${nowIST.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} · © Ollypedia
+</p>`;
+
+  // ── 7. Create or update the blog post ──────────────────────────────────────
+  // Look for an existing blog for this movie+day to avoid duplication
+  const existingBlog = await Blog.findOne({
+    movieId: movie._id,
+    slug: { $regex: `day-${actualDay}-box-office-collection` },
+  });
+
+  let finalSlug = blogSlug;
+  if (existingBlog) {
+    // Update existing
+    existingBlog.title    = blogTitle;
+    existingBlog.content  = blogContent;
+    existingBlog.excerpt  = `${movie.title} Day ${actualDay} box office collection: Net ${netRaw}. Total ${totalNetStr} in ${actualDay} days.`;
+    existingBlog.seoTitle = `${blogTitle} | Ollypedia`;
+    existingBlog.seoDesc  = `${movie.title} collected ${netRaw} net on Day ${actualDay}. Total: ${totalNetStr}. Full day-wise breakdown on Ollypedia.`;
+    existingBlog.tags     = ["Box Office", "Odia Movie", movie.title, "Ollywood", `Day ${actualDay}`];
+    existingBlog.published = true;
+    await existingBlog.save();
+    finalSlug = existingBlog.slug;
+  } else {
+    const blog = await Blog.create({
+      title:      blogTitle,
+      slug:       blogSlug,
+      content:    blogContent,
+      excerpt:    `${movie.title} Day ${actualDay} box office collection: Net ${netRaw}. Total ${totalNetStr} in ${actualDay} days.`,
+      category:   "Box Office",
+      tags:       ["Box Office", "Odia Movie", movie.title, "Ollywood", `Day ${actualDay}`],
+      movieId:    movie._id,
+      movieTitle: movie.title,
+      coverImage: movie.posterUrl || movie.thumbnailUrl || "",
+      author:     "Ollypedia Team",
+      published:  true,
+      featured:   false,
+      seoTitle:   `${blogTitle} | Ollypedia`,
+      seoDesc:    `${movie.title} collected ${netRaw} net on Day ${actualDay}. Total: ${totalNetStr}. Full day-wise breakdown on Ollypedia.`,
+    });
+    finalSlug = blog.slug;
+  }
+
+  // ── 8. Update lastLog on config ────────────────────────────────────────────
+  cfg.lastLog = {
+    runAt:    new Date(),
+    status:   "success",
+    net:      netRaw,
+    day:      actualDay,
+    blogSlug: finalSlug,
+    error:    "",
+  };
+  await cfg.save();
+
+  // ── 9. Append to SacnilkLog (keep last 30) ─────────────────────────────────
+  await SacnilkLog.create({
+    movieId, runAt: new Date(),
+    status:   "success",
+    net:      netRaw,
+    day:      actualDay,
+    blogSlug: finalSlug,
+    rawSnippet: html.slice(0, 500),
+  });
+  await SacnilkLog.deleteMany(
+    { movieId },
+    // keep only most recent 30
+  );
+  // Trim to 30
+  const logCount = await SacnilkLog.countDocuments({ movieId });
+  if (logCount > 30) {
+    const oldest = await SacnilkLog.find({ movieId }).sort({ runAt: 1 }).limit(logCount - 30).select("_id");
+    await SacnilkLog.deleteMany({ _id: { $in: oldest.map(l => l._id) } });
+  }
+
+  // ── 10. Auto-index ping (if you have autoIndexUrl helper) ─────────────────
+  // Uncomment if autoIndexUrl is available in your server.js:
+  // try {
+  //   const blogFullUrl = `https://ollypedia.in/blog/${finalSlug}`;
+  //   await autoIndexUrl(blogFullUrl);
+  // } catch { /* non-fatal */ }
+
+  return { netRaw, day: actualDay, blogSlug: finalSlug };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ROUTES
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/admin/sacnilk/configs ───────────────────────────────────────────
+app.get("/api/admin/sacnilk/configs", adminAuth, async (req, res) => {
+  try {
+    const configs = await SacnilkConfig.find().sort({ createdAt: -1 }).lean();
+    res.json(configs);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/admin/sacnilk/configs/:movieId ──────────────────────────────────
+// Upsert a config for a movie (create or update fields)
+app.put("/api/admin/sacnilk/configs/:movieId", adminAuth, async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+
+    const movie = await Movie.findById(movieId, "title").lean();
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+
+    const { sacnilkUrl, active } = req.body;
+    const update = { movieTitle: movie.title };
+    if (sacnilkUrl !== undefined) update.sacnilkUrl = sacnilkUrl;
+    if (active !== undefined)     update.active     = active;
+
+    const cfg = await SacnilkConfig.findOneAndUpdate(
+      { movieId },
+      { $set: update },
+      { upsert: true, new: true }
+    );
+    res.json(cfg);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/admin/sacnilk/configs/:movieId ───────────────────────────────
+app.delete("/api/admin/sacnilk/configs/:movieId", adminAuth, async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+    await SacnilkConfig.deleteOne({ movieId });
+    await SacnilkLog.deleteMany({ movieId });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/admin/sacnilk/logs/:movieId ─────────────────────────────────────
+app.get("/api/admin/sacnilk/logs/:movieId", adminAuth, async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+    const logs = await SacnilkLog.find({ movieId }).sort({ runAt: -1 }).limit(30).lean();
+    res.json(logs);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/admin/sacnilk/scrape/:movieId ──────────────────────────────────
+// Manual single-movie scrape trigger
+app.post("/api/admin/sacnilk/scrape/:movieId", adminAuth, async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+
+    const result = await scrapeSacnilkForMovie(movieId);
+    res.json({
+      success:       true,
+      netCollection: result.netRaw,
+      day:           result.day,
+      blogSlug:      result.blogSlug,
+      message:       `Scraped Day ${result.day}: ${result.netRaw}. Blog published at /blog/${result.blogSlug}`,
+    });
+  } catch (e) {
+    // Log the failure
+    try {
+      const { movieId } = req.params;
+      await SacnilkLog.create({ movieId, status: "error", error: e.message });
+      // Update lastLog on config too
+      await SacnilkConfig.findOneAndUpdate(
+        { movieId },
+        { $set: { "lastLog.runAt": new Date(), "lastLog.status": "error", "lastLog.error": e.message } }
+      );
+    } catch { /* silent */ }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/admin/sacnilk/scrape-all ──────────────────────────────────────
+// Manual "scrape all active movies" — same logic as the cron job
+app.post("/api/admin/sacnilk/scrape-all", adminAuth, async (req, res) => {
+  try {
+    const configs = await SacnilkConfig.find({ active: true, sacnilkUrl: { $ne: "" } }).lean();
+    let successCount = 0, failCount = 0;
+    const results = [];
+
+    for (const cfg of configs) {
+      try {
+        const r = await scrapeSacnilkForMovie(String(cfg.movieId));
+        successCount++;
+        results.push({ movieId: cfg.movieId, movieTitle: cfg.movieTitle, status: "success", ...r });
+      } catch (e) {
+        failCount++;
+        results.push({ movieId: cfg.movieId, movieTitle: cfg.movieTitle, status: "error", error: e.message });
+        // Log failure
+        try {
+          await SacnilkLog.create({ movieId: cfg.movieId, status: "error", error: e.message });
+          await SacnilkConfig.findOneAndUpdate(
+            { movieId: cfg.movieId },
+            { $set: { "lastLog.runAt": new Date(), "lastLog.status": "error", "lastLog.error": e.message } }
+          );
+        } catch { /* silent */ }
+      }
+      // Small delay between requests to avoid hammering Sacnilk
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    res.json({ success: successCount, failed: failCount, results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CRON JOB — runs every day at 8:00 AM IST (= 02:30 UTC)
+//  Schedule format: "30 2 * * *"  (cron uses UTC; IST = UTC+5:30)
+// ════════════════════════════════════════════════════════════════════════════
+cron.schedule("30 2 * * *", async () => {
+  console.log(`[Sacnilk Cron] Starting daily scrape at ${new Date().toISOString()}`);
+
+  try {
+    const configs = await SacnilkConfig.find({
+      active:      true,
+      sacnilkUrl:  { $ne: "" },
+    }).lean();
+
+    console.log(`[Sacnilk Cron] ${configs.length} active movie(s) to scrape`);
+
+    for (const cfg of configs) {
+      try {
+        const r = await scrapeSacnilkForMovie(String(cfg.movieId));
+        console.log(`[Sacnilk Cron] ✅ ${cfg.movieTitle}: Day ${r.day} = ${r.netRaw}`);
+      } catch (e) {
+        console.error(`[Sacnilk Cron] ❌ ${cfg.movieTitle}: ${e.message}`);
+        // Log failure
+        try {
+          await SacnilkLog.create({ movieId: cfg.movieId, status: "error", error: e.message });
+          await SacnilkConfig.findOneAndUpdate(
+            { movieId: cfg.movieId },
+            { $set: { "lastLog.runAt": new Date(), "lastLog.status": "error", "lastLog.error": e.message } }
+          );
+        } catch { /* silent */ }
+      }
+      // Polite delay between movies
+      await new Promise(r => setTimeout(r, 3000));
+    }
+
+    console.log(`[Sacnilk Cron] Finished at ${new Date().toISOString()}`);
+  } catch (e) {
+    console.error(`[Sacnilk Cron] Fatal error: ${e.message}`);
+  }
+}, {
+  timezone: "Asia/Kolkata",
+});
+
+console.log("✅ Sacnilk cron scheduled: daily at 8:00 AM IST");
 
 
 app.listen(process.env.PORT || 4000, () =>

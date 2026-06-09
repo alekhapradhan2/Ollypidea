@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import BlogGenerator from "./BlogGenerator";
-import BoxOfficePanel from "./BoxOfficePanel"; 
+import BoxOfficePanel from "./BoxOfficePanel";
+import BMSTrackerPanel from "./BMSTrackerPanel";
 import MergePanel from "./MergePanel";
 import { API, getAdminToken } from "../api/api";
 import AutoIndexPanel from "./AutoIndexPanel"; 
+import SacnilkScraperPanel from "./SacnilkScraperPanel";
 
 
 
@@ -2422,6 +2424,8 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["news","📰","News"],
             ["blog","✍️","Blog"],
             ["boxoffice","📊","Box Office"],
+            ["tracker","🎟","BMS Tracker"],
+            [ "sacnilk",  "🕷️ Sacnilk" ],
             ["enquiries","✉️","Enquiries"],
             ["merge","🔀","Merge Duplicates"],
             ["autoindex","📡","Auto-Indexing"],
@@ -3001,6 +3005,11 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 <BoxOfficePanel movies={movies} onToast={onToast} />
               )}
 
+              {/* ── BMS TRACKER ── */}
+              {tab==="tracker" && (
+                <BMSTrackerPanel movies={movies} onToast={onToast} />
+              )}
+
               {/* ── ENQUIRIES ── */}
               {tab==="enquiries" && (
                 <EnquiriesPanel
@@ -3023,6 +3032,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   </div>
 )}
 
+{tab === "sacnilk" && (
+  <SacnilkScraperPanel movies={movies} onToast={onToast} />
+)}
               {/* ── SETTINGS ── */}
               {tab==="settings" && <div style={{padding:28}}><AdminSettings admin={admin} onToast={onToast} /></div>}
             </>
