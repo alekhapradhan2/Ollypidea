@@ -597,6 +597,51 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
         { "@type": "ListItem", "position": 3, "name": "${movieName}", "item": "https://ollypedia.in${boxOfficeUrl}" },
         { "@type": "ListItem", "position": 4, "name": "Day ${targetDay} Collection", "item": "https://ollypedia.in/blog/${blogSlug}" }
       ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the total box office collection of ${movieName}${year ? ` (${year})` : ""}?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "As of Day ${targetDay}, ${movieName} has collected a total of ${totalNetStr} net and ${totalGrossStr} gross at the Odia box office. These are industry estimates updated daily on Ollypedia."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How much did ${movieName} collect on Day ${targetDay}?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "On Day ${targetDay}, ${movieName} collected ${dayNet} net and ${dayGross} gross. The cumulative total stands at ${totalNetStr} net after ${targetDay} day${targetDay !== 1 ? "s" : ""} in theatres."
+          }
+        }${directorName ? `,
+        {
+          "@type": "Question",
+          "name": "Who directed ${movieName}?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "${movieName} is directed by ${directorName}.${producerName ? ` The film is produced by ${producerName}.` : ""} It is an Odia language film released in ${year || "2026"} under the Ollywood banner."
+          }
+        }` : ""}${leadActors.length ? `,
+        {
+          "@type": "Question",
+          "name": "Who are the lead actors in ${movieName}?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "${movieName} stars ${leadActors.join(", ")}${leadActresses.length ? ` alongside ${leadActresses.join(", ")}` : ""}.${musicDirector ? ` The music is composed by ${musicDirector}.` : ""}"
+          }
+        }` : ""},
+        {
+          "@type": "Question",
+          "name": "Is ${movieName} a hit or flop at the box office?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Based on ${targetDay} day${targetDay !== 1 ? "s" : ""} of data, ${movieName} has collected ${totalNetStr} net at the Odia box office.${movie.budget ? ` The film had an estimated budget of ${movie.budget}.` : ""} Ollypedia updates collection figures daily based on industry trade estimates."
+          }
+        }
+      ]
     }
   ]
 }
@@ -832,17 +877,17 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   Uses FAQ schema-friendly markup. Google often
   pulls these into rich results / People Also Ask.
 ───────────────────────────────────────────── -->
-<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;" itemscope itemtype="https://schema.org/FAQPage">
+<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
   <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 22px;line-height:1.3;">
     Frequently Asked Questions — ${movieName} Box Office
   </h2>
 
-  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
-    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+  <div style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
       What is the total box office collection of ${movieName}${year ? ` (${year})` : ""}?
     </h3>
-    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+    <div>
+      <p style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
         As of Day ${targetDay}, <strong style="color:#fff;">${movieName}</strong> has collected a total of
         <strong style="color:#c9973a;">${totalNetStr} net</strong> and
         <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> at the Odia box office.
@@ -851,12 +896,12 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
     </div>
   </div>
 
-  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
-    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+  <div style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
       How much did ${movieName} collect on Day ${targetDay}?
     </h3>
-    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+    <div>
+      <p style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
         On Day ${targetDay}, <strong style="color:#fff;">${movieName}</strong> collected
         <strong style="color:#c9973a;">${dayNet} net</strong> and
         <strong style="color:#7ec8e3;">${dayGross} gross</strong>.
@@ -866,12 +911,12 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   </div>
 
   ${directorName ? `
-  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
-    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+  <div style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
       Who directed ${movieName}?
     </h3>
-    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+    <div>
+      <p style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
         <strong style="color:#fff;">${movieName}</strong> is directed by
         <strong style="color:#ddd;">${directorName}</strong>.
         ${producerName ? `The film is produced by <strong style="color:#ddd;">${producerName}</strong>.` : ""}
@@ -881,12 +926,12 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   </div>` : ""}
 
   ${leadActors.length ? `
-  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
-    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+  <div style="border-bottom:1px solid #242424;padding-bottom:18px;margin-bottom:18px;">
+    <h3 style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
       Who are the lead actors in ${movieName}?
     </h3>
-    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+    <div>
+      <p style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
         <strong style="color:#fff;">${movieName}</strong> stars
         <strong style="color:#ddd;">${leadActors.join(", ")}</strong>${leadActresses.length ? ` alongside <strong style="color:#ddd;">${leadActresses.join(", ")}</strong>` : ""}.
         ${musicDirector ? `The music is composed by <strong style="color:#ddd;">${musicDirector}</strong>.` : ""}
@@ -894,12 +939,12 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
     </div>
   </div>` : ""}
 
-  <div itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" style="padding-bottom:4px;">
-    <h3 itemprop="name" style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
+  <div style="padding-bottom:4px;">
+    <h3 style="font-size:0.93rem;font-weight:700;color:#ddd;margin:0 0 8px;">
       Is ${movieName} a hit or flop at the box office?
     </h3>
-    <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
-      <p itemprop="text" style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
+    <div>
+      <p style="color:#aaa;font-size:0.9rem;line-height:1.8;margin:0;">
         Based on ${targetDay} day${targetDay !== 1 ? "s" : ""} of data, <strong style="color:#fff;">${movieName}</strong> has collected
         <strong style="color:#c9973a;">${totalNetStr} net</strong> at the Odia box office.
         ${movie.budget ? `The film had an estimated budget of <strong style="color:#ddd;">${movie.budget}</strong>.` : ""}
