@@ -597,51 +597,6 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
         { "@type": "ListItem", "position": 3, "name": "${movieName}", "item": "https://ollypedia.in${boxOfficeUrl}" },
         { "@type": "ListItem", "position": 4, "name": "Day ${targetDay} Collection", "item": "https://ollypedia.in/blog/${blogSlug}" }
       ]
-    },
-    {
-      "@type": "FAQPage",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "What is the total box office collection of ${movieName}${year ? ` (${year})` : ""}?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "As of Day ${targetDay}, ${movieName} has collected a total of ${totalNetStr} net and ${totalGrossStr} gross at the Odia box office. These are industry estimates updated daily on Ollypedia."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "How much did ${movieName} collect on Day ${targetDay}?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "On Day ${targetDay}, ${movieName} collected ${dayNet} net and ${dayGross} gross. The cumulative total stands at ${totalNetStr} net after ${targetDay} day${targetDay !== 1 ? "s" : ""} in theatres."
-          }
-        }${directorName ? `,
-        {
-          "@type": "Question",
-          "name": "Who directed ${movieName}?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "${movieName} is directed by ${directorName}.${producerName ? ` The film is produced by ${producerName}.` : ""} It is an Odia language film released in ${year || "2026"} under the Ollywood banner."
-          }
-        }` : ""}${leadActors.length ? `,
-        {
-          "@type": "Question",
-          "name": "Who are the lead actors in ${movieName}?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "${movieName} stars ${leadActors.join(", ")}${leadActresses.length ? ` alongside ${leadActresses.join(", ")}` : ""}.${musicDirector ? ` The music is composed by ${musicDirector}.` : ""}"
-          }
-        }` : ""},
-        {
-          "@type": "Question",
-          "name": "Is ${movieName} a hit or flop at the box office?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Based on ${targetDay} day${targetDay !== 1 ? "s" : ""} of data, ${movieName} has collected ${totalNetStr} net at the Odia box office.${movie.budget ? ` The film had an estimated budget of ${movie.budget}.` : ""} Ollypedia updates collection figures daily based on industry trade estimates."
-          }
-        }
-      ]
     }
   ]
 }
