@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API } from "../api/api";
 
@@ -21,24 +21,24 @@ const heroImage = (m) =>
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
 
-const now = new Date();
+// Stable reference — computed once at module load, not on every render
+const NOW = new Date();
 
-// within N days from today (negative = past)
 const withinDays = (d, pastDays, futureDays) => {
   if (!d) return false;
-  const diff = (new Date(d) - now) / 86400000;
+  const diff = (new Date(d) - NOW) / 86400000;
   return diff >= -pastDays && diff <= futureDays;
 };
 const isThisWeek  = (d) => withinDays(d, 7, 14);
 const isThisMonth = (d) => {
   if (!d) return false;
   const dt = new Date(d);
-  return dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+  return dt.getMonth() === NOW.getMonth() && dt.getFullYear() === NOW.getFullYear();
 };
 const isLastMonth = (d) => {
   if (!d) return false;
   const dt  = new Date(d);
-  const lm  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lm  = new Date(NOW.getFullYear(), NOW.getMonth() - 1, 1);
   return dt.getMonth() === lm.getMonth() && dt.getFullYear() === lm.getFullYear();
 };
 const isLastWeek = (d) => withinDays(d, 14, 0);
@@ -273,53 +273,60 @@ export default function Home({ production }) {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    Promise.all([
-      API.getMovies().catch(() => []),
-      API.getNews().catch(() => []),
-    ]).then(([m, n]) => {
-      setMovies(m);
-      setNews(n.slice(0, 12));
-      setLoading(false);
-    });
+    // Phase 1 — fetch movies first; render hero + rows immediately
+    API.getMovies()
+      .then(m => { setMovies(m); setLoading(false); })
+      .catch(() => setLoading(false));
+
+    // Phase 2 — news is below the fold; fetch independently, doesn't block
+    API.getNews()
+      .then(n => setNews(n.slice(0, 12)))
+      .catch(() => {});
   }, []);
 
-  // ── Hero pool: upcoming + last 60 days + this month + last month ──
-  const heroMovies = movies
+  // ── Memoised section arrays — computed once per movies change, not per render ──
+  const allMovies = useMemo(
+    () => [...movies].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+    [movies]
+  );
+
+  const heroMovies = useMemo(() => movies
     .filter(m => {
       const hasImg = m.thumbnailUrl || m.media?.trailer?.ytId || m.posterUrl;
       if (!hasImg) return false;
-      // include: upcoming (any future date)
       if (!m.verdict || m.verdict === "Upcoming") return true;
-      // include: released within last 60 days
       if (m.releaseDate && withinDays(m.releaseDate, 60, 0)) return true;
-      // include: this month and last month explicitly
       if (isThisMonth(m.releaseDate) || isLastMonth(m.releaseDate)) return true;
       return false;
     })
     .sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0))
-    .slice(0, 8);
+    .slice(0, 8),
+    [movies]
+  );
 
-  useEffect(() => {
-    if (!heroMovies.length) return;
-    timerRef.current = setInterval(() => setHeroIdx(i => (i + 1) % heroMovies.length), 5500);
-    return () => clearInterval(timerRef.current);
-  }, [heroMovies.length]);
-
-  const goHero = (i) => { setHeroIdx(i); clearInterval(timerRef.current); };
-
-  // ── Sections ──────────────────────────────────────────────
-  const allMovies   = [...movies].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-  const thisWeek    = movies.filter(m => isThisWeek(m.releaseDate) && !m.releaseTBA);
-  const thisMonth   = movies.filter(m => isThisMonth(m.releaseDate));
-  const lastMonth   = movies.filter(m => isLastMonth(m.releaseDate));
-  const lastWeek    = movies.filter(m => isLastWeek(m.releaseDate) && !isThisWeek(m.releaseDate));
-  const upcoming    = movies.filter(m => !m.verdict || m.verdict === "Upcoming");
-  const inTheatres  = movies.filter(m => ["Hit","Average","Flop","Super Hit","Blockbuster"].includes(m.verdict));
-  const highRated   = movies
+  const thisWeek   = useMemo(() => movies.filter(m => isThisWeek(m.releaseDate)  && !m.releaseTBA), [movies]);
+  const thisMonth  = useMemo(() => movies.filter(m => isThisMonth(m.releaseDate)),                  [movies]);
+  const lastMonth  = useMemo(() => movies.filter(m => isLastMonth(m.releaseDate)),                  [movies]);
+  const lastWeek   = useMemo(() => movies.filter(m => isLastWeek(m.releaseDate)  && !isThisWeek(m.releaseDate)), [movies]);
+  const upcoming   = useMemo(() => movies.filter(m => !m.verdict || m.verdict === "Upcoming"),      [movies]);
+  const inTheatres = useMemo(() => movies.filter(m => ["Hit","Average","Flop","Super Hit","Blockbuster"].includes(m.verdict)), [movies]);
+  const highRated  = useMemo(() => movies
     .filter(m => m.reviews?.length >= 1)
     .map(m => ({ ...m, avg: m.reviews.reduce((s, r) => s + (r.rating || 0), 0) / m.reviews.length }))
     .filter(m => m.avg >= 3.5)
-    .sort((a, b) => b.avg - a.avg);
+    .sort((a, b) => b.avg - a.avg),
+    [movies]
+  );
+
+  // Hero auto-advance — only restarts when heroMovies.length actually changes
+  const heroLen = heroMovies.length;
+  useEffect(() => {
+    if (!heroLen) return;
+    timerRef.current = setInterval(() => setHeroIdx(i => (i + 1) % heroLen), 5500);
+    return () => clearInterval(timerRef.current);
+  }, [heroLen]);
+
+  const goHero = (i) => { setHeroIdx(i); clearInterval(timerRef.current); };
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh", color: "var(--muted)" }}>
@@ -372,37 +379,19 @@ export default function Home({ production }) {
 
       <div className="home-sections">
 
-        {/* This week */}
-        {thisWeek.length > 0 && <MovieRow title="🔥 Releasing This Week" movies={thisWeek} />}
+        {thisWeek.length   > 0 && <MovieRow title="🔥 Releasing This Week" movies={thisWeek} />}
+        {thisMonth.length  > 0 && <MovieRow title="🗓 This Month"          movies={thisMonth} />}
+        {lastWeek.length   > 0 && <MovieRow title="📅 Last Week"           movies={lastWeek} />}
+        {lastMonth.length  > 0 && <MovieRow title="📆 Last Month"          movies={lastMonth} />}
+        {inTheatres.length > 0 && <MovieRow title="🎭 Now in Theatres"     movies={inTheatres} />}
 
-        {/* This month */}
-        {thisMonth.length > 0 && <MovieRow title="🗓 This Month" movies={thisMonth} />}
-
-        {/* Last week — if different from this month */}
-        {lastWeek.length > 0 && <MovieRow title="📅 Last Week" movies={lastWeek} />}
-
-        {/* Last month */}
-        {lastMonth.length > 0 && <MovieRow title="📆 Last Month" movies={lastMonth} />}
-
-        {/* Now in theatres */}
-        {inTheatres.length > 0 && <MovieRow title="🎭 Now in Theatres" movies={inTheatres} />}
-
-        {/* Trailers */}
         <TrailersRow movies={allMovies} />
-
-        {/* News */}
         <NewsRow news={news} />
-
-        {/* Songs */}
         <SongsRow movies={allMovies} />
 
-        {/* High rated */}
-        {highRated.length > 0 && <MovieRow title="⭐ Top Rated" movies={highRated} />}
+        {highRated.length > 0 && <MovieRow title="⭐ Top Rated"       movies={highRated} />}
+        {upcoming.length  > 0 && <MovieRow title="🚀 Upcoming Movies" movies={upcoming} viewAllPath="/movies" />}
 
-        {/* Upcoming */}
-        {upcoming.length > 0 && <MovieRow title="🚀 Upcoming Movies" movies={upcoming} viewAllPath="/movies" />}
-
-        {/* All movies */}
         <MovieRow title="🎬 All Movies" movies={allMovies} viewAllPath="/movies" />
 
         {movies.length === 0 && (
