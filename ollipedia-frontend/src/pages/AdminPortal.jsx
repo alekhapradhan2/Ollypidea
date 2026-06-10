@@ -1,12 +1,14 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import BlogGenerator from "./BlogGenerator";
-import BoxOfficePanel from "./BoxOfficePanel";
-import BMSTrackerPanel from "./BMSTrackerPanel";
-import MergePanel from "./MergePanel";
 import { API, getAdminToken } from "../api/api";
-import AutoIndexPanel from "./AutoIndexPanel"; 
-import SacnilkScraperPanel from "./SacnilkScraperPanel";
+
+// Lazy-load heavy panel components — only fetched when the user opens that tab
+const BlogGenerator      = lazy(() => import("./BlogGenerator"));
+const BoxOfficePanel     = lazy(() => import("./BoxOfficePanel"));
+const BMSTrackerPanel    = lazy(() => import("./BMSTrackerPanel"));
+const MergePanel         = lazy(() => import("./MergePanel"));
+const AutoIndexPanel     = lazy(() => import("./AutoIndexPanel"));
+const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
 
 
 
@@ -2174,6 +2176,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const [enquiries,   setEnquiries]   = useState([]);
   const [stats,       setStats]       = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const [loadingSecondary, setLoadingSecondary] = useState(true); // cast/productions/news/enquiries still fetching
   const [saving,      setSaving]      = useState(false);
   const [search,      setSearch]      = useState("");
   const setQ = (v) => { setSearch(v); resetPages(); };
@@ -2201,15 +2204,29 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
   const loadAll = async () => {
     setLoading(true);
+    setLoadingSecondary(true);
     try {
-      const [m, c, p, n, s, enq] = await Promise.all([
-        API.getMovies(), API.getCast(), API.getProductions(),
-        API.adminGetAllNews(), API.adminStats(),
+      // Phase 1 — critical: movies + stats to render Dashboard immediately
+      const [m, s] = await Promise.all([
+        API.getMovies(),
+        API.adminStats(),
+      ]);
+      setMovies(m); setStats(s);
+      setLoading(false); // unblock UI as soon as movies + stats are ready
+
+      // Phase 2 — secondary data loaded silently in the background
+      const [c, p, n, enq] = await Promise.all([
+        API.getCast(),
+        API.getProductions(),
+        API.adminGetAllNews(),
         API.adminGetEnquiries().catch(() => []),
       ]);
-      setMovies(m); setCast(c); setProds(p); setNews(n); setStats(s); setEnquiries(enq);
-    } catch (e) { onToast?.(e.message, "error"); }
-    finally { setLoading(false); }
+      setCast(c); setProds(p); setNews(n); setEnquiries(enq);
+      setLoadingSecondary(false);
+    } catch (e) {
+      onToast?.(e.message, "error");
+      setLoading(false);
+    }
   };
 
   const openCreate = (type) => setModal({ type, mode:"create", data:null });
@@ -2230,7 +2247,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
         setMovies(p => p.map(x => x._id===m._id ? m : x));
         onToast?.(`"${m.title}" updated!`);
       }
-      closeModal(); loadAll();
+      closeModal();
     } catch (e) { onToast?.(e.message, "error"); }
     finally { setSaving(false); }
   };
@@ -2738,7 +2755,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               })()}
 
                             {/* ── CAST ── */}
-              {tab==="cast" && (() => {
+              {tab==="cast" && (loadingSecondary ? <Spinner /> : (() => {
                 const pagedCast = filteredCast.slice((castPage-1)*PG.cast, castPage*PG.cast);
                 return (
                   <div style={{padding:"0 28px 40px"}}>
@@ -2811,10 +2828,10 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                         </>}
                   </div>
                 );
-              })()}
+              })())}
 
                             {/* ── PRODUCTIONS ── */}
-              {tab==="productions" && (() => {
+              {tab==="productions" && (loadingSecondary ? <Spinner /> : (() => {
                 const pagedProds = filteredProds.slice((prodPage-1)*PG.prods, prodPage*PG.prods);
                 return (
                   <div style={{padding:"0 28px 40px"}}>
@@ -2887,10 +2904,10 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                         </>}
                   </div>
                 );
-              })()}
+              })())}
 
                             {/* ── NEWS ── */}
-              {tab==="news" && (() => {
+              {tab==="news" && (loadingSecondary ? <Spinner /> : (() => {
                 const pagedNews   = filteredNews.slice((newsPage-1)*PG.news, newsPage*PG.news);
                 const allNewsIds  = filteredNews.map(n=>n._id);
                 const allNewsSel  = allNewsIds.length>0 && allNewsIds.every(id=>selected.has(id));
@@ -2995,47 +3012,61 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                         </>}
                   </div>
                 );
-              })()}
+              })())}
 
               {/* ── BLOG ── */}
               {tab==="blog" && (
-                <BlogGenerator movies={movies} cast={cast} onToast={onToast} />
+                <Suspense fallback={<Spinner />}>
+                  <BlogGenerator movies={movies} cast={cast} onToast={onToast} />
+                </Suspense>
               )}
-             {/* ── BOX OFFICE ── */}
+              {/* ── BOX OFFICE ── */}
               {tab==="boxoffice" && (
-                <BoxOfficePanel movies={movies} onToast={onToast} />
+                <Suspense fallback={<Spinner />}>
+                  <BoxOfficePanel movies={movies} onToast={onToast} />
+                </Suspense>
               )}
 
               {/* ── BMS TRACKER ── */}
               {tab==="tracker" && (
-                <BMSTrackerPanel movies={movies} onToast={onToast} />
+                <Suspense fallback={<Spinner />}>
+                  <BMSTrackerPanel movies={movies} onToast={onToast} />
+                </Suspense>
               )}
 
               {/* ── ENQUIRIES ── */}
               {tab==="enquiries" && (
-                <EnquiriesPanel
-                  enquiries={enquiries}
-                  setEnquiries={setEnquiries}
-                  onToast={onToast}
-                  setConfirm={setConfirm}
-                />
+                loadingSecondary
+                  ? <Spinner />
+                  : <EnquiriesPanel
+                      enquiries={enquiries}
+                      setEnquiries={setEnquiries}
+                      onToast={onToast}
+                      setConfirm={setConfirm}
+                    />
               )}
 
               {/* ── MERGE ── */}
               {tab==="merge" && (
-                <MergePanel movies={movies} onToast={onToast} />
+                <Suspense fallback={<Spinner />}>
+                  <MergePanel movies={movies} onToast={onToast} />
+                </Suspense>
               )}
 
               {/* ── AUTO-INDEXING ── */}
-{tab==="autoindex" && (
-  <div style={{ padding: 28 }}>
-    <AutoIndexPanel onToast={onToast} />
-  </div>
-)}
+              {tab==="autoindex" && (
+                <div style={{ padding: 28 }}>
+                  <Suspense fallback={<Spinner />}>
+                    <AutoIndexPanel onToast={onToast} />
+                  </Suspense>
+                </div>
+              )}
 
-{tab === "sacnilk" && (
-  <SacnilkScraperPanel movies={movies} onToast={onToast} />
-)}
+              {tab === "sacnilk" && (
+                <Suspense fallback={<Spinner />}>
+                  <SacnilkScraperPanel movies={movies} onToast={onToast} />
+                </Suspense>
+              )}
               {/* ── SETTINGS ── */}
               {tab==="settings" && <div style={{padding:28}}><AdminSettings admin={admin} onToast={onToast} /></div>}
             </>
