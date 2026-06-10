@@ -26,19 +26,39 @@ const BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * parseToRupees — converts any currency string to raw rupees (integer).
+ * Mirrors parseToRupeesGlobal on the server exactly.
+ *   "₹7.00 L"   → 700000
+ *   "7L"        → 700000
+ *   "0.1 Cr"    → 1000000
+ *   "3.36Cr"    → 33600000
+ *   "700000"    → 700000  (bare integer ≥ 1000 trusted as rupees)
+ *   "7"         → 0       (bare tiny number with no unit = discard)
+ */
+const parseToRupees = (str) => {
+  if (!str && str !== 0) return 0;
+  const s = String(str).replace(/[₹,\s]/g, "").toLowerCase();
+  const n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  if (s.includes("cr") || s.includes("crore")) return Math.round(n * 1_00_00_000);
+  if (s.includes("l") || s.includes("lakh"))   return Math.round(n * 1_00_000);
+  if (n >= 1000) return Math.round(n);
+  return 0;
+};
+
+/** Format raw rupees → "₹X.XX Cr" / "₹X.XX L" */
 const fmtINR = (val) => {
   if (val === undefined || val === null || val === "") return "—";
-  const n = typeof val === "string" ? parseFloat(val.replace(/[^0-9.]/g, "")) : Number(val);
-  if (isNaN(n) || n === 0) return val || "—";
+  const n = typeof val === "number" ? val : parseToRupees(val);
+  if (!n || isNaN(n)) return val || "—";
   if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
   if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
   return `₹${n.toLocaleString("en-IN")}`;
 };
 
-const parseNum = (s) => {
-  const v = parseFloat(String(s || "").replace(/[^0-9.]/g, ""));
-  return isNaN(v) ? 0 : v;
-};
+/** parseNum — alias of parseToRupees for use in chart/table calculations */
+const parseNum = parseToRupees;
 
 const slugify = (s) =>
   String(s || "")
@@ -1058,9 +1078,9 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
     if (k === "net") {
       // Auto-calculate gross unless the user has manually overridden it
       setForm((p) => {
-        const netNum = parseFloat(val.replace(/[^0-9.]/g, ""));
-        const autoGross = !isNaN(netNum) && netNum > 0
-          ? String(Math.round(netNum * GST_RATE))
+        const netNum = parseToRupees(val);
+        const autoGross = netNum > 0
+          ? fmtINR(Math.round(netNum * GST_RATE))
           : p.gross;
         return { ...p, net: val, gross: grossManual ? p.gross : autoGross };
       });

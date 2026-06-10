@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import BlogGenerator from "./BlogGenerator";
 import BoxOfficePanel from "./BoxOfficePanel";
@@ -857,6 +857,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
               </div>
             </>
           )}
+
         </>
       )}
 

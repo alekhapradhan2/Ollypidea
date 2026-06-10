@@ -193,4 +193,12 @@ export const API = {
   trackerSaveSnapshot:   (body)       => post(`/admin/tracker/save-snapshot`, body, _adminToken),
   trackerDeleteSnapshot: (id)         => del(`/admin/tracker/snapshot/${id}`, _adminToken),
   trackerGetAllActive:   ()           => get(`/admin/tracker/all-active`, _adminToken),
+
+  // ── Admin — Sacnilk Tracker
+  sacnilkGetConfigs:  ()              => get("/admin/sacnilk/configs", _adminToken),
+  sacnilkGetLogs:     (movieId)       => get(`/admin/sacnilk/logs/${movieId}`, _adminToken),
+  sacnilkSaveConfig:  (movieId, body) => req("PUT", `/admin/sacnilk/configs/${movieId}`, body, _adminToken),
+  sacnilkDeleteConfig:(movieId)       => req("DELETE", `/admin/sacnilk/configs/${movieId}`, undefined, _adminToken),
+  sacnilkScrapeOne:   (movieId)       => post(`/admin/sacnilk/scrape/${movieId}`, undefined, _adminToken),
+  sacnilkScrapeAll:   ()              => post("/admin/sacnilk/scrape-all", undefined, _adminToken),
 };
