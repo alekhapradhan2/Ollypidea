@@ -3114,7 +3114,7 @@ Rules:
   ].filter(Boolean);
 
   const tagChips = tags
-    .map(t => `<span style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">${t}</span>`)
+    .map(t => `<span class="tag-chip" style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">${t}</span>`)
     .join("\n    ");
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -3306,6 +3306,75 @@ Rules:
 </script>
 
 
+<!-- MOBILE RESPONSIVE STYLES — scoped, presentation-only, no logic/SEO impact -->
+<style>
+.ollypedia-blog-content img,
+.ollypedia-blog-content table,
+.ollypedia-blog-content div,
+.ollypedia-blog-content section { box-sizing: border-box; }
+
+.ollypedia-blog-content { overflow-x: hidden; word-break: break-word; }
+
+.ollypedia-blog-content .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 640px) {
+  .ollypedia-blog-content .hero-section {
+    padding: 20px 16px 18px !important;
+  }
+  .ollypedia-blog-content section[style*="background:#181818"],
+  .ollypedia-blog-content section[style*="background: #181818"] {
+    padding: 18px 14px !important;
+  }
+  .ollypedia-blog-content .stat-chips {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .ollypedia-blog-content .perf-stats {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  .ollypedia-blog-content nav[aria-label="Day navigation"] {
+    flex-direction: column !important;
+  }
+  .ollypedia-blog-content .info-table td:first-child {
+    width: 38% !important;
+    font-size: 0.8rem !important;
+  }
+  .ollypedia-blog-content .data-table td,
+  .ollypedia-blog-content .data-table th {
+    padding: 8px 8px !important;
+    font-size: 0.78rem !important;
+  }
+  .ollypedia-blog-content .bar-table td {
+    padding: 8px 8px !important;
+  }
+  .ollypedia-blog-content .also-read-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .ollypedia-blog-content .tag-chip {
+    font-size: 0.7rem !important;
+    padding: 3px 10px !important;
+  }
+  .ollypedia-blog-content .cta-btn {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+  .ollypedia-blog-content .faq-section {
+    padding: 18px 14px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .ollypedia-blog-content .stat-chips {
+    grid-template-columns: 1fr !important;
+  }
+  .ollypedia-blog-content h1 {
+    font-size: 1.1rem !important;
+  }
+}
+</style>
+
 <!-- BREADCRUMB + TIMESTAMP (standalone, before hero — matches BoxOfficePanel structure) -->
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
   <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
@@ -3324,14 +3393,14 @@ Rules:
 
 
 <!-- HERO SECTION -->
-<div style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+<div class="hero-section" style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
 
     <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span style="display:inline-block;background:#2a1500;color:#c9973a;font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #3a2200;">📊 Box Office Report</span>
       <span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">Day ${actualDay} Update</span>
       ${year ? `<span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${year}</span>` : ""}
     </div>
-    <h1 style="color:#fff;font-size:1.6rem;line-height:1.3;font-weight:800;margin:0 0 14px;">
+    <h1 style="color:#fff;font-size:clamp(1.2rem,4.5vw,1.6rem);line-height:1.3;font-weight:800;margin:0 0 14px;word-break:break-word;">
       ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} Box Office Collection — ${sections.seoHeadline || blogTitle}
     </h1>
     ${toParagraphs(sections.introParagraph).replace(/<p>/g, '<p style="color:#bbb;font-size:0.98rem;line-height:1.85;margin:0 0 16px;">')}
@@ -3341,18 +3410,18 @@ Rules:
       <strong style="color:#7ec8e3;">${totalGrossStr} Gross</strong> in its first ${actualDay} day${actualDay !== 1 ? "s" : ""} of theatrical release.
       ${directorName ? `Directed by <strong style="color:#ddd;">${directorName}</strong>, the` : "The"} film has been running across Odisha${leadActors.length ? ` with <strong style="color:#ddd;">${leadActors.slice(0,2).join(" and ")}</strong> in the lead roles.` : " with strong audience support."}
     </p>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px;">
+    <div class="stat-chips" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-top:20px;">
       <div style="background:rgba(0,0,0,0.5);border:1px solid #2e2000;border-radius:10px;padding:14px 16px;">
         <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Net</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
+        <div style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:800;color:#c9973a;word-break:break-word;">${totalNetStr}</div>
       </div>
       <div style="background:rgba(0,0,0,0.5);border:1px solid #1a2a3a;border-radius:10px;padding:14px 16px;">
         <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Gross</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#7ec8e3;">${totalGrossStr}</div>
+        <div style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:800;color:#7ec8e3;word-break:break-word;">${totalGrossStr}</div>
       </div>
       <div style="background:rgba(0,0,0,0.5);border:1px solid #222;border-radius:10px;padding:14px 16px;">
         <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Day ${actualDay} Net</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#fff;">${dayNet}</div>
+        <div style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:800;color:#fff;word-break:break-word;">${dayNet}</div>
       </div>
     </div>
 </div>
@@ -3372,7 +3441,7 @@ Rules:
 <!-- MOVIE DETAILS TABLE -->
 <section style="${card}">
   <h2 style="${h2}">${movieName} Movie Details</h2>
-  <table style="width:100%;border-collapse:collapse;">
+  <table class="info-table" style="width:100%;border-collapse:collapse;">
     <tbody>
       ${infoRows.map(([label, val]) => `
       <tr>
@@ -3390,7 +3459,7 @@ Rules:
     </tbody>
   </table>
   <div style="text-align:center;margin-top:22px;">
-    <a href="${boxOfficeUrl}" style="display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.93rem;">
+    <a href="${boxOfficeUrl}" class="cta-btn" style="display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.93rem;">
       🎬 View Latest Box Office Updates
     </a>
   </div>
@@ -3404,7 +3473,7 @@ Rules:
     Net · Gross · Cumulative net total after each day · Trend vs previous day
   </p>
   <div style="overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;font-size:0.88rem;min-width:520px;">
+    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:0.88rem;min-width:520px;">
       <thead>
         <tr>
           <th style="${th}">Day</th>
@@ -3448,7 +3517,7 @@ Rules:
 
 <section style="${card}">
   <h2 style="${h2}">Performance Analysis</h2>
-  <div style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
+  <div class="perf-stats" style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
     <div>
       <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Net</div>
       <div style="font-size:1.2rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
@@ -3506,7 +3575,7 @@ Rules:
 
 
 <!-- FAQ SECTION -->
-<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+<section class="faq-section" style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
   <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 22px;line-height:1.3;">
     Frequently Asked Questions — ${movieName} Box Office
   </h2>
@@ -3568,11 +3637,11 @@ Rules:
 
 
 <!-- ALSO READ — Internal Links -->
-<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+<section class="faq-section" style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
   <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 20px;line-height:1.3;">
     Also Read
   </h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div class="also-read-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
     <a href="${boxOfficeUrl}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
       <span style="font-size:1.3rem;flex-shrink:0;">📊</span>
       <div>
@@ -3896,10 +3965,16 @@ app.post("/api/admin/sacnilk/scrape-all", adminAuth, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// ── Keep-alive ping endpoint — no DB, no auth, ultra-lightweight ─────────────
+app.get("/api/ping", (req, res) => {
+  res.json({ ok: true, ts: new Date().toISOString() });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 //  CRON JOB — runs every day at 8:00 AM IST (= 02:30 UTC)
-//  Schedule format: "30 2 * * *"  (cron uses UTC; IST = UTC+5:30)
+//  Schedule format: "30 3 * * *"  (cron uses UTC; IST = UTC+5:30)
 // ════════════════════════════════════════════════════════════════════════════
-cron.schedule("30 2 * * *", async () => {
+cron.schedule("30 3 * * *", async () => {
   console.log(`[Sacnilk Cron] Starting daily scrape at ${new Date().toISOString()}`);
 
   try {
@@ -3957,6 +4032,29 @@ app.get("*", (req, res) => {
 });
 // ════════════════════════════════════════════════════════════════════════════
 
-app.listen(process.env.PORT || 4000, () =>
-  console.log(`🚀 Server running on port ${process.env.PORT || 4000}`)
-);
+app.listen(process.env.PORT || 4000, () => {
+  console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
+
+  // ── Self-ping every 2 minutes to prevent Render free-tier spin-down ──────
+  // Hits GET /api/ping — lightweight no-DB endpoint defined just above.
+  // Set SELF_URL in your Render environment variables:
+  //   SELF_URL = https://your-app-name.onrender.com
+  const SELF_URL = process.env.SELF_URL;
+  if (SELF_URL) {
+    const PING_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+    setInterval(async () => {
+      try {
+        const res = await fetch(`${SELF_URL}/api/ping`);
+        console.log(`[Keep-Alive] Ping → ${res.status} at ${new Date().toISOString()}`);
+      } catch (e) {
+        console.warn(`[Keep-Alive] Ping failed: ${e.message}`);
+      }
+    }, PING_INTERVAL_MS);
+    console.log(`✅ Keep-alive self-ping active every 2 min → ${SELF_URL}/api/ping`);
+  } else {
+    console.log(`ℹ️  Keep-alive disabled — set SELF_URL env var to enable (e.g. https://your-app.onrender.com)`);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+});
+// ── KEEP-ALIVE PATCH — replace the last app.listen() above with this ────────
+// (Already patched inline below — this comment is for reference only)

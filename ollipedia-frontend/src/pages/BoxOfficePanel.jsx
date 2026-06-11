@@ -473,7 +473,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 
     return `
     <tr style="background:${bgRow};">
-      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;min-width:90px;vertical-align:middle;">
+      <td style="padding:10px 12px;border-bottom:1px solid #1e1e1e;min-width:72px;vertical-align:middle;">
         <div style="font-size:0.8rem;font-weight:700;color:${isToday ? "#c9973a" : "#aaa"};">${dayLabel}</div>
         ${dateStr ? `<div style="font-size:0.7rem;color:#555;">${dateStr}</div>` : ""}
       </td>
@@ -484,7 +484,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
             <div style="flex:1;background:#1a1a1a;border-radius:999px;height:7px;overflow:hidden;">
               <div style="width:${pct}%;height:100%;background:${netColor};border-radius:999px;transition:width 0.3s;"></div>
             </div>
-            <div style="font-size:0.78rem;font-weight:700;color:${isToday ? "#c9973a" : "#ccc"};min-width:68px;text-align:right;">${d.net ? fmtINR(d.net) : "—"}</div>
+            <div style="font-size:0.78rem;font-weight:700;color:${isToday ? "#c9973a" : "#ccc"};min-width:56px;text-align:right;word-break:break-word;">${d.net ? fmtINR(d.net) : "—"}</div>
           </div>
           ${grossNum > 0 ? `
           <div style="display:flex;align-items:center;gap:6px;">
@@ -492,7 +492,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
             <div style="flex:1;background:#1a1a1a;border-radius:999px;height:5px;overflow:hidden;">
               <div style="width:${grossPct}%;height:100%;background:#3a6a8a;border-radius:999px;"></div>
             </div>
-            <div style="font-size:0.72rem;color:#7ec8e3;min-width:68px;text-align:right;">${fmtINR(d.gross)}</div>
+            <div style="font-size:0.72rem;color:#7ec8e3;min-width:56px;text-align:right;word-break:break-word;">${fmtINR(d.gross)}</div>
           </div>` : ""}
         </div>
       </td>
@@ -544,7 +544,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 
   // ── Tag chips ───────────────────────────────────────────────────────────────
   const tagChips = tags
-    .map(t => `<span style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">${t}</span>`)
+    .map(t => `<span class="tag-chip" style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">${t}</span>`)
     .join("\n    ");
 
   // ── Section card style shorthand ────────────────────────────────────────────
@@ -669,6 +669,109 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 
 
 <!-- ─────────────────────────────────────────────
+  MOBILE RESPONSIVE STYLES
+  Scoped to .ollypedia-blog-content — safe to inject inline.
+  No layout or functionality changes, purely presentation fixes.
+───────────────────────────────────────────── -->
+<style>
+/* ── Base resets for blog content ── */
+.ollypedia-blog-content img,
+.ollypedia-blog-content table,
+.ollypedia-blog-content div,
+.ollypedia-blog-content section { box-sizing: border-box; }
+
+/* ── Prevent any element from causing horizontal scroll ── */
+.ollypedia-blog-content { overflow-x: hidden; word-break: break-word; }
+
+/* ── Scrollable table wrapper already present; ensure -webkit too ── */
+.ollypedia-blog-content .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 640px) {
+
+  /* Hero section — tighter padding on small screens */
+  .ollypedia-blog-content .hero-section {
+    padding: 20px 16px 18px !important;
+  }
+
+  /* Section cards — reduce horizontal padding */
+  .ollypedia-blog-content section[style*="background:#181818"],
+  .ollypedia-blog-content section[style*="background: #181818"] {
+    padding: 18px 14px !important;
+  }
+
+  /* Stat chips grid — force single column on very small screens */
+  .ollypedia-blog-content .stat-chips {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Performance analysis stat block — stack vertically */
+  .ollypedia-blog-content .perf-stats {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* Day nav prev/next — stack vertically */
+  .ollypedia-blog-content nav[aria-label="Day navigation"] {
+    flex-direction: column !important;
+  }
+
+  /* Movie details table — label column narrower */
+  .ollypedia-blog-content .info-table td:first-child {
+    width: 38% !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* Box office data table cells — reduce padding and font size */
+  .ollypedia-blog-content .data-table td,
+  .ollypedia-blog-content .data-table th {
+    padding: 8px 8px !important;
+    font-size: 0.78rem !important;
+  }
+
+  /* Bar chart table cells */
+  .ollypedia-blog-content .bar-table td {
+    padding: 8px 8px !important;
+  }
+
+  /* Also Read grid — 1 column */
+  .ollypedia-blog-content .also-read-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tag chips — smaller */
+  .ollypedia-blog-content .tag-chip {
+    font-size: 0.7rem !important;
+    padding: 3px 10px !important;
+  }
+
+  /* CTA button — full width */
+  .ollypedia-blog-content .cta-btn {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+
+  /* FAQ sections — tighter padding */
+  .ollypedia-blog-content .faq-section {
+    padding: 18px 14px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  /* Stat chips — single column on very narrow screens */
+  .ollypedia-blog-content .stat-chips {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hero h1 font size floor */
+  .ollypedia-blog-content h1 {
+    font-size: 1.1rem !important;
+  }
+}
+</style>
+
+<!-- ─────────────────────────────────────────────
   BREADCRUMB + TIMESTAMP
   Breadcrumb: visual trail matches BreadcrumbList schema above.
   <time>: machine-readable freshness signal for Google.
@@ -692,7 +795,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 <!-- ─────────────────────────────────────────────
   HERO BANNER
 ───────────────────────────────────────────── -->
-<div style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+<div class="hero-section" style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
 
   <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="display:inline-block;background:#2a1500;color:#c9973a;font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #3a2200;">📊 Box Office Report</span>
@@ -700,7 +803,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
     ${year ? `<span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${year}</span>` : ""}
   </div>
 
-  <h1 style="color:#fff;font-size:1.6rem;line-height:1.3;font-weight:800;margin:0 0 14px;">
+  <h1 style="color:#fff;font-size:clamp(1.2rem,4.5vw,1.6rem);line-height:1.3;font-weight:800;margin:0 0 14px;word-break:break-word;">
     ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection — ${sections.seoHeadline}
   </h1>
 
@@ -715,18 +818,18 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   </p>
 
   <!-- Stat chips -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+  <div class="stat-chips" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;">
     <div style="background:rgba(0,0,0,0.5);border:1px solid #2e2000;border-radius:10px;padding:14px 16px;">
       <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Net</div>
-      <div style="font-size:1.3rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
+      <div style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:800;color:#c9973a;word-break:break-word;">${totalNetStr}</div>
     </div>
     <div style="background:rgba(0,0,0,0.5);border:1px solid #1a2a3a;border-radius:10px;padding:14px 16px;">
       <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Total Gross</div>
-      <div style="font-size:1.3rem;font-weight:800;color:#7ec8e3;">${totalGrossStr}</div>
+      <div style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:800;color:#7ec8e3;word-break:break-word;">${totalGrossStr}</div>
     </div>
     <div style="background:rgba(0,0,0,0.5);border:1px solid #222;border-radius:10px;padding:14px 16px;">
       <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Day ${targetDay} Net</div>
-      <div style="font-size:1.3rem;font-weight:800;color:#fff;">${dayNet}</div>
+      <div style="font-size:clamp(1rem,3.5vw,1.3rem);font-weight:800;color:#fff;word-break:break-word;">${dayNet}</div>
     </div>
   </div>
 </div>
@@ -750,7 +853,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 ───────────────────────────────────────────── -->
 <section style="${card}">
   <h2 style="${h2}">${movieName} Movie Details</h2>
-  <table style="width:100%;border-collapse:collapse;">
+  <table class="info-table" style="width:100%;border-collapse:collapse;">
     <tbody>
       ${infoRows.map(([label, val]) => `
       <tr>
@@ -768,7 +871,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
     </tbody>
   </table>
   <div style="text-align:center;margin-top:22px;">
-    <a href="${boxOfficeUrl}" style="display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.93rem;">
+    <a href="${boxOfficeUrl}" class="cta-btn" style="display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.93rem;">
       🎬 View Latest Box Office Updates
     </a>
   </div>
@@ -786,7 +889,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
     Net · Gross · Cumulative net total after each day · Trend vs previous day
   </p>
   <div style="overflow-x:auto;">
-    <table style="width:100%;border-collapse:collapse;font-size:0.88rem;min-width:520px;">
+    <table class="data-table" style="width:100%;border-collapse:collapse;font-size:0.88rem;min-width:520px;">
       <thead>
         <tr>
           <th style="${th}">Day</th>
@@ -831,7 +934,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 
 <section style="${card}">
   <h2 style="${h2}">Performance Analysis</h2>
-  <div style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
+  <div class="perf-stats" style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
     <div>
       <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Net</div>
       <div style="font-size:1.2rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
@@ -897,7 +1000,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   Uses FAQ schema-friendly markup. Google often
   pulls these into rich results / People Also Ask.
 ───────────────────────────────────────────── -->
-<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+<section class="faq-section" style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
   <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 22px;line-height:1.3;">
     Frequently Asked Questions — ${movieName} Box Office
   </h2>
@@ -980,11 +1083,11 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   Signals site structure to Google, passes
   PageRank to related pages, reduces bounce rate.
 ───────────────────────────────────────────── -->
-<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+<section class="faq-section" style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
   <h2 style="font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 20px;line-height:1.3;">
     Also Read
   </h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+  <div class="also-read-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
     <a href="${boxOfficeUrl}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;transition:border-color 0.2s;">
       <span style="font-size:1.3rem;flex-shrink:0;">📊</span>
       <div>
