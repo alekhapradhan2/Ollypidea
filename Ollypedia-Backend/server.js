@@ -3974,7 +3974,7 @@ app.get("/api/ping", (req, res) => {
 //  CRON JOB — runs every day at 8:00 AM IST (= 02:30 UTC)
 //  Schedule format: "30 3 * * *"  (cron uses UTC; IST = UTC+5:30)
 // ════════════════════════════════════════════════════════════════════════════
-cron.schedule("30 3 * * *", async () => {
+cron.schedule("0 6 * * *", async () => {
   console.log(`[Sacnilk Cron] Starting daily scrape at ${new Date().toISOString()}`);
 
   try {
