@@ -1174,7 +1174,6 @@ function parseSongs(rawSongs) {
 
 app.post("/api/admin/movies", adminAuth, async (req, res) => {
   try {
-    const adminProd = await getAdminProd();
     const b = req.body;
 
     // Parse cast using the same robust resolveCastEntry helper
@@ -1193,12 +1192,12 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       catch (err) { console.warn("⚠️ Skipping cast entry:", item.name || item.castId, "—", err.message); }
     }
 
-    // Parse productions
+    // Parse productions — use exactly what the admin provides; no silent fallback
     let prods = b.productions || [];
     if (typeof prods === "string") { try { prods = JSON.parse(prods); } catch { prods = []; } }
-    const validProdId = Array.isArray(prods) && prods.length > 0 && isOid(String(prods[0]))
-      ? String(prods[0]) : String(adminProd._id);
-    const collabIds = Array.isArray(prods) ? prods.slice(1).filter(id => isOid(String(id))).map(String) : [];
+    const validProds = Array.isArray(prods) ? prods.filter(id => isOid(String(id))).map(String) : [];
+    const validProdId  = validProds.length > 0 ? validProds[0] : null;
+    const collabIds    = validProds.slice(1);
 
     // Media
     const rm = (b.media && typeof b.media === "object") ? b.media : {};
@@ -1267,12 +1266,11 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     if (b.boxOffice) update.boxOffice = b.boxOffice;
 
     // Productions → productionId + collaborators
-    if (b.productions && Array.isArray(b.productions) && b.productions.length > 0) {
+    // Always apply when the key is present — including clearing it (empty array)
+    if (b.productions !== undefined && Array.isArray(b.productions)) {
       const validProds = b.productions.filter(id => isOid(String(id))).map(String);
-      if (validProds.length > 0) {
-        update.productionId  = validProds[0];
-        update.collaborators = validProds.slice(1);
-      }
+      update.productionId  = validProds.length > 0 ? validProds[0] : null;
+      update.collaborators = validProds.slice(1);
     }
 
     // Cast — use resolveCastEntry (same robust helper)
@@ -3974,7 +3972,7 @@ app.get("/api/ping", (req, res) => {
 //  CRON JOB — runs every day at 8:00 AM IST (= 02:30 UTC)
 //  Schedule format: "30 3 * * *"  (cron uses UTC; IST = UTC+5:30)
 // ════════════════════════════════════════════════════════════════════════════
-cron.schedule("0 9 * * *", async () => {
+cron.schedule("30 6 * * *", async () => {
   console.log(`[Sacnilk Cron] Starting daily scrape at ${new Date().toISOString()}`);
 
   try {
