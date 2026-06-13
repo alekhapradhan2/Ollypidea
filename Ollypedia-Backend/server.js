@@ -33,6 +33,54 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 
+// ── Passive visitor tracking middleware ──────────────────────────────────────
+// Fires on every public GET /api/* — silently logs IP, device, page, location
+const TRACK_SKIP = ["/api/admin", "/api/auth", "/api/cast-auth", "/api/ping", "/blog-uploads"];
+
+app.use(async (req, _res, next) => {
+  try {
+    if (req.method !== "GET") return next();
+    if (TRACK_SKIP.some(p => req.path.startsWith(p))) return next();
+    if (!req.path.startsWith("/api/")) return next();
+
+    const ua  = req.headers["user-agent"] || "";
+    const ip  = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+                || req.socket?.remoteAddress || "";
+    const ref = req.headers["referer"] || req.headers["referrer"] || "";
+
+    const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
+    const device   = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
+
+    const os = /Windows/i.test(ua)    ? "Windows"
+             : /Android/i.test(ua)    ? "Android"
+             : /iPhone|iPad/i.test(ua) ? "iOS"
+             : /Mac/i.test(ua)         ? "macOS"
+             : /Linux/i.test(ua)       ? "Linux" : "Other";
+
+    const browser = /Edg\//i.test(ua)   ? "Edge"
+                  : /OPR\//i.test(ua)   ? "Opera"
+                  : /Chrome/i.test(ua)  ? "Chrome"
+                  : /Firefox/i.test(ua) ? "Firefox"
+                  : /Safari/i.test(ua)  ? "Safari" : "Other";
+
+    const page = req.path.replace(/^\/api/, "") || "/";
+
+    let country = "", city = "";
+    if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
+      try {
+        const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
+        const gd  = await geo.json();
+        if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
+      } catch { /* geo timeout — visit still logged */ }
+    }
+
+    // fire-and-forget — never block the request
+    VisitorLog.create({ ip, country, city, device, os, browser, page, referrer: ref, visitedAt: new Date() }).catch(() => {});
+  } catch { /* never block */ }
+  next();
+});
+
 // Serve uploaded blog images publicly
 app.use("/blog-uploads", express.static(UPLOADS_DIR));
 
@@ -405,6 +453,26 @@ const ContactSchema = new mongoose.Schema({
   read:    { type: Boolean, default: false },
 }, { timestamps: true });
 const Contact = mongoose.model("Contact", ContactSchema);
+
+// ════════════════════════════════════════════════════════════════
+// VISITOR ANALYTICS SCHEMA
+// ════════════════════════════════════════════════════════════════
+const VisitorLogSchema = new mongoose.Schema({
+  ip:        { type: String, default: "" },
+  country:   { type: String, default: "" },
+  city:      { type: String, default: "" },
+  device:    { type: String, default: "" },   // "Mobile" | "Desktop" | "Tablet"
+  os:        { type: String, default: "" },   // "Android" | "iOS" | "Windows" etc.
+  browser:   { type: String, default: "" },   // "Chrome" | "Safari" etc.
+  page:      { type: String, default: "/" },  // e.g. "/movies/abc"
+  referrer:  { type: String, default: "" },
+  visitedAt: { type: Date,   default: Date.now },
+}, { timestamps: false });
+
+VisitorLogSchema.index({ visitedAt: -1 });
+VisitorLogSchema.index({ ip: 1, visitedAt: 1 });
+
+const VisitorLog = mongoose.model("VisitorLog", VisitorLogSchema);
 
 // ════════════════════════════════════════════════════════════════
 // CAST RESOLUTION HELPER
@@ -4013,6 +4081,105 @@ cron.schedule("30 6 * * *", async () => {
 console.log("✅ Sacnilk cron scheduled: daily at 8:00 AM IST");
 
 
+
+// ════════════════════════════════════════════════════════════════
+// VISITOR ANALYTICS — PUBLIC + ADMIN ROUTES
+// ════════════════════════════════════════════════════════════════
+
+// POST /api/track — called by Next.js VisitorTracker component on every page view
+app.post("/api/track", async (req, res) => {
+  res.json({ ok: true }); // respond immediately, never block the user
+
+  try {
+    const ua  = req.headers["user-agent"] || "";
+    const ip  = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+                || req.socket?.remoteAddress || "";
+    const { page = "/", referrer = "" } = req.body;
+
+    const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
+    const device   = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
+
+    const os = /Windows/i.test(ua)    ? "Windows"
+             : /Android/i.test(ua)    ? "Android"
+             : /iPhone|iPad/i.test(ua) ? "iOS"
+             : /Mac/i.test(ua)         ? "macOS"
+             : /Linux/i.test(ua)       ? "Linux" : "Other";
+
+    const browser = /Edg\//i.test(ua)   ? "Edge"
+                  : /OPR\//i.test(ua)   ? "Opera"
+                  : /Chrome/i.test(ua)  ? "Chrome"
+                  : /Firefox/i.test(ua) ? "Firefox"
+                  : /Safari/i.test(ua)  ? "Safari" : "Other";
+
+    let country = "", city = "";
+    if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
+      try {
+        const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
+        const gd  = await geo.json();
+        if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
+      } catch { /* geo timeout */ }
+    }
+
+    await VisitorLog.create({ ip, country, city, device, os, browser, page, referrer, visitedAt: new Date() });
+  } catch { /* never throw */ }
+});
+
+// GET /api/admin/analytics — full analytics dashboard data
+app.get("/api/admin/analytics", adminAuth, async (req, res) => {
+  try {
+    const now   = new Date();
+    const day   = new Date(now); day.setHours(0, 0, 0, 0);
+    const week  = new Date(now); week.setDate(now.getDate() - 7);
+    const month = new Date(now); month.setDate(now.getDate() - 30);
+
+    const [
+      totalVisits, todayVisits, weekVisits, monthVisits,
+      byDevice, byOS, byBrowser, byCountry, topPages, recentVisits, dailyTrend,
+    ] = await Promise.all([
+      VisitorLog.countDocuments(),
+      VisitorLog.countDocuments({ visitedAt: { $gte: day } }),
+      VisitorLog.countDocuments({ visitedAt: { $gte: week } }),
+      VisitorLog.countDocuments({ visitedAt: { $gte: month } }),
+
+      VisitorLog.aggregate([{ $group: { _id: "$device",  count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      VisitorLog.aggregate([{ $group: { _id: "$os",      count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      VisitorLog.aggregate([{ $group: { _id: "$browser", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      VisitorLog.aggregate([
+        { $match: { country: { $ne: "" } } },
+        { $group: { _id: "$country", count: { $sum: 1 } } },
+        { $sort: { count: -1 } }, { $limit: 10 },
+      ]),
+      VisitorLog.aggregate([
+        { $group: { _id: "$page", count: { $sum: 1 } } },
+        { $sort: { count: -1 } }, { $limit: 10 },
+      ]),
+      VisitorLog.find().sort({ visitedAt: -1 }).limit(50).lean(),
+      VisitorLog.aggregate([
+        { $match: { visitedAt: { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } } },
+        { $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$visitedAt", timezone: "Asia/Kolkata" } },
+          count: { $sum: 1 },
+        }},
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+
+    res.json({
+      summary: { totalVisits, todayVisits, weekVisits, monthVisits },
+      byDevice, byOS, byBrowser, byCountry, topPages, recentVisits, dailyTrend,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/admin/analytics/clear — remove logs older than 90 days
+app.delete("/api/admin/analytics/clear", adminAuth, async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const result = await VisitorLog.deleteMany({ visitedAt: { $lt: cutoff } });
+    res.json({ deleted: result.deletedCount });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build

@@ -201,4 +201,8 @@ export const API = {
   sacnilkDeleteConfig:(movieId)       => req("DELETE", `/admin/sacnilk/configs/${movieId}`, undefined, _adminToken),
   sacnilkScrapeOne:   (movieId)       => post(`/admin/sacnilk/scrape/${movieId}`, undefined, _adminToken),
   sacnilkScrapeAll:   ()              => post("/admin/sacnilk/scrape-all", undefined, _adminToken),
+
+  // ── Admin — Analytics
+  adminGetAnalytics: ()  => get("/admin/analytics", _adminToken),
+  adminClearOldLogs: ()  => del("/admin/analytics/clear", _adminToken),
 };
