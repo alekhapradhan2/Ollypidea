@@ -2740,6 +2740,7 @@ async function scrapeSacnilkForMovie(movieId) {
   /** Wrap plain text blocks in <p> tags with inline styles */
   const toParagraphs = (text) =>
     String(text || "")
+      .replace(/`/g, "&#96;")   // ← prevent backticks in AI text from breaking template literals
       .trim()
       .split(/\n{2,}/)
       .map(chunk => chunk.split(/\n/).map(l => l.trim()).filter(Boolean).join(" ").trim())
@@ -3467,7 +3468,7 @@ Rules:
       ${year ? `<span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${year}</span>` : ""}
     </div>
     <h1 style="color:#fff;font-size:clamp(1.2rem,4.5vw,1.6rem);line-height:1.3;font-weight:800;margin:0 0 14px;word-break:break-word;">
-      ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} Box Office Collection — ${sections.seoHeadline || blogTitle}
+      ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} Box Office Collection — ${(sections.seoHeadline || blogTitle).replace(/`/g, "&#96;")}
     </h1>
     ${toParagraphs(sections.introParagraph).replace(/<p>/g, '<p style="color:#bbb;font-size:0.98rem;line-height:1.85;margin:0 0 16px;">')}
     <p style="color:#aaa;font-size:0.93rem;line-height:1.7;margin:0 0 24px;">

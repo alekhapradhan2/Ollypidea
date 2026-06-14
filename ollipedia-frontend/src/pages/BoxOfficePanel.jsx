@@ -222,6 +222,7 @@ const parseAiSections = (aiText, movie, targetDay, totalNet, totalGross) => {
 // Converts plain text with paragraphs into <p> tags
 const toParagraphs = (text) =>
   String(text || "")
+    .replace(/`/g, "&#96;")   // ← prevent backticks in AI text from breaking template literals
     .trim()
     .split(/\n{2,}/)
     .map(chunk => chunk.split(/\n/).map(l => l.trim()).filter(Boolean).join(" ").trim())
@@ -804,10 +805,10 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   </div>
 
   <h1 style="color:#fff;font-size:clamp(1.2rem,4.5vw,1.6rem);line-height:1.3;font-weight:800;margin:0 0 14px;word-break:break-word;">
-    ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection — ${sections.seoHeadline}
+    ${movieName}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection — ${(sections.seoHeadline || "").replace(/`/g, "&#96;")}
   </h1>
 
-  <p style="color:#bbb;font-size:0.98rem;line-height:1.85;margin:0 0 24px;">${sections.introParagraph}</p>
+  <p style="color:#bbb;font-size:0.98rem;line-height:1.85;margin:0 0 24px;">${(sections.introParagraph || "").replace(/`/g, "&#96;")}</p>
 
   <p style="color:#aaa;font-size:0.93rem;line-height:1.7;margin:0 0 24px;">
     According to industry trade estimates, <strong style="color:#fff;">${movieName}</strong> has collected approximately
