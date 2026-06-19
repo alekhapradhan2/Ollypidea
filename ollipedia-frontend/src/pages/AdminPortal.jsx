@@ -511,19 +511,21 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
 
   // Productions: normalise to [{_id, name}]
   // Server may return productions as populated objects OR bare IDs
-  const [productions, setProductions] = useState(() =>
-    (initial?.productions || []).map(p => {
-      if (p && typeof p==="object" && p._id) return { _id:String(p._id), name:p.name||"Unknown Production" };
-      if (typeof p==="string" && p.length===24) {
-        // bare ID — name unknown until we can resolve it; show placeholder
-        return { _id:p, name:"Loading…" };
-      }
+// Productions: normalise to [{_id, name}]
+  // Server stores primary production as `productionId` and extras as `collaborators[]`
+  // (there is no `productions` field on the movie object — that was the bug)
+  const [productions, setProductions] = useState(() => {
+    const primary = initial?.productionId ? [initial.productionId] : [];
+    const collabs = initial?.collaborators || [];
+    return [...primary, ...collabs].map(p => {
+      if (p && typeof p === "object" && p._id) return { _id: String(p._id), name: p.name || "Unknown Production" };
+      if (typeof p === "string" && p.length === 24) return { _id: p, name: "Loading…" };
       return null;
-    }).filter(Boolean)
-  );
-  // Resolve any "Loading…" production names by searching the productions API
+    }).filter(Boolean);
+  });
+  // Resolve any "Loading…" entries (bare ObjectId strings, not populated)
   useEffect(() => {
-    const unresolved = productions.filter(p => p.name==="Loading…");
+    const unresolved = productions.filter(p => p.name === "Loading…");
     if (!unresolved.length) return;
     (async () => {
       try {
