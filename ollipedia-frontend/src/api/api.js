@@ -186,6 +186,7 @@ export const API = {
   adminAddBoxOfficeDay:    (id, body)       => post(`/admin/movies/${id}/boxoffice-days`, body, _adminToken),
   adminUpdateBoxOfficeDay: (id, day, body)  => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}`, body, _adminToken),
   adminDeleteBoxOfficeDay: (id, day)        => del(`/admin/movies/${id}/boxoffice-days/${day}`, _adminToken),
+  adminBulkBoxOfficeDays:  (id, body)       => post(`/admin/movies/${id}/boxoffice-days/bulk`, body, _adminToken),
 
   // ── Admin — BMS Tracker
   trackerGetSessions:    (movieId)    => get(`/admin/tracker/sessions/${movieId}`, _adminToken),

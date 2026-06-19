@@ -60,6 +60,119 @@ const fmtINR = (val) => {
 /** parseNum — alias of parseToRupees for use in chart/table calculations */
 const parseNum = parseToRupees;
 
+// ─── Bulk Upload helpers ───────────────────────────────────────────────────
+
+/** GST_RATE — Gross = Net × 1.18 (18% entertainment tax/GST). Shared by the
+ *  Bulk Upload feature; mirrors the same constant inside DayModal and on
+ *  the server (GST_RATE_GLOBAL) so previews always match what gets saved. */
+const GST_RATE = 1.18;
+
+/** addDaysToISO — Day 1 == releaseDate itself, Day N == releaseDate + (N-1).
+ *  Mirrors addDaysToISO() on the server exactly, so the bulk-upload preview
+ *  always matches the date that actually gets stored. */
+const addDaysToISO = (releaseDate, dayNum) => {
+  if (!releaseDate) return "";
+  const d = new Date(releaseDate);
+  if (isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + (Number(dayNum) - 1));
+  return d.toISOString().slice(0, 10);
+};
+
+/** buildBoxOfficeTemplateCSV — generates the downloadable CSV template.
+ *  The Date column is pre-filled purely as a reference for the person
+ *  filling it in — the server always recalculates the real date from the
+ *  movie's releaseDate when the file is uploaded back, so whatever ends up
+ *  in this column on save (even if Excel reformats it) is ignored. */
+const buildBoxOfficeTemplateCSV = (movie, startDay, count) => {
+  const rows = [["Day", "Date (reference only — recalculated on upload)", "Net Collection"]];
+  for (let i = 0; i < count; i++) {
+    const day  = startDay + i;
+    const date = addDaysToISO(movie?.releaseDate, day);
+    rows.push([`Day ${day}`, date || "TBA", ""]);
+  }
+  return rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+};
+
+/** downloadCSV — triggers a browser file download for a CSV string. */
+const downloadCSV = (csvText, filename) => {
+  const blob = new Blob(["\uFEFF" + csvText], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+/** parseCSVText — tiny quoted-field-aware CSV parser (no external deps
+ *  needed). Good enough for the simple 3-column template this feature
+ *  generates and expects back. */
+const parseCSVText = (text) => {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  const pushField = () => { row.push(field); field = ""; };
+  const pushRow    = () => { pushField(); rows.push(row); row = []; };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ",") pushField();
+      else if (c === "\r") { /* skip, \n below ends the row */ }
+      else if (c === "\n") pushRow();
+      else field += c;
+    }
+  }
+  if (field.length || row.length) pushRow();
+  return rows.filter((r) => r.some((c) => String(c).trim() !== ""));
+};
+
+/** extractDayNumber — pulls an integer day number out of strings like
+ *  "Day 12", "12", "day12", "Day-12". Returns null if nothing usable. */
+const extractDayNumber = (s) => {
+  const m = String(s ?? "").match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+};
+
+/** parseBulkCSVRows — turns parsed CSV rows (incl. header row) into
+ *  { day, netRaw } entries, matching columns by header keyword ("day" /
+ *  "net") so it tolerates Excel re-saving or re-ordering the columns. */
+const parseBulkCSVRows = (rows) => {
+  if (!rows.length) return [];
+  const header = rows[0].map((h) => String(h).toLowerCase());
+  let dayIdx = header.findIndex((h) => h.includes("day"));
+  let netIdx = header.findIndex((h) => h.includes("net"));
+  if (dayIdx === -1) dayIdx = 0;
+  if (netIdx === -1) netIdx = header.length - 1;
+
+  return rows.slice(1)
+    .map((r) => ({ day: extractDayNumber(r[dayIdx]), netRaw: String(r[netIdx] ?? "").trim() }))
+    .filter((r) => r.day && r.netRaw);
+};
+
+/** parseBulkPasteText — accepts free-typed/pasted lines like:
+ *    "Day 1 - 1500000"   "Day1: 15L"   "1,1500000"   "1\t1.2 Cr"
+ *  one entry per line, and returns { day, netRaw } entries. */
+const parseBulkPasteText = (text) => {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const day = extractDayNumber(line);
+      if (!day) return null;
+      const netRaw = line
+        .replace(/^\s*day\s*-?\s*\d+\s*/i, "")
+        .replace(/^\d+\s*/, "")
+        .replace(/^[\s,:\-\t]+/, "")
+        .trim();
+      return netRaw ? { day, netRaw } : null;
+    })
+    .filter(Boolean);
+};
+
 const slugify = (s) =>
   String(s || "")
     .toLowerCase()
@@ -679,10 +792,72 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 .ollypedia-blog-content img,
 .ollypedia-blog-content table,
 .ollypedia-blog-content div,
-.ollypedia-blog-content section { box-sizing: border-box; }
+.ollypedia-blog-content section,
+.ollypedia-blog-content td,
+.ollypedia-blog-content th { box-sizing: border-box; }
 
 /* ── Prevent any element from causing horizontal scroll ── */
 .ollypedia-blog-content { overflow-x: hidden; word-break: break-word; }
+
+/* ── Long text, headings, links and data cells wrap instead of overflowing
+     (most of this already inherits word-break from the rule above; these
+     are explicit so it holds even if an inline style or sanitizer strips
+     inheritance) ── */
+.ollypedia-blog-content p,
+.ollypedia-blog-content span,
+.ollypedia-blog-content strong,
+.ollypedia-blog-content em,
+.ollypedia-blog-content a,
+.ollypedia-blog-content h1,
+.ollypedia-blog-content h2,
+.ollypedia-blog-content h3,
+.ollypedia-blog-content td,
+.ollypedia-blog-content th {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+/* ── Images, charts, video and other embeds never exceed the viewport.
+     (No <img>/<iframe> currently ships in this template, but this keeps
+     any future poster/embed additions safe automatically.) ── */
+.ollypedia-blog-content img,
+.ollypedia-blog-content svg,
+.ollypedia-blog-content video,
+.ollypedia-blog-content iframe,
+.ollypedia-blog-content embed,
+.ollypedia-blog-content object,
+.ollypedia-blog-content canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── Code blocks and quotes wrap or scroll within themselves instead of
+     widening the page ── */
+.ollypedia-blog-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.ollypedia-blog-content code {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.ollypedia-blog-content blockquote {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* ── A table is only allowed to exceed 100% width when it explicitly opts
+     in via min-width (e.g. the day-wise data table, which scrolls inside
+     its own .tbl-scroll/overflow-x:auto wrapper) — min-width still wins
+     over this for that table, so its intended horizontal scroll is
+     untouched; every other table is capped to the viewport. ── */
+.ollypedia-blog-content table { max-width: 100%; }
 
 /* ── Scrollable table wrapper already present; ensure -webkit too ── */
 .ollypedia-blog-content .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -698,6 +873,11 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   .ollypedia-blog-content section[style*="background:#181818"],
   .ollypedia-blog-content section[style*="background: #181818"] {
     padding: 18px 14px !important;
+  }
+
+  /* Tags section — reduce horizontal padding to match other cards */
+  .ollypedia-blog-content section[style*="background:#111"] {
+    padding: 16px 14px !important;
   }
 
   /* Stat chips grid — force single column on very small screens */
@@ -1525,6 +1705,258 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
   );
 }
 
+// ─── BulkUploadModal ────────────────────────────────────────────────────────
+// Lets the admin add many days of collection in one go, two ways:
+//   1) Download a CSV template (Day + auto reference Date pre-filled),
+//      fill in the Net Collection column only, upload it back.
+//   2) Paste lines like "Day 1 - 1500000" directly.
+// Either way, Date is always recalculated from movie.releaseDate + (day-1)
+// and Gross is always recalculated as Net × 1.18 — the person only ever
+// has to type the net collection number.
+
+function BulkUploadModal({ movie, allDays, onClose, onSaved, onToast }) {
+  const year = getYear(movie.releaseDate);
+  const nextDay = allDays.length ? Math.max(...allDays.map((d) => d.day)) + 1 : 1;
+  const existingDaySet = new Set(allDays.map((d) => d.day));
+
+  const [tab,        setTab]        = useState("file"); // "file" | "paste"
+  const [startDay,   setStartDay]   = useState(nextDay);
+  const [numRows,    setNumRows]    = useState(30);
+  const [pasteText,  setPasteText]  = useState("");
+  const [rows,       setRows]       = useState([]); // priced preview rows
+  const [saving,     setSaving]     = useState(false);
+  const [err,        setErr]        = useState("");
+  const fileInputRef = useRef(null);
+
+  const priceRows = (entries) => {
+    const byDay = new Map();
+    entries.forEach(({ day, netRaw }) => byDay.set(day, { day, netRaw })); // last one wins on dup
+    return Array.from(byDay.values())
+      .sort((a, b) => a.day - b.day)
+      .map((r) => {
+        const netNum = parseToRupees(r.netRaw);
+        return {
+          ...r,
+          netNum,
+          valid:     netNum > 0,
+          grossNum:  netNum > 0 ? Math.round(netNum * GST_RATE) : 0,
+          date:      addDaysToISO(movie.releaseDate, r.day),
+          isUpdate:  existingDaySet.has(r.day),
+        };
+      });
+  };
+
+  const handleDownloadTemplate = () => {
+    const csv      = buildBoxOfficeTemplateCSV(movie, startDay, numRows);
+    const safeName = slugify(movie.title || "movie");
+    downloadCSV(csv, `${safeName}-boxoffice-template-day${startDay}-to-${startDay + numRows - 1}.csv`);
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr("");
+    try {
+      const text    = await file.text();
+      const csvRows = parseCSVText(text);
+      const entries = parseBulkCSVRows(csvRows);
+      if (!entries.length) {
+        setErr("No usable rows found — make sure the Net Collection column is filled in.");
+        setRows([]);
+      } else {
+        setRows(priceRows(entries));
+      }
+    } catch (e2) {
+      setErr("Could not read that file: " + e2.message);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleParsePaste = () => {
+    setErr("");
+    const entries = parseBulkPasteText(pasteText);
+    if (!entries.length) {
+      setErr('Could not find any day lines. Try one entry per line, e.g. "Day 1 - 1500000".');
+      setRows([]);
+    } else {
+      setRows(priceRows(entries));
+    }
+  };
+
+  const validRows   = rows.filter((r) => r.valid);
+  const invalidRows = rows.filter((r) => !r.valid);
+  const newCount    = validRows.filter((r) => !r.isUpdate).length;
+  const updateCount = validRows.filter((r) => r.isUpdate).length;
+
+  const handleConfirm = async () => {
+    if (!validRows.length) return;
+    setSaving(true);
+    setErr("");
+    try {
+      const payload = { days: validRows.map((r) => ({ day: r.day, net: String(r.netNum) })) };
+      const res = await API.adminBulkBoxOfficeDays(movie._id, payload);
+      onToast(`✅ Saved ${res.added || 0} new + ${res.updated || 0} updated day(s) for ${movie.title}.`, "success");
+      onSaved();
+      onClose();
+    } catch (e) {
+      setErr(e.message || "Bulk save failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700, maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="modal-header">
+          <span className="modal-title">📤 Bulk Box Office Upload — {movie.title}{year ? ` (${year})` : ""}</span>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div style={{ padding: "22px 24px" }}>
+          {!movie.releaseDate && (
+            <div style={{ marginBottom: 16, padding: "10px 14px", background: "rgba(220,160,40,0.08)", border: "1px solid rgba(220,160,40,0.3)", borderRadius: 8, color: "#d9a73a", fontSize: "0.8rem" }}>
+              ⚠️ This movie has no release date set, so per-day dates can't be auto-calculated. Set a release date first so Day 1 = release date works correctly.
+            </div>
+          )}
+
+          {err && (
+            <div style={{ marginBottom: 16, padding: "10px 14px", background: "rgba(220,50,50,0.1)", border: "1px solid rgba(220,50,50,0.4)", borderRadius: 8, color: "#e87a6a", fontSize: "0.82rem" }}>
+              ⚠️ {err}
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+            {[["file", "📄 Template File"], ["paste", "✏️ Paste Data"]].map(([key, label]) => (
+              <button key={key}
+                onClick={() => { setTab(key); setRows([]); setErr(""); }}
+                className={tab === key ? "btn btn-gold btn-sm" : "btn btn-ghost btn-sm"}
+                style={{ fontWeight: 700 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "file" && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={lbl}>Start Day</label>
+                  <input className="form-input" style={{ width: "100%", boxSizing: "border-box" }}
+                    type="number" min="1" value={startDay}
+                    onChange={(e) => setStartDay(parseInt(e.target.value, 10) || 1)} />
+                </div>
+                <div>
+                  <label style={lbl}>Number of Days</label>
+                  <input className="form-input" style={{ width: "100%", boxSizing: "border-box" }}
+                    type="number" min="1" max="200" value={numRows}
+                    onChange={(e) => setNumRows(parseInt(e.target.value, 10) || 1)} />
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ width: "100%", marginBottom: 14, fontWeight: 700 }} onClick={handleDownloadTemplate}>
+                ⬇️ Download Template (Day {startDay}–{startDay + numRows - 1})
+              </button>
+              <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: 16, lineHeight: 1.6 }}>
+                Open it in Excel/Sheets, fill in the <strong style={{ color: "var(--text)" }}>Net Collection</strong> column only — leave a day blank to skip it — then save as <strong style={{ color: "var(--text)" }}>.csv</strong> and upload it below. Dates and Gross are always calculated automatically; whatever ends up in the Date column is ignored.
+              </div>
+              <label style={lbl}>Upload Filled Template (.csv)</label>
+              <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={handleFileChange}
+                className="form-input" style={{ width: "100%", boxSizing: "border-box" }} />
+            </>
+          )}
+
+          {tab === "paste" && (
+            <>
+              <label style={lbl}>Paste day-wise data (one entry per line)</label>
+              <textarea
+                className="form-input"
+                style={{ width: "100%", boxSizing: "border-box", minHeight: 140, fontFamily: "monospace", fontSize: "0.82rem", resize: "vertical" }}
+                placeholder={"Day 1 - 1500000\nDay 2 - 2200000\nDay 3 - 1.8 Cr\n…"}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+              />
+              <div style={{ fontSize: "0.72rem", color: "var(--muted)", margin: "8px 0 14px", lineHeight: 1.6 }}>
+                Accepts formats like "Day 1 - 1500000", "1,15L", "1 1.2 Cr" — one entry per line. Dates and Gross are calculated automatically from Day 1 = {movie.releaseDate ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "the release date"}.
+              </div>
+              <button className="btn btn-gold btn-sm" style={{ fontWeight: 800 }} onClick={handleParsePaste} disabled={!pasteText.trim()}>
+                🔍 Parse &amp; Preview
+              </button>
+            </>
+          )}
+
+          {/* Preview */}
+          {rows.length > 0 && (
+            <>
+              <div style={{ borderTop: "1px solid var(--border)", margin: "20px 0 16px" }} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <span style={{ fontSize: "0.72rem", background: "rgba(80,200,120,0.12)", color: "#6fd08c", border: "1px solid rgba(80,200,120,0.3)", padding: "3px 10px", borderRadius: 10, fontWeight: 700 }}>
+                  {newCount} new
+                </span>
+                {updateCount > 0 && (
+                  <span style={{ fontSize: "0.72rem", background: "rgba(201,151,58,0.12)", color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)", padding: "3px 10px", borderRadius: 10, fontWeight: 700 }}>
+                    {updateCount} will be overwritten
+                  </span>
+                )}
+                {invalidRows.length > 0 && (
+                  <span style={{ fontSize: "0.72rem", background: "rgba(220,50,50,0.1)", color: "#e87a6a", border: "1px solid rgba(220,50,50,0.3)", padding: "3px 10px", borderRadius: 10, fontWeight: 700 }}>
+                    {invalidRows.length} skipped (no readable amount)
+                  </span>
+                )}
+              </div>
+
+              <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 10 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <thead>
+                    <tr style={{ background: "var(--bg2)" }}>
+                      {["Day", "Date", "Net", "Gross", "Status"].map((h) => (
+                        <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: "0.62rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "2px solid var(--border)", position: "sticky", top: 0, background: "var(--bg2)" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.day} style={{ borderBottom: "1px solid var(--border)", opacity: r.valid ? 1 : 0.5 }}>
+                        <td style={{ padding: "7px 12px", fontWeight: 700, color: "var(--gold)" }}>Day {r.day}</td>
+                        <td style={{ padding: "7px 12px", color: "var(--muted)" }}>
+                          {r.date ? new Date(r.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                        </td>
+                        <td style={{ padding: "7px 12px", fontWeight: 600 }}>{r.valid ? fmtINR(r.netNum) : (r.netRaw || "—")}</td>
+                        <td style={{ padding: "7px 12px", color: "#7ec8e3" }}>{r.valid ? fmtINR(r.grossNum) : "—"}</td>
+                        <td style={{ padding: "7px 12px", fontSize: "0.72rem" }}>
+                          {!r.valid
+                            ? <span style={{ color: "#e87a6a" }}>⚠️ unreadable amount</span>
+                            : r.isUpdate
+                            ? <span style={{ color: "var(--gold)" }}>↻ update</span>
+                            : <span style={{ color: "#6fd08c" }}>+ new</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+            <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button className="btn btn-gold" style={{ flex: 2, fontWeight: 800 }}
+              onClick={handleConfirm} disabled={saving || validRows.length === 0}>
+              {saving ? "Saving…" : `💾 Save ${validRows.length} Day${validRows.length !== 1 ? "s" : ""}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main BoxOfficePanel ───────────────────────────────────────────────────────
 
 export default function BoxOfficePanel({ movies, onToast }) {
@@ -1535,6 +1967,7 @@ export default function BoxOfficePanel({ movies, onToast }) {
   const [days,        setDays]        = useState([]);
   const [loadingDays, setLoadingDays] = useState(false);
   const [modal,       setModal]       = useState(null); // { isEdit, dayData } | null
+  const [bulkModal,   setBulkModal]   = useState(false);
   const dropRef = useRef(null);
 
   // Close dropdown on outside click
@@ -1613,6 +2046,12 @@ export default function BoxOfficePanel({ movies, onToast }) {
           </span>
         )}
         <div style={{ flex: 1 }} />
+        {selMovie && (
+          <button className="btn btn-ghost btn-sm" style={{ fontWeight: 800 }}
+            onClick={() => setBulkModal(true)}>
+            📤 Bulk Upload
+          </button>
+        )}
         {selMovie && (
           <button className="btn btn-gold btn-sm" style={{ fontWeight: 800 }}
             onClick={() => setModal({ isEdit: false, dayData: null })}>
@@ -1735,6 +2174,11 @@ export default function BoxOfficePanel({ movies, onToast }) {
                 onClick={() => setModal({ isEdit: false, dayData: null })}>
                 + Add Day 1 Collection
               </button>
+              <div style={{ marginTop: 12 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setBulkModal(true)}>
+                  📤 Bulk Upload Multiple Days Instead
+                </button>
+              </div>
             </div>
           )}
 
@@ -1826,6 +2270,17 @@ export default function BoxOfficePanel({ movies, onToast }) {
           dayData={modal.isEdit ? modal.dayData : null}
           allDays={days}
           onClose={() => setModal(null)}
+          onSaved={() => loadDays(selMovie)}
+          onToast={onToast}
+        />
+      )}
+
+      {/* Bulk Upload Modal */}
+      {bulkModal && selMovie && (
+        <BulkUploadModal
+          movie={selMovie}
+          allDays={days}
+          onClose={() => setBulkModal(false)}
           onSaved={() => loadDays(selMovie)}
           onToast={onToast}
         />

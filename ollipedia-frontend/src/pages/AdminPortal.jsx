@@ -9,6 +9,7 @@ const BMSTrackerPanel    = lazy(() => import("./BMSTrackerPanel"));
 const MergePanel         = lazy(() => import("./MergePanel"));
 const AutoIndexPanel     = lazy(() => import("./AutoIndexPanel"));
 const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
+const PosterGeneratorPanel = lazy(() => import("./PosterGeneratorPanel"));
 
 
 
@@ -2638,6 +2639,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["boxoffice","📊","Box Office"],
             ["tracker","🎟","BMS Tracker"],
             [ "sacnilk",  "🕷️ Sacnilk" ],
+            ["poster","🖼️","Poster Generator"],
             ["enquiries","✉️","Enquiries"],
             ["analytics","📈","Analytics"],
             ["merge","🔀","Merge Duplicates"],
@@ -3260,6 +3262,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {tab === "sacnilk" && (
                 <Suspense fallback={<Spinner />}>
                   <SacnilkScraperPanel movies={movies} onToast={onToast} />
+                </Suspense>
+              )}
+
+              {/* ── POSTER GENERATOR ── */}
+              {tab === "poster" && (
+                <Suspense fallback={<Spinner />}>
+                  <PosterGeneratorPanel movies={movies} onToast={onToast} />
                 </Suspense>
               )}
 

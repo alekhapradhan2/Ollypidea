@@ -154,6 +154,23 @@ function formatINRGlobal(n) {
   return `₹${Number(n).toLocaleString("en-IN")}`;
 }
 
+/** GST_RATE — Gross = Net × 1.18 (18% entertainment tax/GST). Used by the
+ *  bulk box-office upload route and mirrored in BoxOfficePanel.jsx on the
+ *  frontend so previews match exactly what gets saved. */
+const GST_RATE_GLOBAL = 1.18;
+
+/** addDaysToISO — given a releaseDate (any parseable date string) and a
+ *  1-indexed day number, returns the calendar date for that day as
+ *  "YYYY-MM-DD". Day 1 == releaseDate itself. Returns "" if releaseDate
+ *  is missing/invalid. */
+function addDaysToISO(releaseDate, dayNum) {
+  if (!releaseDate) return "";
+  const d = new Date(releaseDate);
+  if (isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + (Number(dayNum) - 1));
+  return d.toISOString().slice(0, 10);
+}
+
 /** Auth middleware — sets req.prodId (string) */
 const auth = (req, res, next) => {
   const token = (req.headers.authorization || "").split(" ")[1];
@@ -1260,12 +1277,20 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       catch (err) { console.warn("⚠️ Skipping cast entry:", item.name || item.castId, "—", err.message); }
     }
 
-    // Parse productions — use exactly what the admin provides; no silent fallback
+    // Parse productions — use exactly what the admin provides; only fall back
+    // to the admin placeholder production when none was given, since
+    // productionId is required on the Movie schema and Movie.create() always
+    // runs full validation (unlike the update route below, which doesn't).
     let prods = b.productions || [];
     if (typeof prods === "string") { try { prods = JSON.parse(prods); } catch { prods = []; } }
     const validProds = Array.isArray(prods) ? prods.filter(id => isOid(String(id))).map(String) : [];
-    const validProdId  = validProds.length > 0 ? validProds[0] : null;
+    let validProdId  = validProds.length > 0 ? validProds[0] : null;
     const collabIds    = validProds.slice(1);
+
+    if (!validProdId) {
+      const adminProd = await getAdminProd();
+      validProdId = String(adminProd._id);
+    }
 
     // Media
     const rm = (b.media && typeof b.media === "object") ? b.media : {};
@@ -2143,6 +2168,81 @@ app.delete("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, r
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
  
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN — POST /api/admin/movies/:id/boxoffice-days/bulk
+// Bulk add/update day entries in one shot — powers the "Bulk Upload"
+// feature in BoxOfficePanel.jsx (CSV template upload + paste-data mode).
+//
+// Body: { days: [ { day: 1, net: "1500000" }, { day: 2, net: "22L" }, ... ] }
+//   - "net" accepts the same formats as the single-day routes ("1500000",
+//     "15L", "1.2 Cr", "₹15,00,000" etc.) via parseToRupeesGlobal.
+//   - "date" is ALWAYS auto-calculated server-side from the movie's
+//     releaseDate + (day - 1), regardless of what (if anything) the client
+//     sends — this is what makes "Day 1 = release date, Day 2 = release
+//     date + 1, …" work automatically.
+//   - "gross" is ALWAYS auto-calculated as net × 1.18 (GST_RATE_GLOBAL).
+//   - Existing day numbers are overwritten (upsert); new day numbers are
+//     appended. Rows with no usable net value are skipped, not errored.
+// ═══════════════════════════════════════════════════════════════════════════
+app.post("/api/admin/movies/:id/boxoffice-days/bulk", adminAuth, async (req, res) => {
+  try {
+    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
+
+    const { days } = req.body;
+    if (!Array.isArray(days) || days.length === 0) {
+      return res.status(400).json({ error: "days array is required" });
+    }
+
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+
+    movie.boxOfficeDays = movie.boxOfficeDays || [];
+
+    let added = 0, updated = 0;
+    const skipped = [];
+
+    for (const entry of days) {
+      const dayNum = parseInt(entry?.day, 10);
+      if (!dayNum || dayNum < 1) { skipped.push(entry?.day ?? "?"); continue; }
+
+      const netNum = parseToRupeesGlobal(entry?.net || "0");
+      if (netNum <= 0) { skipped.push(dayNum); continue; } // blank/unreadable row — skip silently
+
+      const grossNum     = Math.round(netNum * GST_RATE_GLOBAL);
+      const netStored     = formatINRGlobal(netNum);
+      const grossStored   = formatINRGlobal(grossNum);
+      const dateStored    = addDaysToISO(movie.releaseDate, dayNum); // always derived from releaseDate
+
+      const idx = movie.boxOfficeDays.findIndex((d) => d.day === dayNum);
+      if (idx === -1) {
+        movie.boxOfficeDays.push({
+          day: dayNum, net: netStored, gross: grossStored,
+          date: dateStored, note: entry?.note || "",
+        });
+        added++;
+      } else {
+        movie.boxOfficeDays[idx].net   = netStored;
+        movie.boxOfficeDays[idx].gross = grossStored;
+        movie.boxOfficeDays[idx].date  = dateStored;
+        if (entry?.note !== undefined) movie.boxOfficeDays[idx].note = entry.note;
+        updated++;
+      }
+    }
+
+    movie.boxOfficeDays.sort((a, b) => a.day - b.day);
+
+    // Re-sync the boxOffice.total summary from the full day-wise net figures
+    const totalNet = movie.boxOfficeDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+    if (totalNet > 0) {
+      movie.boxOffice = movie.boxOffice || {};
+      movie.boxOffice.total = formatINRGlobal(totalNet);
+    }
+
+    await movie.save({ validateBeforeSave: false });
+    res.json({ success: true, added, updated, skipped, days: movie.boxOfficeDays });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN — GET /api/admin/boxoffice/all-movies
 // Returns movies that have at least one boxOfficeDays entry (already existed
@@ -3378,9 +3478,57 @@ Rules:
 .ollypedia-blog-content img,
 .ollypedia-blog-content table,
 .ollypedia-blog-content div,
-.ollypedia-blog-content section { box-sizing: border-box; }
+.ollypedia-blog-content section,
+.ollypedia-blog-content td,
+.ollypedia-blog-content th { box-sizing: border-box; }
 
 .ollypedia-blog-content { overflow-x: hidden; word-break: break-word; }
+
+.ollypedia-blog-content p,
+.ollypedia-blog-content span,
+.ollypedia-blog-content strong,
+.ollypedia-blog-content em,
+.ollypedia-blog-content a,
+.ollypedia-blog-content h1,
+.ollypedia-blog-content h2,
+.ollypedia-blog-content h3,
+.ollypedia-blog-content td,
+.ollypedia-blog-content th {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.ollypedia-blog-content img,
+.ollypedia-blog-content svg,
+.ollypedia-blog-content video,
+.ollypedia-blog-content iframe,
+.ollypedia-blog-content embed,
+.ollypedia-blog-content object,
+.ollypedia-blog-content canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.ollypedia-blog-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.ollypedia-blog-content code {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.ollypedia-blog-content blockquote {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.ollypedia-blog-content table { max-width: 100%; }
 
 .ollypedia-blog-content .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
@@ -3391,6 +3539,9 @@ Rules:
   .ollypedia-blog-content section[style*="background:#181818"],
   .ollypedia-blog-content section[style*="background: #181818"] {
     padding: 18px 14px !important;
+  }
+  .ollypedia-blog-content section[style*="background:#111"] {
+    padding: 16px 14px !important;
   }
   .ollypedia-blog-content .stat-chips {
     grid-template-columns: 1fr 1fr !important;
