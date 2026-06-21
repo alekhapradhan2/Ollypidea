@@ -663,6 +663,10 @@ function extractMovieCastCrew(movie) {
       (r.includes("director") && !["music", "art", "action", "stunt", "assistant", "co-", "associate"].some(x => r.includes(x)));
   });
   const director = directorEntry?.name || movie.director || "";
+  // NEW (additive): keep the matched cast entry too, so callers that want a
+  // clickable link to the director's cast profile can build one via
+  // castProfileUrl(cc.directorEntry) — `director` (the plain name string)
+  // is unchanged and still used everywhere it already was.
 
   const producerEntry = cast.find(m => {
     const r = (m.role || m.type || "").toLowerCase().trim();
@@ -671,10 +675,19 @@ function extractMovieCastCrew(movie) {
   });
   const producer = producerEntry?.name || movie.producer || "";
 
-  const musicDirector = findByRole(["music director"])?.name || "";
-  const writer = findByRole(["writer", "screenplay", "story", "dialogue"])?.name || "";
-  const dop = findByRole(["cinematographer", "dop", "director of photography"])?.name || "";
-  const editor = findByRole(["editor"])?.name || "";
+  // NEW (additive): keep the matched entry object for each of these too —
+  // same purpose as directorEntry above — so the "Key Crew" rows can link
+  // to a cast profile page wherever one exists, without changing any of
+  // the existing plain-string fields (musicDirector, writer, dop, editor)
+  // that other code already depends on.
+  const musicDirectorEntry = findByRole(["music director"]);
+  const writerEntry = findByRole(["writer", "screenplay", "story", "dialogue"]);
+  const dopEntry = findByRole(["cinematographer", "dop", "director of photography"]);
+  const editorEntry = findByRole(["editor"]);
+  const musicDirector = musicDirectorEntry?.name || "";
+  const writer = writerEntry?.name || "";
+  const dop = dopEntry?.name || "";
+  const editor = editorEntry?.name || "";
 
   const CREW_KW = ["director", "producer", "writer", "screenplay", "story", "dialogue", "music director", "cinematographer", "dop", "editor", "choreographer", "art director", "costume", "sound", "stunt", "vfx"];
   const actingKW = ["actor", "actress", "lead", "hero", "heroine", "supporting", "cameo", "special appearance"];
@@ -686,7 +699,54 @@ function extractMovieCastCrew(movie) {
 
   const leadCast = actors.slice(0, 6);
 
-  return { director, producer, musicDirector, writer, dop, editor, leadCast, fullCast: cast };
+  // ── OTT-blog-only cast filter ──────────────────────────────────────────
+  // BUGFIX: the OTT Announcement and OTT Streaming blogs were displaying
+  // crew members (Cinematographer, Editor, Music Director, Choreographer,
+  // etc.) in their "Cast" section whenever a person's `role`/`type` string
+  // didn't match one of the CREW_KW substrings above — the `actors` filter
+  // above is "exclude known-crew" (fail-open), so anyone with an
+  // unrecognized or missing role string falls through and gets treated as
+  // cast by default. That's correct for `leadCast`/`fullCast` (used on the
+  // Movie Details page and in the shared JSON-LD `actor[]` array, which
+  // this fix must NOT touch), but it's wrong for the OTT blogs' "Cast"
+  // section, which must show ONLY Director, Actor, and Actress.
+  //
+  // `ottCast` below is therefore the inverse approach — "include
+  // known-cast" (fail-closed): a person is only included if their
+  // role/type string explicitly indicates Director, Actor, or Actress.
+  // Anyone else (Cinematographer, Editor, Music Director, Lyricist,
+  // Producer, Writer, Choreographer, Art Director, Costume Designer, or
+  // any other/miscellaneous crew role) is excluded, even if their role
+  // string is something this codebase has never seen before.
+  //
+  // This is a NEW, additive field — `leadCast` and `fullCast` (and every
+  // existing call site that reads them) are completely unchanged.
+  //
+  // Director sub-roles that are NOT the film's director (must stay excluded
+  // even though their role string contains "director").
+  const OTT_NON_FILM_DIRECTOR_KW = ["music", "art", "action", "stunt", "casting", "assistant", "co-", "associate", "photography", "of photography"];
+  const isOttDirector = (r) => r === "director" || r === "film director" || r === "movie director" ||
+    (r.includes("director") && !OTT_NON_FILM_DIRECTOR_KW.some(x => r.includes(x)));
+  const isOttActingRole = (r) => ["actor", "actress", "lead", "hero", "heroine", "supporting", "cameo", "special appearance", "cast"].some(k => r.includes(k));
+  const ottCast = cast.filter(m => {
+    const r = (m.role || m.type || "").toLowerCase().trim();
+    if (!r) return false; // no role/type at all → cannot confirm cast/director, so exclude (fail-closed)
+    return isOttDirector(r) || isOttActingRole(r);
+  });
+
+  return {
+    director, producer, musicDirector, writer, dop, editor, leadCast, fullCast: cast, ottCast,
+    // NEW (additive): raw cast entries (with castId) for crew roles, so
+    // callers can build clickable cast-profile links via castProfileUrl(...)
+    // wherever a crew member's name is displayed. None of the existing
+    // string fields above changed.
+    directorEntry: directorEntry || null,
+    producerEntry: producerEntry || null,
+    musicDirectorEntry: musicDirectorEntry || null,
+    writerEntry: writerEntry || null,
+    dopEntry: dopEntry || null,
+    editorEntry: editorEntry || null,
+  };
 }
 
 /** Returns the canonical cast profile URL — always /cast/{castId} (ObjectId only). */
@@ -814,8 +874,12 @@ function buildMovieDetailsTitle(movie) {
  *  degrades gracefully instead of getting cut off mid-word. */
 function buildOttTitle(movie, cc) {
   const dateTail = isRealDate(movie.ottReleaseDate) ? `on ${formatHumanDate(movie.ottReleaseDate)}` : "— Announced Soon";
+  // BUGFIX: use the strictly-filtered ottCast (Director + Actor + Actress
+  // only) so a Cinematographer/Editor/Music Director never ends up named
+  // as a "Starrer" in the page title — same root cause as the Cast-section
+  // bug, fixed the same way, scoped only to this OTT-blog title builder.
   const build = (leadCount) => {
-    const leads = (cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
+    const leads = (cc.ottCast || cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
     const subject = leads.length ? `${leads.join(" & ")} Starrer` : "Odia Movie";
     return `${movie.title} OTT Release Date: ${subject} Premieres on ${movie.streamingOn} ${dateTail}`.replace(/\s+/g, " ").trim();
   };
@@ -988,11 +1052,21 @@ function buildMovieDetailsBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublis
       </tr>`;
   }).join("");
 
+  // Each crew name links to its cast profile (same /cast/{id} pattern used
+  // for the full cast table below) when a matching cast entry exists;
+  // falls back to plain text exactly as before when it doesn't (e.g. when
+  // the name came from movie.director rather than a matched cast entry).
+  const crewLink = (name, entry) => {
+    const url = castProfileUrl(entry);
+    return url ? `<a href="${url}" style="color:#e8c87a;text-decoration:underline;text-underline-offset:2px;">${name}</a>` : name;
+  };
   const keyCrewRows = [
-    ["Director", cc.director], ["Producer", cc.producer], ["Music Director", cc.musicDirector],
-    ["Writer", cc.writer], ["Cinematography", cc.dop], ["Editor", cc.editor],
-  ].filter(([, v]) => v).map(([k, v]) => `
-      <tr><td style="${tdL}">${k}</td><td style="${tdR}">${v}</td></tr>`).join("");
+    ["Director", cc.director, cc.directorEntry], ["Producer", cc.producer, cc.producerEntry],
+    ["Music Director", cc.musicDirector, cc.musicDirectorEntry],
+    ["Writer", cc.writer, cc.writerEntry], ["Cinematography", cc.dop, cc.dopEntry],
+    ["Editor", cc.editor, cc.editorEntry],
+  ].filter(([, v]) => v).map(([k, v, entry]) => `
+      <tr><td style="${tdL}">${k}</td><td style="${tdR}">${crewLink(v, entry)}</td></tr>`).join("");
 
   const songRows = hasSongs ? movie.media.songs.map(s => `
       <tr><td style="${td}font-weight:600;">${s.title || ""}</td><td style="${td}">${s.singer || ""}</td></tr>`).join("") : "";
@@ -1408,7 +1482,9 @@ async function generateOttAiSections(movie, cc) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const isDateAvailable = isRealDate(movie.ottReleaseDate);
   const ottDateFmt = isDateAvailable ? formatHumanDate(movie.ottReleaseDate) : "Release Date Not Announced";
-  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean).join(", ");
+  // BUGFIX: use the strictly-filtered ottCast so the AI is never told a
+  // Cinematographer/Editor/Music Director is part of the "Lead Cast".
+  const leadNames = (cc.ottCast || cc.leadCast).map(c => c.name).filter(Boolean).join(", ");
   const festival = isDateAvailable ? findNearbyFestival(movie.ottReleaseDate) : "";
 
   const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | OTT Platform: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${(movie.genre || []).join(", ") || "Odia"} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"}${festival ? ` | Note: this OTT release falls close to ${festival} — you may mention this naturally if it fits.` : ""}`;
@@ -1457,7 +1533,14 @@ function buildOttBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, date
   const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
   const ogImage = poster || `${SITE_URL}/logo.png`;
   const movieUrl = `/movie/${movie.slug}`;
-  const leadCast = cc.leadCast || [];
+  // BUGFIX: use the strictly-filtered ottCast (Director + Actor + Actress
+  // only) for this blog's Cast section and its actor[] schema — NOT the
+  // shared cc.leadCast, which can include crew (Cinematographer, Editor,
+  // Music Director, etc.) whenever their role string isn't recognized by
+  // the shared fail-open filter in extractMovieCastCrew. Scoped to this
+  // function only; cc.leadCast itself is untouched, so the Movie Details
+  // page (and its JSON-LD) are completely unaffected.
+  const leadCast = cc.ottCast || cc.leadCast || [];
   const imdbNum = parseFloat(movie.imdbRating);
   const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
   const dp = datePublished || new Date().toISOString();
@@ -1748,8 +1831,10 @@ async function autoGenerateOttBlog(movie) {
  *  no keyword value) and capped at 90 chars so long names/platforms don't
  *  get truncated by Google with a graceful 1-lead-name fallback. */
 function buildOttLiveTitle(movie, cc) {
+  // BUGFIX: same fix as buildOttTitle — use the strictly-filtered ottCast
+  // so a crew member never ends up named as a "Starrer" in the title.
   const build = (leadCount) => {
-    const leads = (cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
+    const leads = (cc.ottCast || cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
     const subject = leads.length ? `${leads.join(" & ")} Starrer` : "Odia Movie";
     return `${movie.title} Is Now Streaming on ${movie.streamingOn}: ${subject}`.replace(/\s+/g, " ").trim();
   };
@@ -1762,7 +1847,9 @@ function buildOttLiveTitle(movie, cc) {
 async function generateOttLiveAiSections(movie, cc) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const ottDateFmt = isRealDate(movie.ottReleaseDate) ? formatHumanDate(movie.ottReleaseDate) : "Now";
-  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean).join(", ");
+  // BUGFIX: use the strictly-filtered ottCast so the AI is never told a
+  // Cinematographer/Editor/Music Director is part of the "Lead Cast".
+  const leadNames = (cc.ottCast || cc.leadCast).map(c => c.name).filter(Boolean).join(", ");
   const genre = (movie.genre || []).join(", ") || "Odia";
 
   const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | Now Streaming on: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${genre} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"} | Streaming URL: ${movie.streamingUrl || "N/A"}`;
@@ -1809,7 +1896,11 @@ function buildOttLiveBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, 
   const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
   const ogImage = poster || `${SITE_URL}/logo.png`;
   const movieUrl = `/movie/${movie.slug}`;
-  const leadCast = cc.leadCast || [];
+  // BUGFIX: same fix as the OTT Release blog — use the strictly-filtered
+  // ottCast (Director + Actor + Actress only) for this blog's Cast section
+  // and its actor[] schema, instead of the shared cc.leadCast (which can
+  // include crew). Scoped to this function only.
+  const leadCast = cc.ottCast || cc.leadCast || [];
   const genre = (movie.genre || []).join(", ") || "Odia";
   const imdbNum = parseFloat(movie.imdbRating);
   const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
@@ -1984,7 +2075,7 @@ ${BLOG_RESPONSIVE_STYLES}
           <tr><td style="${tdL}">Language</td><td style="${tdR}">${movie.language || "Odia"}</td></tr>
           ${genre ? `<tr><td style="${tdL}">Genre</td><td style="${tdR}">${genre}</td></tr>` : ""}
           ${movie.releaseDate ? `<tr><td style="${tdL}">Theatrical Release</td><td style="${tdR}">${formatHumanDate(movie.releaseDate)}</td></tr>` : ""}
-          ${cc.director ? `<tr><td style="${tdL}">Director</td><td style="${tdR}">${cc.director}</td></tr>` : ""}
+          ${cc.director ? `<tr><td style="${tdL}">Director</td><td style="${tdR}">${(() => { const u = castProfileUrl(cc.directorEntry); return u ? `<a href="${u}" style="color:#4ade80;text-decoration:underline;text-underline-offset:2px;">${cc.director}</a>` : cc.director; })()}</td></tr>` : ""}
           ${movie.runtime ? `<tr><td style="${tdL}">Runtime</td><td style="${tdR}">${movie.runtime}</td></tr>` : ""}
         </tbody>
       </table>
