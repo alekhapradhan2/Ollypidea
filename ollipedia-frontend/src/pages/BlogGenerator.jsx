@@ -18,6 +18,7 @@ const ARTICLE_TYPES = [
 const BLOG_CATEGORIES = [
   "Movie Review","Actor Spotlight","Top 10","General",
   "Behind the Scenes","Music","Industry News","Opinion",
+  "Movie Update","OTT Release",
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

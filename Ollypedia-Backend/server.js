@@ -1,11 +1,11 @@
-const express  = require("express");
+const express = require("express");
 const mongoose = require("mongoose");
-const cors     = require("cors");
-const bcrypt   = require("bcryptjs");
-const jwt      = require("jsonwebtoken");
-const path     = require("path");
-const fs       = require("fs");
-const multer   = require("multer");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const path = require("path");
+const fs = require("fs");
+const multer = require("multer");
 require("dotenv").config();
 
 // ── Multer: disk storage for blog inline images ──────────────────────────────
@@ -14,15 +14,15 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const blogImageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename:    (_req, file, cb) => {
-    const ext  = path.extname(file.originalname).toLowerCase() || ".jpg";
-    const name = `blog-img-${Date.now()}-${Math.random().toString(36).slice(2,8)}${ext}`;
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const name = `blog-img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
     cb(null, name);
   },
 });
 const blogImageUpload = multer({
   storage: blogImageStorage,
-  limits:  { fileSize: 8 * 1024 * 1024 }, // 8 MB max
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max
   fileFilter: (_req, file, cb) => {
     if (/^image\/(jpeg|jpg|png|webp|gif)$/.test(file.mimetype)) cb(null, true);
     else cb(new Error("Only image files are allowed (jpeg, png, webp, gif)"));
@@ -43,26 +43,26 @@ app.use(async (req, _res, next) => {
     if (TRACK_SKIP.some(p => req.path.startsWith(p))) return next();
     if (!req.path.startsWith("/api/")) return next();
 
-    const ua  = req.headers["user-agent"] || "";
-    const ip  = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-                || req.socket?.remoteAddress || "";
+    const ua = req.headers["user-agent"] || "";
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+      || req.socket?.remoteAddress || "";
     const ref = req.headers["referer"] || req.headers["referrer"] || "";
 
     const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
-    const device   = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
+    const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
 
-    const os = /Windows/i.test(ua)    ? "Windows"
-             : /Android/i.test(ua)    ? "Android"
-             : /iPhone|iPad/i.test(ua) ? "iOS"
-             : /Mac/i.test(ua)         ? "macOS"
-             : /Linux/i.test(ua)       ? "Linux" : "Other";
+    const os = /Windows/i.test(ua) ? "Windows"
+      : /Android/i.test(ua) ? "Android"
+        : /iPhone|iPad/i.test(ua) ? "iOS"
+          : /Mac/i.test(ua) ? "macOS"
+            : /Linux/i.test(ua) ? "Linux" : "Other";
 
-    const browser = /Edg\//i.test(ua)   ? "Edge"
-                  : /OPR\//i.test(ua)   ? "Opera"
-                  : /Chrome/i.test(ua)  ? "Chrome"
-                  : /Firefox/i.test(ua) ? "Firefox"
-                  : /Safari/i.test(ua)  ? "Safari" : "Other";
+    const browser = /Edg\//i.test(ua) ? "Edge"
+      : /OPR\//i.test(ua) ? "Opera"
+        : /Chrome/i.test(ua) ? "Chrome"
+          : /Firefox/i.test(ua) ? "Firefox"
+            : /Safari/i.test(ua) ? "Safari" : "Other";
 
     const page = req.path.replace(/^\/api/, "") || "/";
 
@@ -70,13 +70,13 @@ app.use(async (req, _res, next) => {
     if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
       try {
         const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
-        const gd  = await geo.json();
+        const gd = await geo.json();
         if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
       } catch { /* geo timeout — visit still logged */ }
     }
 
     // fire-and-forget — never block the request
-    VisitorLog.create({ ip, country, city, device, os, browser, page, referrer: ref, visitedAt: new Date() }).catch(() => {});
+    VisitorLog.create({ ip, country, city, device, os, browser, page, referrer: ref, visitedAt: new Date() }).catch(() => { });
   } catch { /* never block */ }
   next();
 });
@@ -91,6 +91,14 @@ mongoose.connect(process.env.MONGO_URI)
 // ════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════
+
+/** Canonical site origin — used everywhere a blog/movie/cast URL is built
+ *  (canonical tags, OG/Twitter meta, JSON-LD @id/url fields, sitemaps).
+ *  Moved to the top of the file (was previously declared just above
+ *  /robots.txt) so every blog-HTML builder can reference the SAME
+ *  constant instead of hardcoding "https://ollypedia.in" inline — fixes
+ *  the www vs non-www canonical mismatch flagged in the SEO audit. */
+const SITE_URL = process.env.SITE_URL || "https://www.ollypedia.in";
 
 /** Is s a valid 24-hex MongoDB ObjectId string? */
 const isOid = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
@@ -140,7 +148,7 @@ function parseToRupeesGlobal(str) {
   const n = parseFloat(s);
   if (isNaN(n)) return 0;
   if (s.includes("cr") || s.includes("crore")) return Math.round(n * 1_00_00_000);
-  if (s.includes("l") || s.includes("lakh"))   return Math.round(n * 1_00_000);
+  if (s.includes("l") || s.includes("lakh")) return Math.round(n * 1_00_000);
   // Bare integer — trust only if it looks like actual rupees (≥ 1000)
   if (n >= 1000) return Math.round(n);
   return 0; // "7", "0.17" etc. with no unit = corrupted — discard
@@ -150,7 +158,7 @@ function parseToRupeesGlobal(str) {
 function formatINRGlobal(n) {
   if (!n || isNaN(n)) return "—";
   if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
-  if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
+  if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(2)} L`;
   return `₹${Number(n).toLocaleString("en-IN")}`;
 }
 
@@ -218,14 +226,14 @@ const canEdit = (movie, prodId) =>
 // ════════════════════════════════════════════════════════════════
 
 const ProductionSchema = new mongoose.Schema({
-  name:     { type: String, required: true },
-  email:    { type: String, required: true, unique: true, lowercase: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
-  logo:     { type: String, default: "" },
-  banner:   { type: String, default: "" },
-  bio:      { type: String, default: "" },
-  founded:  { type: String, default: "" },
-  website:  { type: String, default: "" },
+  logo: { type: String, default: "" },
+  banner: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  founded: { type: String, default: "" },
+  website: { type: String, default: "" },
   location: { type: String, default: "" },
 }, { timestamps: true });
 
@@ -234,26 +242,26 @@ const ProductionSchema = new mongoose.Schema({
  * movies[] is a back-reference array for filmography display.
  */
 const CastSchema = new mongoose.Schema({
-  name:      { type: String, required: true, trim: true },
-  type:      { type: String, default: "Actor" },   // primary / legacy (comma-separated)
-  roles:     [{ type: String }],                   // multi-role array e.g. ["Actor","Singer"]
-  bio:       { type: String, default: "" },
-  photo:     { type: String, default: "" },
-  dob:       { type: String, default: "" },
-  gender:    { type: String, default: "" },
-  location:  { type: String, default: "" },
-  website:   { type: String, default: "" },
+  name: { type: String, required: true, trim: true },
+  type: { type: String, default: "Actor" },   // primary / legacy (comma-separated)
+  roles: [{ type: String }],                   // multi-role array e.g. ["Actor","Singer"]
+  bio: { type: String, default: "" },
+  photo: { type: String, default: "" },
+  dob: { type: String, default: "" },
+  gender: { type: String, default: "" },
+  location: { type: String, default: "" },
+  website: { type: String, default: "" },
   instagram: { type: String, default: "" },
-  banner:    { type: String, default: "" },
-  movies:    [{ type: mongoose.Schema.Types.ObjectId, ref: "Movie" }],
+  banner: { type: String, default: "" },
+  movies: [{ type: mongoose.Schema.Types.ObjectId, ref: "Movie" }],
 }, { timestamps: true });
 
 const ReviewSchema = new mongoose.Schema({
-  user:    { type: String, default: "Anonymous" },
-  rating:  Number,
-  text:    String,
-  date:    String,
-  likes:   { type: Number, default: 0 },
+  user: { type: String, default: "Anonymous" },
+  rating: Number,
+  text: String,
+  date: String,
+  likes: { type: Number, default: 0 },
   replies: [{
     user: { type: String, default: "Anonymous" },
     text: { type: String, default: "" },
@@ -262,18 +270,18 @@ const ReviewSchema = new mongoose.Schema({
 });
 
 const SongSchema = new mongoose.Schema({
-  title:           { type: String, default: "" },
-  singer:          { type: String, default: "" },
-  singerRef:       [{ type: mongoose.Schema.Types.ObjectId, ref: "Cast" }],
-  musicDirector:   { type: String, default: "" },
-  musicDirectorRef:[{ type: mongoose.Schema.Types.ObjectId, ref: "Cast" }],
-  lyricist:        { type: String, default: "" },
-  lyricistRef:     [{ type: mongoose.Schema.Types.ObjectId, ref: "Cast" }],
-  ytId:            { type: String, default: "" },
-  url:             { type: String, default: "" },
-  thumbnailUrl:    { type: String, default: "" },
-  lyrics:          { type: String, default: "" },
-  description:     { type: String, default: "" },
+  title: { type: String, default: "" },
+  singer: { type: String, default: "" },
+  singerRef: [{ type: mongoose.Schema.Types.ObjectId, ref: "Cast" }],
+  musicDirector: { type: String, default: "" },
+  musicDirectorRef: [{ type: mongoose.Schema.Types.ObjectId, ref: "Cast" }],
+  lyricist: { type: String, default: "" },
+  lyricistRef: [{ type: mongoose.Schema.Types.ObjectId, ref: "Cast" }],
+  ytId: { type: String, default: "" },
+  url: { type: String, default: "" },
+  thumbnailUrl: { type: String, default: "" },
+  lyrics: { type: String, default: "" },
+  description: { type: String, default: "" },
 });
 
 /**
@@ -282,108 +290,111 @@ const SongSchema = new mongoose.Schema({
  */
 const CastEntrySchema = new mongoose.Schema({
   castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast", required: true },
-  name:   { type: String, default: "" },
-  photo:  { type: String, default: "" },
-  type:   { type: String, default: "Actor" },
-  role:   { type: String, default: "" },
+  name: { type: String, default: "" },
+  photo: { type: String, default: "" },
+  type: { type: String, default: "Actor" },
+  role: { type: String, default: "" },
 }, { _id: false });
 
 const MovieSchema = new mongoose.Schema({
-  title:        { type: String, required: true, trim: true },
-  category:     { type: String, default: "Feature Film" },
-  genre:        [{ type: String }],
-  releaseDate:  { type: String, default: "" },
-  releaseTBA:   { type: Boolean, default: false },
-  director:     { type: String, default: "" },
-  producer:     { type: String, default: "" },
-  budget:       { type: String, default: "" },
-  language:     { type: String, default: "Odia" },
-  synopsis:     { type: String, default: "" },
-  posterUrl:     { type: String, default: "" },
-  thumbnailUrl:  { type: String, default: "" },
-  bannerUrl:     { type: String, default: "" },
-  runtime:       { type: String, default: "" },
-  imdbId:        { type: String, default: "" },
-  imdbRating:    { type: String, default: "" },
-  imdbVotes:     { type: String, default: "" },
+  title: { type: String, required: true, trim: true },
+  category: { type: String, default: "Feature Film" },
+  genre: [{ type: String }],
+  releaseDate: { type: String, default: "" },
+  releaseTBA: { type: Boolean, default: false },
+  director: { type: String, default: "" },
+  producer: { type: String, default: "" },
+  budget: { type: String, default: "" },
+  language: { type: String, default: "Odia" },
+  synopsis: { type: String, default: "" },
+  posterUrl: { type: String, default: "" },
+  thumbnailUrl: { type: String, default: "" },
+  bannerUrl: { type: String, default: "" },
+  runtime: { type: String, default: "" },
+  imdbId: { type: String, default: "" },
+  imdbRating: { type: String, default: "" },
+  imdbVotes: { type: String, default: "" },
   contentRating: { type: String, default: "" },
-  productionId:  { type: mongoose.Schema.Types.ObjectId, ref: "Production", required: true },
+  productionId: { type: mongoose.Schema.Types.ObjectId, ref: "Production", required: true },
   collaborators: [{ type: mongoose.Schema.Types.ObjectId, ref: "Production" }],
   cast: [CastEntrySchema],
   media: {
     trailer: {
-      ytId:         { type: String, default: "" },
-      url:          { type: String, default: "" },
+      ytId: { type: String, default: "" },
+      url: { type: String, default: "" },
       thumbnailUrl: { type: String, default: "" },
     },
     songs: [SongSchema],
   },
- boxOffice: {
-   opening:   { type: String, default: "TBA" },
-   firstWeek: { type: String, default: "TBA" },
-   total:     { type: String, default: "TBA" },
- },
- boxOfficeDays: [{
-   day:   { type: Number, required: true },
-   net:   { type: String, default: "" },
-   gross: { type: String, default: "" },
-   date:  { type: String, default: "" },
-   note:  { type: String, default: "" },
- }],
-  verdict:  { type: String, default: "Upcoming" },
-  status:   { type: String, default: "Upcoming" },
-  reviews:  [ReviewSchema],
-  news:     [{ type: mongoose.Schema.Types.ObjectId, ref: "News" }],
-  slug:     { type: String, default: "", index: true },
+  boxOffice: {
+    opening: { type: String, default: "TBA" },
+    firstWeek: { type: String, default: "TBA" },
+    total: { type: String, default: "TBA" },
+  },
+  boxOfficeDays: [{
+    day: { type: Number, required: true },
+    net: { type: String, default: "" },
+    gross: { type: String, default: "" },
+    date: { type: String, default: "" },
+    note: { type: String, default: "" },
+  }],
+  verdict: { type: String, default: "Upcoming" },
+  status: { type: String, default: "Upcoming" },
+  reviews: [ReviewSchema],
+  news: [{ type: mongoose.Schema.Types.ObjectId, ref: "News" }],
+  slug: { type: String, default: "", index: true },
   interestedYes: { type: Number, default: 0 },
-  interestedNo:  { type: Number, default: 0 },   // SEO slug e.g. "bindusagar-2026"
-  streamingOn:   { type: String, default: "" },  // OTT platform name e.g. "Aao NXT"
-  streamingUrl:  { type: String, default: "" },  // Direct link to stream the movie
-  ottReleaseDate:{ type: String, default: "" },  // OTT release date (ISO string or "TBA")
+  interestedNo: { type: Number, default: 0 },   // SEO slug e.g. "bindusagar-2026"
+  streamingOn: { type: String, default: "" },  // OTT platform name e.g. "Aao NXT"
+  streamingUrl: { type: String, default: "" },  // Direct link to stream the movie
+  ottReleaseDate: { type: String, default: "" },  // OTT release date (ISO string or "TBA")
+  detailBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "Movie Details" blog
+  ottBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "OTT Release" blog
+  ottLiveBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "Now Streaming on OTT" blog
 }, { timestamps: true });
 
 const NewsSchema = new mongoose.Schema({
-  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie" },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie" },
   movieTitle: { type: String, default: "" },
-  title:      { type: String, required: true },
-  content:    { type: String, required: true },
-  category:   { type: String, default: "Update" },
-  imageUrl:   { type: String, default: "" },
-  published:  { type: Boolean, default: true },
-  sourceUrl:  { type: String, default: "" },   // link to original article
-  ytId:       { type: String, default: "" },   // YouTube video ID (for video news)
-  newsType:   { type: String, default: "article" }, // "article" | "video"
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  category: { type: String, default: "Update" },
+  imageUrl: { type: String, default: "" },
+  published: { type: Boolean, default: true },
+  sourceUrl: { type: String, default: "" },   // link to original article
+  ytId: { type: String, default: "" },   // YouTube video ID (for video news)
+  newsType: { type: String, default: "article" }, // "article" | "video"
 }, { timestamps: true });
 
 // ── Blog / Article Schema ────────────────────────────────────────
 const BlogSchema = new mongoose.Schema({
-  title:      { type: String, required: true, trim: true },
-  slug:       { type: String, required: true, unique: true, trim: true },
-  excerpt:    { type: String, default: "" },        // 1–2 sentence teaser
-  content:    { type: String, required: true },     // full article HTML/text
-  category:   { type: String, default: "General" }, // "Movie Review","Top 10","Actor Spotlight","News","General"
-  tags:       [{ type: String }],                   // ["Odia 2025","Babushaan","Action"]
+  title: { type: String, required: true, trim: true },
+  slug: { type: String, required: true, unique: true, trim: true },
+  excerpt: { type: String, default: "" },        // 1–2 sentence teaser
+  content: { type: String, required: true },     // full article HTML/text
+  category: { type: String, default: "General" }, // "Movie Review","Top 10","Actor Spotlight","News","General"
+  tags: [{ type: String }],                   // ["Odia 2025","Babushaan","Action"]
   coverImage: { type: String, default: "" },
-  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie" }, // optional link
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie" }, // optional link
   movieTitle: { type: String, default: "" },
-  castId:     { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },  // optional cast link
-  castName:   { type: String, default: "" },
-  author:     { type: String, default: "Ollypedia Team" },
-  published:  { type: Boolean, default: false },
-  featured:   { type: Boolean, default: false },
-  views:      { type: Number, default: 0 },
-  readTime:   { type: Number, default: 5 },         // minutes
-  seoTitle:      { type: String, default: "" },
-  seoDesc:       { type: String, default: "" },
-  youtubeVideoId:{ type: String, default: "" },  // optional embedded YouTube video
-  reviews:       [ReviewSchema],
+  castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },  // optional cast link
+  castName: { type: String, default: "" },
+  author: { type: String, default: "Ollypedia Team" },
+  published: { type: Boolean, default: false },
+  featured: { type: Boolean, default: false },
+  views: { type: Number, default: 0 },
+  readTime: { type: Number, default: 5 },         // minutes
+  seoTitle: { type: String, default: "" },
+  seoDesc: { type: String, default: "" },
+  youtubeVideoId: { type: String, default: "" },  // optional embedded YouTube video
+  reviews: [ReviewSchema],
 }, { timestamps: true });
 
 // Auto-generate slug from title
-BlogSchema.pre("validate", function(next) {
+BlogSchema.pre("validate", function (next) {
   if (this.isNew && !this.slug && this.title) {
     this.slug = this.title.toLowerCase()
-      .replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").trim()
+      .replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim()
       + "-" + Date.now().toString(36);
   }
   if (!this.readTime && this.content) {
@@ -395,25 +406,25 @@ BlogSchema.pre("validate", function(next) {
 const Blog = mongoose.model("Blog", BlogSchema);
 
 const CastMemberSchema = new mongoose.Schema({
-  name:      { type: String, required: true },
-  email:     { type: String, required: true, unique: true, lowercase: true },
-  password:  { type: String, required: true },
-  roles:     [String],
-  photo:     { type: String, default: "" },
-  banner:    { type: String, default: "" },
-  bio:       { type: String, default: "" },
-  dob:       { type: String, default: "" },
-  gender:    { type: String, default: "" },
-  location:  { type: String, default: "" },
-  website:   { type: String, default: "" },
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
+  password: { type: String, required: true },
+  roles: [String],
+  photo: { type: String, default: "" },
+  banner: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  dob: { type: String, default: "" },
+  gender: { type: String, default: "" },
+  location: { type: String, default: "" },
+  website: { type: String, default: "" },
   instagram: { type: String, default: "" },
-  castId:    { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },
+  castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },
 }, { timestamps: true });
 
-const Production = mongoose.model("Production",  ProductionSchema);
+const Production = mongoose.model("Production", ProductionSchema);
 
 // ── Auto-generate slug on Movie create/update ─────────────────
-MovieSchema.pre("save", async function(next) {
+MovieSchema.pre("save", async function (next) {
   if (this.isNew || this.isModified("title") || this.isModified("releaseDate") || !this.slug) {
     const base = makeMovieSlug(this.title, this.releaseDate);
     let slug = base; let attempt = 0;
@@ -427,14 +438,14 @@ MovieSchema.pre("save", async function(next) {
   next();
 });
 
-MovieSchema.pre("findOneAndUpdate", async function(next) {
+MovieSchema.pre("findOneAndUpdate", async function (next) {
   const u = this.getUpdate();
   const titleNew = u.title ?? u.$set?.title;
-  const dateNew  = u.releaseDate ?? u.$set?.releaseDate;
+  const dateNew = u.releaseDate ?? u.$set?.releaseDate;
   if (titleNew !== undefined || dateNew !== undefined) {
     const doc = await this.model.findOne(this.getQuery()).lean();
-    const title       = titleNew       ?? doc?.title ?? "";
-    const releaseDate = dateNew        ?? doc?.releaseDate ?? "";
+    const title = titleNew ?? doc?.title ?? "";
+    const releaseDate = dateNew ?? doc?.releaseDate ?? "";
     const base = makeMovieSlug(title, releaseDate);
     let slug = base; let attempt = 0;
     while (true) {
@@ -448,26 +459,1638 @@ MovieSchema.pre("findOneAndUpdate", async function(next) {
   next();
 });
 
-const Movie      = mongoose.model("Movie",       MovieSchema);
-const Cast       = mongoose.model("Cast",        CastSchema);
-const News       = mongoose.model("News",        NewsSchema);
-const CastMember = mongoose.model("CastMember",  CastMemberSchema);
+const Movie = mongoose.model("Movie", MovieSchema);
+const Cast = mongoose.model("Cast", CastSchema);
+const News = mongoose.model("News", NewsSchema);
+const CastMember = mongoose.model("CastMember", CastMemberSchema);
+
+
+// ════════════════════════════════════════════════════════════════
+// AUTO-BLOG-ON-MOVIE — auto-generates "Movie Details" + "OTT Release"
+// blogs whenever a movie is created/edited via the admin portal.
+// ════════════════════════════════════════════════════════════════
+
+/** Human-readable date — "15 August 2026". Returns "" for missing/invalid. */
+function formatHumanDate(d) {
+  if (!d) return "";
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return String(d).trim() === "TBA" ? "TBA" : String(d);
+  return dt.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/** Is this OTT release date a real date (not blank / not "TBA")? */
+function isRealDate(d) {
+  if (!d) return false;
+  const s = String(d).trim();
+  if (!s || s.toUpperCase() === "TBA") return false;
+  return !isNaN(new Date(s).getTime());
+}
+
+/** Wrap AI text into styled <p> blocks — same convention as the rest of the app. */
+function autoBlogParagraphs(text) {
+  return String(text || "")
+    .replace(/`/g, "&#96;")
+    .trim()
+    .split(/\n{2,}/)
+    .map(chunk => chunk.split(/\n/).map(l => l.trim()).filter(Boolean).join(" ").trim())
+    .filter(Boolean)
+    .map(p => `<p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${p}</p>`)
+    .join("\n");
+}
+
+/**
+ * BLOG_RESPONSIVE_STYLES — shared, presentation-only CSS reset injected into
+ * every auto-generated blog type (Movie Details, OTT Announcement, OTT
+ * Release/Live, Box Office, etc.) so generated content never stretches
+ * beyond its container on desktop or overflows horizontally on tablet/mobile.
+ * Purely visual — does NOT touch markup structure, content, SEO tags,
+ * schema, or any business logic. Scoped entirely under .bp-article-html
+ * (the wrapper class the frontend renders all blog HTML inside), so it
+ * cannot leak out and affect any other part of the site.
+ */
+const BLOG_RESPONSIVE_STYLES = `
+<!-- RESPONSIVE STYLES — scoped, presentation-only, no logic/SEO impact -->
+<style>
+.bp-article-html,
+.bp-article-html * { box-sizing: border-box; }
+
+.bp-article-html {
+  max-width: 100%;
+  overflow-x: hidden;
+  word-break: break-word;
+}
+
+.bp-article-html p,
+.bp-article-html span,
+.bp-article-html strong,
+.bp-article-html em,
+.bp-article-html a,
+.bp-article-html h1,
+.bp-article-html h2,
+.bp-article-html h3,
+.bp-article-html h4,
+.bp-article-html li,
+.bp-article-html td,
+.bp-article-html th {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.bp-article-html img,
+.bp-article-html svg,
+.bp-article-html video,
+.bp-article-html iframe,
+.bp-article-html embed,
+.bp-article-html object,
+.bp-article-html canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.bp-article-html pre {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.bp-article-html code {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.bp-article-html blockquote {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.bp-article-html table {
+  max-width: 100%;
+  width: 100%;
+  table-layout: auto;
+}
+.bp-article-html .tbl-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bp-article-html .blog-content-layout,
+.bp-article-html .blog-live-layout,
+.bp-article-html .hero-section,
+.bp-article-html section,
+.bp-article-html div {
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .bp-article-html .hero-section {
+    padding: 20px 16px 18px !important;
+  }
+  .bp-article-html section[style*="background:#181818"],
+  .bp-article-html section[style*="background: #181818"] {
+    padding: 18px 14px !important;
+  }
+  .bp-article-html section[style*="background:#111"] {
+    padding: 16px 14px !important;
+  }
+  .bp-article-html .stat-chips {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .bp-article-html .perf-stats {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  .bp-article-html nav[aria-label="Day navigation"] {
+    flex-direction: column !important;
+  }
+  .bp-article-html .info-table td:first-child {
+    width: 38% !important;
+    font-size: 0.8rem !important;
+  }
+  .bp-article-html .data-table td,
+  .bp-article-html .data-table th {
+    padding: 8px 8px !important;
+    font-size: 0.78rem !important;
+  }
+  .bp-article-html .bar-table td {
+    padding: 8px 8px !important;
+  }
+  .bp-article-html .also-read-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .bp-article-html .tag-chip {
+    font-size: 0.7rem !important;
+    padding: 3px 10px !important;
+  }
+  .bp-article-html .cta-btn {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+  .bp-article-html .faq-section {
+    padding: 18px 14px !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .bp-article-html .stat-chips {
+    grid-template-columns: 1fr !important;
+  }
+  .bp-article-html h1 {
+    font-size: 1.1rem !important;
+  }
+}
+</style>
+`;
+
+/**
+ * extractMovieCastCrew — pulls out director/producer/key-crew + a clean
+ * lead-cast list from movie.cast[]. Mirrors the logic already used by
+ * the Sacnilk auto-blog function, generalised for any movie.
+ */
+function extractMovieCastCrew(movie) {
+  const cast = Array.isArray(movie.cast) ? movie.cast : [];
+  const findByRole = (keywords) =>
+    cast.find(m => keywords.some(k => (m.role || m.type || "").toLowerCase().includes(k)));
+
+  const directorEntry = cast.find(m => {
+    const r = (m.role || m.type || "").toLowerCase().trim();
+    return r === "director" || r === "film director" || r === "movie director" ||
+      (r.includes("director") && !["music", "art", "action", "stunt", "assistant", "co-", "associate"].some(x => r.includes(x)));
+  });
+  const director = directorEntry?.name || movie.director || "";
+
+  const producerEntry = cast.find(m => {
+    const r = (m.role || m.type || "").toLowerCase().trim();
+    return r === "producer" ||
+      (r.includes("producer") && !["executive", "co-", "line", "associate", "assistant"].some(x => r.includes(x)));
+  });
+  const producer = producerEntry?.name || movie.producer || "";
+
+  const musicDirector = findByRole(["music director"])?.name || "";
+  const writer = findByRole(["writer", "screenplay", "story", "dialogue"])?.name || "";
+  const dop = findByRole(["cinematographer", "dop", "director of photography"])?.name || "";
+  const editor = findByRole(["editor"])?.name || "";
+
+  const CREW_KW = ["director", "producer", "writer", "screenplay", "story", "dialogue", "music director", "cinematographer", "dop", "editor", "choreographer", "art director", "costume", "sound", "stunt", "vfx"];
+  const actingKW = ["actor", "actress", "lead", "hero", "heroine", "supporting", "cameo", "special appearance"];
+  const actors = cast.filter(m => {
+    const r = (m.role || m.type || "").toLowerCase();
+    const isCrew = CREW_KW.some(k => r.includes(k)) && !actingKW.some(k => r.includes(k));
+    return !isCrew;
+  });
+
+  const leadCast = actors.slice(0, 6);
+
+  return { director, producer, musicDirector, writer, dop, editor, leadCast, fullCast: cast };
+}
+
+/** Returns the canonical cast profile URL — always /cast/{castId} (ObjectId only). */
+function castProfileUrl(entry) {
+  if (!entry || !entry.castId) return "";
+  return `/cast/${entry.castId}`;
+}
+
+/**
+ * fetchRelatedMovies — SEO FIX: powers the "Related Odia Movies" / "More
+ * Odia Movies on {Platform}" internal linking sections recommended by the
+ * audit (closes the "content island" gap — blog pages currently have zero
+ * links to other movies). When `preferPlatform` is true (OTT pages), tries
+ * same-streaming-platform matches first per the audit's "Also available on
+ * {Platform}" recommendation, then tops up with genre matches. Never
+ * throws — callers fire-and-forget blog generation, so a lookup failure
+ * here must degrade to "no related movies" rather than block publishing.
+ */
+async function fetchRelatedMovies(movie, limit = 4, preferPlatform = false) {
+  try {
+    const genres = Array.isArray(movie.genre) ? movie.genre.filter(Boolean) : [];
+    const baseFilter = { _id: { $ne: movie._id }, slug: { $exists: true, $ne: "" } };
+    const fields = "title slug posterUrl thumbnailUrl releaseDate genre streamingOn";
+
+    let related = [];
+    if (preferPlatform && movie.streamingOn) {
+      related = await Movie.find({ ...baseFilter, streamingOn: movie.streamingOn }, fields)
+        .sort({ createdAt: -1 }).limit(limit).lean();
+    }
+    if (related.length < limit) {
+      const have = new Set(related.map(m => String(m._id)));
+      const genreFilter = { ...baseFilter };
+      if (genres.length) genreFilter.genre = { $in: genres };
+      const extra = await Movie.find(genreFilter, fields)
+        .sort({ createdAt: -1 }).limit(limit - related.length + have.size).lean();
+      for (const m of extra) {
+        if (related.length >= limit) break;
+        if (have.has(String(m._id))) continue;
+        related.push(m);
+        have.add(String(m._id));
+      }
+    }
+    return Array.isArray(related) ? related.slice(0, limit) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Builds the "Related Odia Movies" internal-linking HTML block, or "" if
+ *  there are no related movies to show. Shared across all 3 blog types.
+ *  `heading` lets OTT pages say "More Odia Movies on {Platform}" instead
+ *  per the audit's competitor-comparison recommendation. */
+function buildRelatedMoviesHtml(related, accentColor = "#c9973a", heading = "Related Odia Movies") {
+  if (!Array.isArray(related) || !related.length) return "";
+  const cards = related.map(m => {
+    const img = m.posterUrl || m.thumbnailUrl || "";
+    const yr = m.releaseDate ? new Date(m.releaseDate).getFullYear() : "";
+    return `
+      <a href="/movie/${m.slug}" style="display:block;background:#181818;border:1px solid #242424;border-radius:10px;overflow:hidden;text-decoration:none;width:140px;flex-shrink:0;">
+        ${img ? `<img src="${img}" alt="${m.title} Poster" loading="lazy" width="140" height="210" style="width:100%;height:auto;display:block;object-fit:cover;" />` : ""}
+        <div style="padding:8px 10px;">
+          <div style="color:#ddd;font-size:0.8rem;font-weight:700;line-height:1.3;">${m.title}${yr ? ` (${yr})` : ""}</div>
+        </div>
+      </a>`;
+  }).join("");
+  return `
+    <section id="related-movies" style="background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+      <h2 style="font-size:1.05rem;font-weight:800;color:${accentColor};border-left:4px solid ${accentColor};padding-left:12px;margin:0 0 18px;line-height:1.3;">${heading}</h2>
+      <div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:4px;">${cards}</div>
+    </section>`;
+}
+
+/**
+ * FESTIVAL_WINDOWS_2026 — verified Odisha festival date windows for 2026,
+ * used only as soft context fed to the AI (so it can naturally mention
+ * "just in time for Raja" etc. in body copy when relevant) — never used
+ * to force a claim into a title or meta tag.
+ *
+ * MAINTENANCE: these are lunar/solar dates that shift every year — verify
+ * against an official Odisha calendar/panchang before adding new years.
+ * Years not in this table simply produce no festival context — safe by
+ * default, never a stale or wrong claim.
+ */
+const FESTIVAL_WINDOWS_2026 = [
+  { label: "Makar Sankranti", start: "2026-01-12", end: "2026-01-16" },
+  { label: "Maha Vishuba Sankranti", start: "2026-04-12", end: "2026-04-16" },
+  { label: "Raja Parba", start: "2026-06-12", end: "2026-06-17" },
+  { label: "Ratha Yatra", start: "2026-07-14", end: "2026-07-19" },
+  { label: "Nuakhai", start: "2026-09-14", end: "2026-09-18" },
+  { label: "Durga Puja", start: "2026-10-16", end: "2026-10-21" },
+  { label: "Diwali", start: "2026-11-06", end: "2026-11-10" },
+];
+
+/** Returns "Raja Parba" etc. if dateStr falls in/near a known festival
+ *  window (±a few days buffer), else "" (graceful fallback — see note above). */
+function findNearbyFestival(dateStr) {
+  if (!isRealDate(dateStr)) return "";
+  const d = new Date(dateStr);
+  const year = d.getFullYear();
+  const table = year === 2026 ? FESTIVAL_WINDOWS_2026 : [];
+  const BUFFER_DAYS = 6;
+  for (const f of table) {
+    const start = new Date(f.start); start.setDate(start.getDate() - BUFFER_DAYS);
+    const end = new Date(f.end); end.setDate(end.getDate() + 2);
+    if (d >= start && d <= end) return f.label;
+  }
+  return "";
+}
+
+/** Deterministic, always-consistent SEO title for the "Movie Details" blog —
+ *  built in code (not left to the AI) so the format never drifts:
+ *  "Kali Gita (2026) Movie Details, Cast, Crew, Story, Release Date & Latest Updates" */
+function buildMovieDetailsTitle(movie) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  return `${movie.title}${year ? ` (${year})` : ""} Movie Details, Cast, Crew, Story, Release Date & Latest Updates`;
+}
+
+/** Deterministic, always-consistent SEO title for the "OTT Release" blog —
+ *  built in code so lead-actor names and the platform always appear exactly
+ *  the way you want: "Bindusagar OTT Release Date: A & B Starrer Premieres
+ *  on Tarang Plus on 26 June 2026" (falls back to "Announced Soon" if the
+ *  date isn't a clean, parseable date).
+ *  SEO FIX: capped at 90 chars (Google's effective title display ceiling) —
+ *  first tries 2 lead names, then falls back to 1, then 0, so the title
+ *  degrades gracefully instead of getting cut off mid-word. */
+function buildOttTitle(movie, cc) {
+  const dateTail = isRealDate(movie.ottReleaseDate) ? `on ${formatHumanDate(movie.ottReleaseDate)}` : "— Announced Soon";
+  const build = (leadCount) => {
+    const leads = (cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
+    const subject = leads.length ? `${leads.join(" & ")} Starrer` : "Odia Movie";
+    return `${movie.title} OTT Release Date: ${subject} Premieres on ${movie.streamingOn} ${dateTail}`.replace(/\s+/g, " ").trim();
+  };
+  let title = build(2);
+  if (title.length > 90) title = build(1);
+  if (title.length > 90) title = build(0);
+  return title.length > 90 ? title.slice(0, 89).trim() + "…" : title;
+}
+
+/**
+ * callGroqStructured — internal Groq call (no HTTP round-trip), returns a
+ * parsed JSON object matching `keys`, falling back to `fallbacks` per-key
+ * if Groq is unavailable, errors, or returns malformed JSON. This NEVER
+ * throws — auto-blog generation must never break movie creation.
+ *
+ * SEO FIX: if the returned `metaDescription` is outside Google's effective
+ * snippet window (100–165 chars), it's replaced with the (length-capped)
+ * fallback description instead of being published as-is — the small
+ * instant model occasionally returns descriptions that are too short/long
+ * or too generic, and an out-of-range meta description risks Google
+ * rewriting the snippet itself.
+ */
+async function callGroqStructured(systemPrompt, userPrompt, keys, fallbacks, maxTokens = 2200) {
+  const groqKey = process.env.GROQ_API_KEY || "";
+  if (!groqKey) { console.warn("⚠️ GROQ_API_KEY not set — auto-blog using template fallback content."); return fallbacks; }
+  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${groqKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.7,
+        top_p: 0.9,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!response.ok) { console.warn(`⚠️ Groq API responded ${response.status} — auto-blog using fallback content.`); return fallbacks; }
+    const data = await response.json();
+    const text = (data.choices?.[0]?.message?.content || "").trim();
+    if (!text) return fallbacks;
+    const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    const parsed = JSON.parse(clean);
+    const out = {};
+    for (const k of keys) out[k] = (parsed[k] !== undefined && parsed[k] !== null && parsed[k] !== "") ? parsed[k] : fallbacks[k];
+    if (keys.includes("metaDescription") && typeof out.metaDescription === "string") {
+      const len = out.metaDescription.trim().length;
+      if (len < 100 || len > 165) {
+        out.metaDescription = String(fallbacks.metaDescription || "").slice(0, 160);
+      }
+    }
+    return out;
+  } catch (e) {
+    console.warn("⚠️ Groq call failed — auto-blog using fallback content:", e.message);
+    return fallbacks;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MOVIE DETAILS BLOG
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generateMovieDetailsAiSections(movie, cc) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const genre = (movie.genre || []).join(", ") || "Odia";
+  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean).join(", ");
+  const hasSongs = Array.isArray(movie.media?.songs) && movie.media.songs.length > 0;
+  const songNames = hasSongs ? movie.media.songs.map(s => s.title).filter(Boolean).join(", ") : "";
+  const festival = findNearbyFestival(movie.releaseDate);
+
+  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | Genre: ${genre} | Language: ${movie.language || "Odia"} | Director: ${cc.director || "N/A"} | Producer: ${cc.producer || "N/A"} | Lead Cast: ${leadNames || "N/A"} | Music Director: ${cc.musicDirector || "N/A"} | Writer: ${cc.writer || "N/A"} | Cinematographer: ${cc.dop || "N/A"} | Release Date: ${movie.releaseDate ? formatHumanDate(movie.releaseDate) : "TBA"} | Runtime: ${movie.runtime || "N/A"} | Certification: ${movie.contentRating || "N/A"} | Songs: ${songNames || "N/A"} | Synopsis: ${movie.synopsis || "N/A"}${festival ? ` | Note: release falls close to ${festival} — you may mention this naturally if it fits.` : ""}`;
+
+  const userPrompt = `Write deeply detailed, SEO-rich JSON content for a comprehensive movie-details article on Ollypedia, an Odia (Ollywood) cinema website, about the film "${movie.title}". This MUST be a full editorial article with long, rich, substantive paragraphs — each paragraph must feel like it was written by a professional film journalist. Use ONLY the details given below. Naturally weave in the movie title, genre, director, and lead cast names across paragraphs. Do NOT include HTML or markdown.
+
+${ctx}
+
+Return a JSON object with exactly these keys (plain text only, NO HTML, NO markdown, aim for maximum detail and length):
+- metaDescription: 150-160 characters mentioning movie title, release date and genre, maximising Google click-through rate
+- introParagraph: 250-350 words introducing the film in depth — cover its genre, Ollywood landscape expectations, production scale, what makes it different, key anticipation factors. Start with "${movie.title}".
+- storyParagraph: 350-500 words expanding on the synopsis — discuss narrative background, story world, major themes, emotional conflicts, character arcs, setting, tone and pacing. Do not invent specific plot twists not in the synopsis; if synopsis is thin, write richly about the genre, tone, emotional stakes, and cultural context.
+- castCrewParagraph: 300-400 words covering each lead cast member individually — their character roles, acting style, notable past work, what they bring to this film specifically. Name every cast member. Discuss director-cast collaboration, chemistry, and ensemble dynamics.
+- directorVisionParagraph: 250-350 words about the director's signature filmmaking style, technical execution for this project, visual language, production design, use of locations, cinematography approach, and creative ambition. If director name is N/A, write about the production team's craft and values.
+- musicParagraph: 200-280 words about the soundtrack, background score, mood of the music, genre of songs. If song titles are listed, describe each one briefly. If no songs listed, discuss the musical traditions of Odia cinema and what this film's genre demands from its score.
+- whereToWatchParagraph: 180-250 words on the theatrical release strategy — major circuits in Odisha (Bhubaneswar, Cuttack, Berhampur, Sambalpur, Rourkela, Puri, Balasore), importance of supporting Odia films in theatres, how to find showtimes, family viewing experience, and the cinematic experience advantage.
+- anticipationParagraph: 250-350 words on audience expectations, industry buzz, social media reception, trailer/teaser reception if known, comparison with similar Odia films, box office potential, why this film matters for Ollywood, and the overall cultural significance of this release.`;
+
+  const fallbacks = {
+    metaDescription: `${movie.title}${year ? ` (${year})` : ""}: full cast, crew, story and release date. Read the complete details on Ollypedia, your home for Odia cinema.`,
+    introParagraph: `${movie.title}${year ? ` (${year})` : ""} is one of the most awaited ${genre} films in Odia cinema, bringing together a talented cast and crew under the ${movie.language || "Odia"} banner. The film has sparked widespread discussion among Odia cinema fans for its bold premise, its choice of genre, and the calibre of talent involved in front of and behind the camera. From its story to its theatrical release plans, here is everything Ollywood fans need to know about this hotly anticipated production. With ${cc.director ? `director ${cc.director} at the helm` : "a skilled creative team guiding the vision"}, the film is set to make a significant mark on the Odia film industry this year.`,
+    // SEO FIX: this is the canonical, full-length synopsis presentation —
+    // the OTT Release and "Now Streaming" pages reframe (not repeat) this
+    // text in their own fallbacks below, to avoid duplicate-content
+    // penalties across the three blog pages for the same movie.
+    storyParagraph: movie.synopsis || `Full plot details for ${movie.title} will be updated as soon as they are officially released by the production team. What is known is that this ${genre} drama carries a story designed to resonate deeply with Odia audiences — touching on universal themes of identity, family, love, and struggle, placed firmly in the cultural and social landscape of Odisha. The film promises a narrative that goes beyond surface-level entertainment, aiming to deliver emotional depth, strong character writing, and a cinematic experience that stays with the viewer long after the credits roll. Odia cinema audiences have long been waiting for a ${genre} film of this calibre, and ${movie.title} appears ready to deliver on those expectations.`,
+    castCrewParagraph: `${movie.title} is helmed by ${cc.director || "the director"}${cc.producer ? ` and produced by ${cc.producer}` : ""}, with ${leadNames || "a talented cast"} leading the film. ${leadNames ? `${leadNames.split(",")[0]} headlines the cast` : "The cast"} alongside a carefully chosen supporting ensemble drawn from Ollywood's growing and versatile talent pool. Each cast member brings their unique strengths and experience to the project, creating a dynamic ensemble that promises powerful on-screen performances. The chemistry between the lead actors has been a talking point in promotional discussions, and audiences can expect nuanced, layered portrayals from every member of the cast.`,
+    directorVisionParagraph: cc.director ? `${cc.director} brings a distinct and considered vision to ${movie.title}, shaping its ${genre.toLowerCase()} narrative with a sharp eye for authentic Odia storytelling. Known for meticulous attention to production detail, the director has assembled a technical crew that reflects the ambition of this project — from the cinematography and production design to the editing and sound design. The visual language of ${movie.title} is expected to reflect the emotional texture of its story, using lighting, framing, and location choices to build a vivid and immersive world for the audience.` : `The creative team behind ${movie.title} is focused on delivering an authentic ${genre.toLowerCase()} experience rooted in Odia storytelling traditions, combining modern production techniques with culturally grounded narrative choices. Every aspect of the film's technical execution has been crafted to serve the story and the emotional journey of its characters.`,
+    musicParagraph: hasSongs ? `The music of ${movie.title}${cc.musicDirector ? `, composed by ${cc.musicDirector},` : ""} features tracks including ${songNames}, adding to the film's emotional and entertainment value. The soundtrack blends melodious compositions with energetic numbers, catering to a wide range of musical tastes within the Odia audience. Each song has been crafted to complement a key moment in the film's narrative, enhancing the emotional resonance of the story on screen.` : `Music plays a central and irreplaceable role in Odia cinema, and ${movie.title} is expected to feature a soundtrack that perfectly complements its ${genre.toLowerCase()} tone and emotional arc. Full album details, song titles, and composer credits will be updated as they are officially released by the production team. Fans can expect a mix of melodious and peppy tracks that reflect the spirit of the film and the cultural heartbeat of Odisha.`,
+    whereToWatchParagraph: (() => {
+      // SEO FIX: this fallback previously rendered byte-identical across
+      // every movie, which the audit flags as a duplicate-content risk.
+      // Deterministically rotate city order + phrasing per movie (seeded
+      // off the title) so the AI-down fallback still varies page to page.
+      const cities = ["Bhubaneswar", "Cuttack", "Berhampur", "Sambalpur", "Rourkela", "Puri", "Balasore"];
+      const seed = String(movie.title || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+      const rotated = [...cities.slice(seed % cities.length), ...cities.slice(0, seed % cities.length)];
+      const openers = [
+        `${movie.title} is set for a wide theatrical release across Odisha, covering major cities and districts including`,
+        `Moviegoers across Odisha can catch ${movie.title} in theatres, with screenings planned across`,
+        `${movie.title} arrives in cinemas throughout Odisha, releasing in major centres such as`,
+      ];
+      const opener = openers[seed % openers.length];
+      return `${opener} ${rotated.join(", ")}. Ollypedia strongly encourages Odia cinema fans to experience this film on the big screen — the theatrical experience, with its immersive visuals, surround sound, and shared audience energy, brings the story of ${movie.title} to life in a way that no home viewing can replicate. Supporting Odia films in cinemas also directly helps the Ollywood industry grow and produce more high-quality content for audiences everywhere.`;
+    })(),
+    anticipationParagraph: `With its promising cast, strong creative team, and a story that taps into the pulse of Odia society, ${movie.title} has generated significant buzz and anticipation among Odia cinema audiences. Fans of ${genre.toLowerCase()} films in particular have reason to look forward to this one, given the quality of talent assembled and the ambition of the production. Social media has been buzzing with discussions about the film's trailer, posters, and music — all of which point to a major release that could define this season for Ollywood. Box office observers are closely watching ${movie.title} as a potential standout film of the year.`,
+  };
+
+  return callGroqStructured(
+    "You are a senior Odia cinema (Ollywood) journalist writing long-form, highly detailed, SEO-optimised editorial articles for Ollypedia. Return ONLY a valid JSON object — no markdown, no code fences, no extra text. All values must be plain text with no HTML tags. Each paragraph must be thorough, specific, and feel like professional film journalism. Never use placeholder or filler sentences — every sentence must add real value and information.",
+    userPrompt,
+    ["metaDescription", "introParagraph", "storyParagraph", "castCrewParagraph", "directorVisionParagraph", "musicParagraph", "whereToWatchParagraph", "anticipationParagraph"],
+    fallbacks,
+    4500
+  );
+}
+
+function buildMovieDetailsBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = []) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const genre = (movie.genre || []).join(", ") || "Odia";
+  const releaseFmt = movie.releaseTBA || !movie.releaseDate ? "To Be Announced" : formatHumanDate(movie.releaseDate);
+  // Falls back to the site logo only when the movie has no poster/thumbnail/
+  // banner at all — same fallback asset the rest of the codebase already
+  // relies on (kept as logo.png rather than introducing a new, unverified
+  // asset path), just sourced from SITE_URL for www/non-www consistency.
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const ogImage = poster || `${SITE_URL}/logo.png`;
+  const movieUrl = `/movie/${movie.slug}`;
+  const hasSongs = Array.isArray(movie.media?.songs) && movie.media.songs.length > 0;
+  const trailerId = movie.media?.trailer?.ytId || "";
+  const imdbNum = parseFloat(movie.imdbRating);
+  const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
+  const hasBoxOffice = movie.boxOffice && Object.values(movie.boxOffice).some(v => v && v !== "TBA");
+  // SEO FIX: productionCompany for the Movie schema — only added when
+  // productionId has actually been populated to an object (it's sometimes
+  // just an ObjectId depending on the caller), so this never renders a raw
+  // Mongo ID string into the page.
+  const productionCompanyName = (movie.productionId && typeof movie.productionId === "object" && movie.productionId.name) ? movie.productionId.name : "";
+  const dp = datePublished || new Date().toISOString();
+  const dm = dateModified || dp;
+
+  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
+  const h2 = `font-size:1.05rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
+  const h3 = `color:#ccc;font-size:0.95rem;font-weight:700;margin:18px 0 8px;`;
+  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
+  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+  const th = `padding:11px 14px;background:#1f1f1f;color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;text-align:left;border-bottom:2px solid #2a2a2a;`;
+  const td = `padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;`;
+
+  const castRows = (cc.fullCast || []).map(c => {
+    const url = castProfileUrl(c);
+    return `
+      <tr>
+        <td style="${td}font-weight:600;">${url ? `<a href="${url}" style="color:#e8c87a;text-decoration:underline;text-underline-offset:2px;">${c.name || ""}</a>` : (c.name || "")}</td>
+        <td style="${td}color:#c9973a;">${c.role || c.type || ""}</td>
+      </tr>`;
+  }).join("");
+
+  const keyCrewRows = [
+    ["Director", cc.director], ["Producer", cc.producer], ["Music Director", cc.musicDirector],
+    ["Writer", cc.writer], ["Cinematography", cc.dop], ["Editor", cc.editor],
+  ].filter(([, v]) => v).map(([k, v]) => `
+      <tr><td style="${tdL}">${k}</td><td style="${tdR}">${v}</td></tr>`).join("");
+
+  const songRows = hasSongs ? movie.media.songs.map(s => `
+      <tr><td style="${td}font-weight:600;">${s.title || ""}</td><td style="${td}">${s.singer || ""}</td></tr>`).join("") : "";
+
+  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean);
+  const keywordsArr = [
+    movie.title, `${movie.title} cast`, `${movie.title} release date`, `${movie.title} story`,
+    `${movie.title} director`, year ? `${movie.title} ${year}` : "", `${movie.title} odia movie`,
+    "Odia movie", "Ollywood", genre ? `${genre} odia movie` : "", movie.language || "Odia",
+    cc.director ? `${cc.director} movies` : "", cc.musicDirector ? `${cc.musicDirector} music` : "",
+    ...leadNames.map(n => `${n} movies`),
+  ].filter(Boolean);
+  const keywordsStr = [...new Set(keywordsArr)].join(", ");
+
+  const toc = [
+    ["Quick Facts", "quick-facts"], ["Story & Plot", "story"], ["Cast & Crew", "cast-crew"],
+    ["Director's Vision", "director-vision"], hasSongs ? ["Music & Soundtrack", "music"] : null,
+    trailerId ? ["Official Trailer", "trailer"] : null,
+    hasBoxOffice ? ["Box Office Collection", "box-office"] : null,
+    ["Where to Watch", "where-to-watch"],
+    // SEO FIX: non-keyword-aligned heading replaced with a search-intent match
+    [`Why Watch ${movie.title}?`, "anticipation"],
+    relatedMovies.length ? ["Related Movies", "related-movies"] : null,
+  ].filter(Boolean);
+  const tocHtml = `
+<nav aria-label="Table of contents" style="${card}padding:18px 24px;">
+  <strong style="color:#888;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;">On this page</strong>
+  <ul style="margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;">
+    ${toc.map(([label, id]) => `<li><a href="#${id}" style="color:#7ec8e3;text-decoration:none;font-size:0.85rem;">${label}</a></li>`).join("")}
+  </ul>
+</nav>`;
+
+  // SEO FIX: real word count for the schema "wordCount" field (and a more
+  // honest internal readTime), counted from the AI prose only — not HTML
+  // tags/inline style strings, which previously inflated the count.
+  const plainWordCount = [ai.introParagraph, ai.storyParagraph, ai.castCrewParagraph, ai.directorVisionParagraph, ai.musicParagraph, ai.whereToWatchParagraph, ai.anticipationParagraph]
+    .filter(Boolean).join(" ").split(/\s+/).filter(Boolean).length;
+
+  // SEO FIX: Event schema for the theatrical release (matches BookMyShow /
+  // PVR-style sites per the audit's competitor comparison) — only emitted
+  // when there's a real release date to anchor it to.
+  const eventSchema = (movie.releaseDate && !movie.releaseTBA) ? `,
+    {
+      "@type": "Event",
+      "name": ${JSON.stringify(`${movie.title} — Theatrical Release`)},
+      "startDate": "${movie.releaseDate}",
+      "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+      "eventStatus": "https://schema.org/EventScheduled",
+      "location": { "@type": "Place", "name": "Cinemas across Odisha", "address": { "@type": "PostalAddress", "addressRegion": "Odisha", "addressCountry": "IN" } },
+      "workPerformed": { "@type": "Movie", "name": ${JSON.stringify(movie.title)} },
+      "image": ${JSON.stringify(ogImage)},
+      "organizer": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+    }` : "";
+
+  // SEO FIX: MusicRecording schema per song — targets "{Song} lyrics" /
+  // "{Song} singer" queries per the audit's ranking-gain recommendations.
+  const musicRecordingSchema = hasSongs ? movie.media.songs.filter(s => s.title).map(s => `,
+    {
+      "@type": "MusicRecording",
+      "name": ${JSON.stringify(s.title)},
+      "inAlbum": { "@type": "MusicAlbum", "name": ${JSON.stringify(`${movie.title} (Original Motion Picture Soundtrack)`)} }${s.singer ? `,
+      "byArtist": { "@type": "Person", "name": ${JSON.stringify(s.singer)} }` : ""}${s.musicDirector ? `,
+      "composer": { "@type": "Person", "name": ${JSON.stringify(s.musicDirector)} }` : ""}${s.lyricist ? `,
+      "lyricist": { "@type": "Person", "name": ${JSON.stringify(s.lyricist)} }` : ""}
+    }`).join("") : "";
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — READ BY CMS
+  title:          ${seoTitle}
+  description:    ${ai.metaDescription}
+  keywords:       ${keywordsStr}
+  canonical:      ${SITE_URL}/blog/${blogSlug}
+  robots:         index, follow
+  og:site_name:   Ollypedia
+  og:title:       ${seoTitle}
+  og:description: ${ai.metaDescription}
+  og:url:         ${SITE_URL}/blog/${blogSlug}
+  og:image:       ${ogImage}
+  og:image:width: 1200
+  og:image:height: 630
+  og:type:        article
+  og:locale:      en_IN
+  article:published_time: ${dp}
+  article:modified_time:  ${dm}
+  article:author: Ollypedia Team
+  article:section: ${(movie.genre || [])[0] || "Movies"}
+  twitter:card:   summary_large_image
+  twitter:site:   @OllypediaIn
+  twitter:creator: @OllypediaIn
+  twitter:title:  ${seoTitle}
+  twitter:description: ${ai.metaDescription}
+  twitter:image:  ${ogImage}
+  twitter:image:alt: ${movie.title} Poster
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": ${JSON.stringify(seoTitle)},
+      "description": ${JSON.stringify(ai.metaDescription)},
+      "image": ${JSON.stringify(ogImage)},
+      "datePublished": "${dp}",
+      "dateModified": "${dm}",
+      "inLanguage": "en",
+      "wordCount": ${plainWordCount},
+      "keywords": ${JSON.stringify(keywordsStr)},
+      "author": [
+        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
+        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+      ],
+      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}",
+                     "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" } },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${blogSlug}" },
+      "about": {
+        "@type": "Movie",
+        "name": ${JSON.stringify(movie.title)},
+        "url": "${SITE_URL}${movieUrl}",
+        "image": ${JSON.stringify(ogImage)},
+        "inLanguage": ${JSON.stringify(movie.language || "Odia")},
+        "genre": ${JSON.stringify(genre)}${movie.releaseDate ? `,
+        "datePublished": "${movie.releaseDate}"` : ""}${movie.contentRating ? `,
+        "contentRating": ${JSON.stringify(movie.contentRating)}` : ""}${movie.runtime ? `,
+        "duration": ${JSON.stringify(movie.runtime)}` : ""}${productionCompanyName ? `,
+        "productionCompany": { "@type": "Organization", "name": ${JSON.stringify(productionCompanyName)} }` : ""}${cc.director ? `,
+        "director": { "@type": "Person", "name": ${JSON.stringify(cc.director)} }` : ""}${cc.producer ? `,
+        "producer": { "@type": "Person", "name": ${JSON.stringify(cc.producer)} }` : ""}${cc.leadCast.length ? `,
+        "actor": [${cc.leadCast.map(a => { const u = castProfileUrl(a); return `{ "@type": "Person", "name": ${JSON.stringify(a.name)}${u ? `, "url": "${SITE_URL}${u}"` : ""} }`; }).join(", ")}]` : ""}${trailerId ? `,
+        "trailer": { "@type": "VideoObject", "name": ${JSON.stringify(`${movie.title} — Official Trailer`)}, "embedUrl": "https://www.youtube.com/embed/${trailerId}", "thumbnailUrl": ${JSON.stringify(movie.media?.trailer?.thumbnailUrl || `https://img.youtube.com/vi/${trailerId}/hqdefault.jpg`)}, "uploadDate": "${movie.createdAt ? new Date(movie.createdAt).toISOString() : dp}" }` : ""}${hasImdb ? `,
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": ${imdbNum}, "bestRating": "10"${movie.imdbVotes ? `, "ratingCount": ${JSON.stringify(String(movie.imdbVotes).replace(/[^0-9]/g, "") || "1")}` : ""} }` : ""}
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
+        { "@type": "ListItem", "position": 2, "name": "Movies", "item": "${SITE_URL}/movies" },
+        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movie.title)}, "item": "${SITE_URL}${movieUrl}" },
+        { "@type": "ListItem", "position": 4, "name": "Details & Cast", "item": "${SITE_URL}/blog/${blogSlug}" }
+      ]
+    }${trailerId ? `,
+    {
+      "@type": "VideoObject",
+      "name": ${JSON.stringify(`${movie.title} — Official Trailer`)},
+      "description": ${JSON.stringify(ai.metaDescription)},
+      "thumbnailUrl": ${JSON.stringify(movie.media?.trailer?.thumbnailUrl || `https://img.youtube.com/vi/${trailerId}/hqdefault.jpg`)},
+      "uploadDate": "${movie.createdAt ? new Date(movie.createdAt).toISOString() : dp}",
+      "embedUrl": "https://www.youtube.com/embed/${trailerId}"
+    }` : ""}${eventSchema}${musicRecordingSchema}
+  ]
+}
+</script>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/movies" style="color:#777;text-decoration:none;">Movies</a>
+    <span style="color:#333;">›</span>
+    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#999;">Details &amp; Cast</span>
+  </nav>
+</div>
+
+<div class="hero-section" style="background:linear-gradient(135deg,#1a0e00 0%,#121212 100%);border:1px solid #2e2000;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+  <h1 style="color:#fff;font-size:1.4rem;font-weight:800;margin:0 0 12px;line-height:1.3;">${seoTitle}</h1>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#c9973a;font-weight:700;">${genre}</span>
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#7ec8e3;font-weight:700;">${movie.language || "Odia"}</span>
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#e8c87a;font-weight:700;">📅 ${releaseFmt}</span>
+    ${hasImdb ? `<span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#f5c518;font-weight:700;">⭐ ${imdbNum}/10 IMDb</span>` : ""}
+  </div>
+  ${autoBlogParagraphs(ai.introParagraph)}
+</div>
+
+${tocHtml}
+
+${BLOG_RESPONSIVE_STYLES}
+<style>
+  .blog-content-layout { display: flex; flex-direction: column; gap: 24px; }
+  .blog-poster-aside { width: 100%; max-width: 300px; margin: 0 auto; }
+  .blog-poster-aside img { width: 100%; height: auto; border-radius: 12px; border: 1px solid #242424; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+  @media (min-width: 900px) {
+    .blog-content-layout { flex-direction: row; align-items: flex-start; }
+    .blog-poster-aside { width: 240px; position: sticky; top: 80px; flex-shrink: 0; }
+  }
+</style>
+
+<div class="blog-content-layout">
+  <aside class="blog-poster-aside">
+    ${poster ? `<img src="${poster}" alt="${movie.title} Poster" width="240" height="360" fetchpriority="high" style="object-fit:cover;" onError="this.style.display='none'" />` : ""}
+    <a href="${movieUrl}" style="display:block;background:#c9973a;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">View Full Movie Page →</a>
+  </aside>
+  <div style="flex: 1; min-width: 0;">
+    <section id="quick-facts" style="${card}">
+      <h2 style="${h2}">Quick Facts</h2>
+      <table style="width:100%;border-collapse:collapse;" class="info-table">
+        <tbody>
+          <tr><td style="${tdL}">Release Date</td><td style="${tdR}">${releaseFmt}</td></tr>
+          <tr><td style="${tdL}">Genre</td><td style="${tdR}">${genre}</td></tr>
+          <tr><td style="${tdL}">Language</td><td style="${tdR}">${movie.language || "Odia"}</td></tr>
+          ${movie.runtime ? `<tr><td style="${tdL}">Runtime</td><td style="${tdR}">${movie.runtime}</td></tr>` : ""}
+          ${movie.contentRating ? `<tr><td style="${tdL}">Certification</td><td style="${tdR}">${movie.contentRating}</td></tr>` : ""}
+          ${keyCrewRows}
+        </tbody>
+      </table>
+    </section>
+
+    <section id="story" style="${card}">
+      <h2 style="${h2}">Story &amp; Plot</h2>
+      ${autoBlogParagraphs(ai.storyParagraph)}
+    </section>
+
+    <section id="cast-crew" style="${card}">
+      <h2 style="${h2}">Cast &amp; Crew</h2>
+      ${autoBlogParagraphs(ai.castCrewParagraph)}
+      ${castRows ? `
+      <h3 style="${h3}">Lead Cast</h3>
+      <div class="tbl-scroll" style="overflow-x:auto;margin-top:10px;">
+        <table style="width:100%;border-collapse:collapse;min-width:320px;" class="data-table">
+          <thead><tr><th style="${th}">Name</th><th style="${th}">Role</th></tr></thead>
+          <tbody>${castRows}</tbody>
+        </table>
+      </div>` : ""}
+      ${keyCrewRows ? `<h3 style="${h3}">Key Crew</h3><p style="color:#999;line-height:1.8;margin:0;font-size:0.87rem;">See the full crew breakdown in Quick Facts above, including director, producer, music direction, writing, cinematography, and editing credits.</p>` : ""}
+    </section>
+
+    <section id="director-vision" style="${card}">
+      <h2 style="${h2}">Director's Vision</h2>
+      ${autoBlogParagraphs(ai.directorVisionParagraph)}
+    </section>
+
+    ${hasSongs ? `
+    <section id="music" style="${card}">
+      <h2 style="${h2}">Music &amp; Soundtrack</h2>
+      ${autoBlogParagraphs(ai.musicParagraph)}
+      <div class="tbl-scroll" style="overflow-x:auto;margin-top:10px;">
+        <table style="width:100%;border-collapse:collapse;min-width:320px;" class="data-table">
+          <thead><tr><th style="${th}">Song</th><th style="${th}">Singer</th></tr></thead>
+          <tbody>${songRows}</tbody>
+        </table>
+      </div>
+    </section>` : `
+    <section id="music" style="${card}">
+      <h2 style="${h2}">Music &amp; Soundtrack</h2>
+      ${autoBlogParagraphs(ai.musicParagraph)}
+    </section>`}
+
+    ${trailerId ? `
+    <section id="trailer" style="${card}">
+      <h2 style="${h2}">Official Trailer</h2>
+      <div style="position:relative;padding-top:56.25%;border-radius:10px;overflow:hidden;background:#000;">
+        <iframe src="https://www.youtube.com/embed/${trailerId}" loading="lazy" title="${movie.title} Official Trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"></iframe>
+      </div>
+    </section>` : ""}
+
+    ${hasBoxOffice ? `
+    <section id="box-office" style="${card}">
+      <h2 style="${h2}">Box Office Collection</h2>
+      <table style="width:100%;border-collapse:collapse;" class="info-table">
+        <tbody>
+          ${movie.boxOffice.opening && movie.boxOffice.opening !== "TBA" ? `<tr><td style="${tdL}">Opening Day</td><td style="${tdR}">${movie.boxOffice.opening}</td></tr>` : ""}
+          ${movie.boxOffice.firstWeek && movie.boxOffice.firstWeek !== "TBA" ? `<tr><td style="${tdL}">First Week</td><td style="${tdR}">${movie.boxOffice.firstWeek}</td></tr>` : ""}
+          ${movie.boxOffice.total && movie.boxOffice.total !== "TBA" ? `<tr><td style="${tdL}">Total Collection</td><td style="${tdR}">${movie.boxOffice.total}</td></tr>` : ""}
+        </tbody>
+      </table>
+    </section>` : ""}
+
+    <section id="where-to-watch" style="${card}">
+      <h2 style="${h2}">Where to Watch</h2>
+      ${autoBlogParagraphs(ai.whereToWatchParagraph)}
+    </section>
+
+    <section id="anticipation" style="${card}">
+      <h2 style="${h2}">Why Watch ${movie.title}?</h2>
+      ${autoBlogParagraphs(ai.anticipationParagraph)}
+    </section>
+
+    ${buildRelatedMoviesHtml(relatedMovies, "#c9973a")}
+
+    <section style="background:#111;border-radius:14px;padding:20px 26px;margin-bottom:22px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="/movies" style="display:inline-block;background:#c9973a;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">Browse More Odia Movies →</a>
+    </section>
+  </div>
+</div>`;
+}
+
+/**
+ * autoGenerateMovieDetailsBlog — orchestrates AI + HTML + publish for the
+ * "Movie Details" blog. Creates a new Blog if movie.detailBlogId is empty,
+ * otherwise updates the existing one. Never throws — caller fire-and-forgets.
+ */
+/** Build a URL-safe slug from the full SEO title — preserves key words for SEO.
+ *  Legacy helper, still used as a final fallback for slug collisions. */
+function titleToSlug(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim()
+    .slice(0, 120); // max 120 chars to keep URLs manageable
+}
+
+/** Trim a hyphenated slug down to maxLen WITHOUT cutting a word in half —
+ *  drops whole trailing segments instead of leaving a truncated half-word. */
+function trimSlugToLength(slug, maxLen) {
+  if (slug.length <= maxLen) return slug;
+  const parts = slug.split("-");
+  let out = "";
+  for (const part of parts) {
+    const next = out ? `${out}-${part}` : part;
+    if (next.length > maxLen) break;
+    out = next;
+  }
+  return out || slug.slice(0, maxLen);
+}
+
+/** SEO FIX: short, clean, keyword-rich slug for the Movie Details blog —
+ *  "bindusagar-2026-movie-details" instead of the full ~120-char SEO-title
+ *  slug. Capped at 60 chars per Google's URL-length guidance. */
+function buildMovieDetailsSlug(movie) {
+  const base = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 45);
+  return trimSlugToLength(`${base}-movie-details`, 60);
+}
+
+/** SEO FIX: short OTT-release slug that does NOT embed the release date
+ *  (a date-bearing slug goes stale the moment the film actually releases).
+ *  "bindusagar-2026-ott-release-tarang-plus" — platform name included for
+ *  keyword relevance, capped at 60 chars. */
+function buildOttSlug(movie) {
+  const base = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 35);
+  const platform = trimSlugToLength(
+    String(movie.streamingOn || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim(),
+    15
+  );
+  return trimSlugToLength(`${base}-ott-release${platform ? `-${platform}` : ""}`, 60);
+}
+
+/** SEO FIX: short "now streaming" slug — distinct from buildOttSlug so the
+ *  two OTT pages never collide, and short enough to stay memorable. */
+function buildOttLiveSlug(movie) {
+  const base = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 30);
+  const platform = trimSlugToLength(
+    String(movie.streamingOn || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim(),
+    15
+  );
+  return trimSlugToLength(`${base}-streaming-now${platform ? `-${platform}` : ""}`, 60);
+}
+
+async function autoGenerateMovieDetailsBlog(movie) {
+  try {
+    const cc = extractMovieCastCrew(movie);
+    const ai = await generateMovieDetailsAiSections(movie, cc);
+    const seoTitle = buildMovieDetailsTitle(movie);
+    // SEO FIX: short, clean slug (≤60 chars) instead of the full ~120-char
+    // SEO-title slug — e.g. "bindusagar-2026-movie-details".
+    const baseSlug = buildMovieDetailsSlug(movie);
+    // SEO FIX: related movies for internal linking (closes the "content
+    // island" gap flagged in the audit's contextual-information section).
+    const relatedMovies = await fetchRelatedMovies(movie);
+
+    let blog = movie.detailBlogId ? await Blog.findById(movie.detailBlogId) : null;
+    if (!blog) blog = await Blog.findOne({ slug: baseSlug }); // catch orphaned/duplicate slug instead of crashing
+    const slug = blog ? blog.slug : baseSlug;
+    // dateModified should reflect the real last-edit time, not "now" on every
+    // regeneration — pass the existing blog's updatedAt through (createdAt for
+    // brand-new posts so datePublished === dateModified on first publish).
+    const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : new Date().toISOString();
+    const dateModified = new Date().toISOString();
+    const html = buildMovieDetailsBlogHTML(movie, cc, ai, slug, seoTitle, datePublished, dateModified, relatedMovies);
+
+    const fields = {
+      title: seoTitle,
+      excerpt: ai.metaDescription,
+      content: html,
+      category: "Movie Update",
+      tags: [movie.title, "Ollywood", "Odia Movie", ...(movie.genre || [])],
+      coverImage: movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "",
+      movieId: movie._id,
+      movieTitle: movie.title,
+      author: "Ollypedia Team",
+      published: true,
+      readTime: Math.max(1, Math.ceil(html.split(/\s+/).length / 200)),
+      seoTitle: seoTitle,
+      seoDesc: ai.metaDescription,
+    };
+
+    if (blog) {
+      Object.assign(blog, fields);
+      await blog.save();
+    } else {
+      blog = await Blog.create({ ...fields, slug });
+      await Movie.findByIdAndUpdate(movie._id, { detailBlogId: blog._id });
+    }
+    console.log(`✅ Auto-published Movie Details blog for "${movie.title}" → /blog/${blog.slug}`);
+    return blog;
+  } catch (e) {
+    console.error(`❌ autoGenerateMovieDetailsBlog failed for "${movie?.title}":`, e.message);
+    return null;
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OTT RELEASE BLOG
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generateOttAiSections(movie, cc) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const isDateAvailable = isRealDate(movie.ottReleaseDate);
+  const ottDateFmt = isDateAvailable ? formatHumanDate(movie.ottReleaseDate) : "Release Date Not Announced";
+  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean).join(", ");
+  const festival = isDateAvailable ? findNearbyFestival(movie.ottReleaseDate) : "";
+
+  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | OTT Platform: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${(movie.genre || []).join(", ") || "Odia"} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"}${festival ? ` | Note: this OTT release falls close to ${festival} — you may mention this naturally if it fits.` : ""}`;
+
+  const userPrompt = `Write deeply detailed, SEO-rich JSON content for an OTT-release announcement article on Ollypedia, an Odia (Ollywood) cinema website, about the film "${movie.title}" streaming on ${movie.streamingOn}. This MUST be a full editorial article with long, rich paragraphs — each paragraph should feel like professional journalism. Use ONLY the details given. No HTML or markdown.
+
+${ctx}
+
+Return a JSON object with exactly these keys (plain text only, NO HTML, NO markdown, aim for maximum detail):
+- metaDescription: 150-160 characters mentioning movie title, OTT platform and release status/date, maximising Google click-through
+- introParagraph: 220-320 words announcing that "${movie.title}" will stream on ${movie.streamingOn}. Name the lead cast, detail the genre and story highlights, explain why this OTT release is significant for Odia cinema fans, and clearly state the release status: ${ottDateFmt}.
+- synopsisParagraph: 200-280 words recapping the film's story, genre, thematic conflicts, emotional highlights, and what makes it worth watching on OTT. Draw from the synopsis and genre; do not invent specific plot points not mentioned. Write to help a viewer decide whether to watch. IMPORTANT: paraphrase and reframe in your own words for an OTT/streaming context — do not copy the source synopsis verbatim, since this same film also has a separate theatrical-release article with its own story section.
+- castHighlightParagraph: 200-280 words specifically naming and highlighting each lead actor — their roles, acting style, past notable performances in Odia cinema, and what they bring to this specific film. Make it feel like a genuine talent profile piece.
+- howToWatchParagraph: 180-250 words explaining step-by-step how Odisha audiences can stream the film on ${movie.streamingOn} — app download, website access, subscription tiers, regional language content availability, and how digital OTT access is transforming Odia cinema viewership.
+- platformParagraph: 150-220 words introducing ${movie.streamingOn} as an OTT platform — its founding story, growth, content library, focus on regional Indian language films, contribution to Odia cinema's digital accessibility, and why it is a key destination for Ollywood fans.`;
+
+  const fallbacks = {
+    metaDescription: `${movie.title} streams on ${movie.streamingOn}. Get cast, release details and how-to-watch info on Ollypedia.`,
+    introParagraph: `${movie.title}${leadNames ? `, starring ${leadNames},` : ""} is set to stream on the popular OTT platform ${movie.streamingOn}. The OTT release status is currently: ${ottDateFmt}. This digital premiere marks an exciting milestone for Odia cinema fans everywhere, giving audiences across Odisha and around the world the opportunity to experience this ${(movie.genre || []).join(", ") || "Odia"} film from the comfort of their homes. With the growing reach of regional OTT platforms like ${movie.streamingOn}, Odia cinema is finding new audiences far beyond the traditional theatrical circuit, and ${movie.title} is set to be a significant addition to this wave of digital content.`,
+    // SEO FIX: previously fell back to the raw, unmodified `movie.synopsis`
+    // string — byte-identical to the Movie Details page's storyParagraph
+    // fallback, which the audit flags as duplicate content across blog
+    // pages for the same movie. Now reframes the synopsis with OTT-specific
+    // context instead of repeating it verbatim.
+    synopsisParagraph: movie.synopsis
+      ? `Now streaming on ${movie.streamingOn}, ${movie.title} tells a story that has resonated strongly with Odia audiences since it was first announced. ${movie.synopsis} For viewers deciding whether to press play, this ${(movie.genre || []).join(", ") || "Odia"} film offers a self-contained viewing experience that holds up just as well on a home screen as it did in theatres.`
+      : `${movie.title} is a ${(movie.genre || []).join(", ") || "Odia"} film that has drawn considerable attention from Ollywood audiences and critics alike. The film carries a story built around the cultural and emotional landscape of Odisha, exploring themes that resonate deeply with Odia viewers. Full story details, including character backgrounds and plot specifics, will be updated as officially confirmed by the production team. What is clear is that ${movie.title} combines strong performances with a compelling narrative structure that is ideal for OTT viewing.`,
+    castHighlightParagraph: leadNames ? `${leadNames} lead the cast of ${movie.title}, each bringing their distinctive acting strengths and on-screen presence to their respective roles. The ensemble is widely regarded as one of the strongest assembled for an Odia film in recent memory, with each actor having established themselves as a significant talent in the Ollywood industry. Their combined performances are expected to be a major draw for OTT audiences discovering the film on ${movie.streamingOn}, and early reviews of their work on screen have been overwhelmingly positive.` : `${movie.title} features a talented cast of Odia cinema's most acclaimed performers, whose nuanced portrayals and strong screen chemistry are expected to be the highlight of this OTT viewing experience on ${movie.streamingOn}. The casting choices reflect the production team's commitment to quality storytelling and authentic representation of Odia culture and characters.`,
+    howToWatchParagraph: `Viewers can catch ${movie.title} on ${movie.streamingOn} by downloading the official app from the Google Play Store or Apple App Store, or by visiting the platform's website directly. ${movie.streamingOn} offers subscription plans tailored for Odia-speaking audiences, with options for monthly and annual memberships that provide unlimited access to its growing library of Odia films, web series, and regional content. Once subscribed, simply search for "${movie.title}" in the app or website to start streaming. Ollypedia will update the direct streaming link as soon as it goes live officially.`,
+    platformParagraph: `${movie.streamingOn} is among the leading OTT platforms dedicated to bringing Odia-language films, web series, and regional entertainment to digital screens across India and beyond. With a rapidly growing content library and a strong focus on authentic regional storytelling, ${movie.streamingOn} has become a vital destination for Odia cinema fans who want to stay connected with Ollywood's latest releases. The platform's commitment to supporting Odia-language content creators and giving regional films a digital home has made it an important part of the Ollywood ecosystem.`,
+  };
+
+  return callGroqStructured(
+    "You are a senior Odia cinema (Ollywood) journalist writing long-form, highly detailed, SEO-optimised editorial articles for Ollypedia. Return ONLY a valid JSON object — no markdown, no code fences, no extra text. All values must be plain text with no HTML. Each paragraph must be thorough, specific, and written like professional film journalism. Every sentence must add real value.",
+    userPrompt,
+    ["metaDescription", "introParagraph", "synopsisParagraph", "castHighlightParagraph", "howToWatchParagraph", "platformParagraph"],
+    fallbacks,
+    4000
+  );
+}
+
+function buildOttBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = []) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const isDateAvailable = isRealDate(movie.ottReleaseDate);
+  const ottDateFmt = isDateAvailable ? formatHumanDate(movie.ottReleaseDate) : "Release Date Not Announced";
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const ogImage = poster || `${SITE_URL}/logo.png`;
+  const movieUrl = `/movie/${movie.slug}`;
+  const leadCast = cc.leadCast || [];
+  const imdbNum = parseFloat(movie.imdbRating);
+  const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
+  const dp = datePublished || new Date().toISOString();
+  const dm = dateModified || dp;
+
+  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
+  const h2 = `font-size:1.05rem;font-weight:800;color:#7ec8e3;border-left:4px solid #7ec8e3;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
+  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
+  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+
+  const castChips = leadCast.map(c => {
+    const url = castProfileUrl(c);
+    return `<span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#ddd;">${url ? `<a href="${url}" style="color:#7ec8e3;text-decoration:underline;text-underline-offset:2px;">${c.name}</a>` : c.name}</span>`;
+  }).join("");
+
+  const leadNames = leadCast.map(c => c.name).filter(Boolean);
+  const keywordsArr = [
+    movie.title, `${movie.title} OTT release date`, `${movie.title} ${movie.streamingOn}`,
+    `watch ${movie.title} online`, `${movie.title} streaming`, movie.streamingOn,
+    `${movie.streamingOn} odia movies`, "Odia movie OTT", "Ollywood streaming",
+    ...leadNames.map(n => `${n} movies`),
+  ].filter(Boolean);
+  const keywordsStr = [...new Set(keywordsArr)].join(", ");
+
+  const toc = [
+    ["OTT Release Details", "release-details"], ["Story", "synopsis"], ["Cast Highlights", "cast"],
+    ["How to Watch", "how-to-watch"], [`About ${movie.streamingOn}`, "platform"],
+    relatedMovies.length ? ["Related Movies", "related-movies"] : null,
+  ].filter(Boolean);
+  const tocHtml = `
+<nav aria-label="Table of contents" style="${card}padding:18px 24px;">
+  <strong style="color:#888;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;">On this page</strong>
+  <ul style="margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;">
+    ${toc.map(([label, id]) => `<li><a href="#${id}" style="color:#7ec8e3;text-decoration:none;font-size:0.85rem;">${label}</a></li>`).join("")}
+  </ul>
+</nav>`;
+
+  const plainWordCount = [ai.introParagraph, ai.synopsisParagraph, ai.castHighlightParagraph, ai.howToWatchParagraph, ai.platformParagraph]
+    .filter(Boolean).join(" ").split(/\s+/).filter(Boolean).length;
+
+  // SEO FIX: Event schema for the OTT premiere — only emitted with a real date.
+  const eventSchema = isDateAvailable ? `,
+    {
+      "@type": "Event",
+      "name": ${JSON.stringify(`${movie.title} — OTT Premiere on ${movie.streamingOn}`)},
+      "startDate": "${movie.ottReleaseDate}",
+      "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
+      "eventStatus": "https://schema.org/EventScheduled",
+      "location": { "@type": "VirtualLocation", "url": ${JSON.stringify(movie.streamingUrl || SITE_URL + movieUrl)} },
+      "workPerformed": { "@type": "Movie", "name": ${JSON.stringify(movie.title)} },
+      "image": ${JSON.stringify(ogImage)},
+      "organizer": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+    }` : "";
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — READ BY CMS
+  title:          ${seoTitle}
+  description:    ${ai.metaDescription}
+  keywords:       ${keywordsStr}
+  canonical:      ${SITE_URL}/blog/${blogSlug}
+  robots:         index, follow
+  og:site_name:   Ollypedia
+  og:title:       ${seoTitle}
+  og:description: ${ai.metaDescription}
+  og:url:         ${SITE_URL}/blog/${blogSlug}
+  og:image:       ${ogImage}
+  og:image:width: 1200
+  og:image:height: 630
+  og:type:        article
+  og:locale:      en_IN
+  article:published_time: ${dp}
+  article:modified_time:  ${dm}
+  article:author: Ollypedia Team
+  article:section: OTT Release
+  twitter:card:   summary_large_image
+  twitter:site:   @OllypediaIn
+  twitter:creator: @OllypediaIn
+  twitter:title:  ${seoTitle}
+  twitter:description: ${ai.metaDescription}
+  twitter:image:  ${ogImage}
+  twitter:image:alt: ${movie.title} Poster
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": ${JSON.stringify(seoTitle)},
+      "description": ${JSON.stringify(ai.metaDescription)},
+      "image": ${JSON.stringify(ogImage)},
+      "datePublished": "${dp}",
+      "dateModified": "${dm}",
+      "inLanguage": "en",
+      "wordCount": ${plainWordCount},
+      "keywords": ${JSON.stringify(keywordsStr)},
+      "author": [
+        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
+        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+      ],
+      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}",
+                     "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" } },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${blogSlug}" },
+      "about": {
+        "@type": "Movie",
+        "name": ${JSON.stringify(movie.title)},
+        "url": "${SITE_URL}${movieUrl}",
+        "image": ${JSON.stringify(ogImage)},
+        "inLanguage": ${JSON.stringify(movie.language || "Odia")}${movie.releaseDate ? `,
+        "datePublished": "${movie.releaseDate}"` : ""}${movie.runtime ? `,
+        "duration": ${JSON.stringify(movie.runtime)}` : ""}${cc.director ? `,
+        "director": { "@type": "Person", "name": ${JSON.stringify(cc.director)} }` : ""}${leadCast.length ? `,
+        "actor": [${leadCast.map(a => { const u = castProfileUrl(a); return `{ "@type": "Person", "name": ${JSON.stringify(a.name)}${u ? `, "url": "${SITE_URL}${u}"` : ""} }`; }).join(", ")}]` : ""}${hasImdb ? `,
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": ${imdbNum}, "bestRating": "10"${movie.imdbVotes ? `, "ratingCount": ${JSON.stringify(String(movie.imdbVotes).replace(/[^0-9]/g, "") || "1")}` : ""} }` : ""}${movie.streamingUrl ? `,
+        "potentialAction": {
+          "@type": "WatchAction",
+          "target": ${JSON.stringify(movie.streamingUrl)}
+        }` : ""}
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
+        { "@type": "ListItem", "position": 2, "name": "Movies", "item": "${SITE_URL}/movies" },
+        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movie.title)}, "item": "${SITE_URL}${movieUrl}" },
+        { "@type": "ListItem", "position": 4, "name": "OTT Release", "item": "${SITE_URL}/blog/${blogSlug}" }
+      ]
+    }${eventSchema}
+  ]
+}
+</script>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/movies" style="color:#777;text-decoration:none;">Movies</a>
+    <span style="color:#333;">›</span>
+    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#999;">OTT Release</span>
+  </nav>
+</div>
+
+<div class="hero-section" style="background:linear-gradient(135deg,#001a1e 0%,#121212 100%);border:1px solid #00343d;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+  <h1 style="color:#fff;font-size:1.4rem;font-weight:800;margin:0 0 12px;line-height:1.3;">${seoTitle}</h1>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#7ec8e3;font-weight:700;">📺 ${movie.streamingOn}</span>
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#e8c87a;font-weight:700;">📅 ${ottDateFmt}</span>
+    ${castChips}
+  </div>
+  ${autoBlogParagraphs(ai.introParagraph)}
+</div>
+
+${tocHtml}
+
+${BLOG_RESPONSIVE_STYLES}
+<style>
+  .blog-content-layout { display: flex; flex-direction: column; gap: 24px; }
+  .blog-poster-aside { width: 100%; max-width: 300px; margin: 0 auto; }
+  .blog-poster-aside img { width: 100%; height: auto; border-radius: 12px; border: 1px solid #242424; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
+  @media (min-width: 900px) {
+    .blog-content-layout { flex-direction: row; align-items: flex-start; }
+    .blog-poster-aside { width: 240px; position: sticky; top: 80px; flex-shrink: 0; }
+  }
+</style>
+
+<div class="blog-content-layout">
+  <aside class="blog-poster-aside">
+    ${poster ? `<img src="${poster}" alt="${movie.title} Poster" width="240" height="360" fetchpriority="high" style="object-fit:cover;" onError="this.style.display='none'" />` : ""}
+    ${movie.streamingUrl ? `<a href="${movie.streamingUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">▶ Watch on ${movie.streamingOn}</a>` : `<a href="${movieUrl}" style="display:block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">View Full Movie Page →</a>`}
+  </aside>
+  <div style="flex: 1; min-width: 0;">
+    <section id="release-details" style="${card}">
+      <h2 style="${h2}">OTT Release Details</h2>
+      <table style="width:100%;border-collapse:collapse;" class="info-table">
+        <tbody>
+          <tr><td style="${tdL}">Streaming Platform</td><td style="${tdR}">${movie.streamingOn}</td></tr>
+          <tr><td style="${tdL}">OTT Release Date</td><td style="${tdR}">${ottDateFmt}</td></tr>
+          <tr><td style="${tdL}">Language</td><td style="${tdR}">${movie.language || "Odia"}</td></tr>
+          ${(movie.genre || []).length ? `<tr><td style="${tdL}">Genre</td><td style="${tdR}">${(movie.genre || []).join(", ")}</td></tr>` : ""}
+          ${movie.releaseDate ? `<tr><td style="${tdL}">Theatrical Release</td><td style="${tdR}">${formatHumanDate(movie.releaseDate)}</td></tr>` : ""}
+        </tbody>
+      </table>
+    </section>
+
+    <section id="synopsis" style="${card}">
+      <h2 style="${h2}">Story</h2>
+      ${autoBlogParagraphs(ai.synopsisParagraph)}
+    </section>
+
+    <section id="cast" style="${card}">
+      <h2 style="${h2}">Cast Highlights</h2>
+      ${autoBlogParagraphs(ai.castHighlightParagraph)}
+    </section>
+
+    <section id="how-to-watch" style="${card}">
+      <h2 style="${h2}">How to Watch</h2>
+      ${autoBlogParagraphs(ai.howToWatchParagraph)}
+      ${movie.streamingUrl ? `<a href="${movie.streamingUrl}" target="_blank" rel="nofollow noopener noreferrer" class="cta-btn" style="display:inline-block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;margin-top:6px;">Watch on ${movie.streamingOn} →</a>` : ""}
+    </section>
+
+    <section id="platform" style="${card}">
+      <h2 style="${h2}">About ${movie.streamingOn}</h2>
+      ${autoBlogParagraphs(ai.platformParagraph)}
+    </section>
+
+    ${buildRelatedMoviesHtml(relatedMovies, "#7ec8e3", `More Odia Movies on ${movie.streamingOn}`)}
+
+    <section style="background:#111;border-radius:14px;padding:20px 26px;margin-bottom:22px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="${movieUrl}" style="display:inline-block;background:#c9973a;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">View Full Movie Page →</a>
+      <a href="/movies" style="display:inline-block;background:transparent;border:1px solid #333;color:#ccc;font-weight:700;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">Browse More Odia Movies →</a>
+    </section>
+  </div>
+</div>`;
+}
+
+/**
+ * autoGenerateOttBlog — orchestrates AI + HTML + publish for the
+ * "OTT Release" blog. Creates a new Blog if movie.ottBlogId is empty,
+ * otherwise updates the existing one (so correcting the OTT date later
+ * doesn't create a duplicate post). Never throws.
+ */
+async function autoGenerateOttBlog(movie) {
+  try {
+    if (!movie.streamingOn) return null;
+
+    const cc = extractMovieCastCrew(movie);
+    const ai = await generateOttAiSections(movie, cc);
+    const seoTitle = buildOttTitle(movie, cc);
+    // SEO FIX: short slug that does NOT embed the OTT release date (so it
+    // never goes stale), e.g. "bindusagar-2026-ott-release-tarang-plus".
+    const baseSlug = buildOttSlug(movie);
+    // SEO FIX: prefer related movies on the SAME platform first (the audit's
+    // "Also available on {Platform}" recommendation), falling back to
+    // genre-matched movies if the platform alone doesn't yield enough.
+    const relatedMovies = await fetchRelatedMovies(movie, 4, true);
+
+    let blog = movie.ottBlogId ? await Blog.findById(movie.ottBlogId) : null;
+    if (!blog) blog = await Blog.findOne({ slug: baseSlug }); // catch orphaned/duplicate slug instead of crashing
+    const slug = blog ? blog.slug : baseSlug;
+    const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : new Date().toISOString();
+    const dateModified = new Date().toISOString();
+    const html = buildOttBlogHTML(movie, cc, ai, slug, seoTitle, datePublished, dateModified, relatedMovies);
+
+    const fields = {
+      title: seoTitle,
+      excerpt: ai.metaDescription,
+      content: html,
+      category: "OTT Release",
+      tags: [movie.title, movie.streamingOn, "OTT Release", "Odia Movie"],
+      coverImage: movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "",
+      movieId: movie._id,
+      movieTitle: movie.title,
+      author: "Ollypedia Team",
+      published: true,
+      readTime: Math.max(1, Math.ceil(html.split(/\s+/).length / 200)),
+      seoTitle: seoTitle,
+      seoDesc: ai.metaDescription,
+    };
+
+    if (blog) {
+      Object.assign(blog, fields);
+      await blog.save();
+    } else {
+      blog = await Blog.create({ ...fields, slug });
+      await Movie.findByIdAndUpdate(movie._id, { ottBlogId: blog._id });
+    }
+    console.log(`✅ Auto-published OTT Release blog for "${movie.title}" → /blog/${blog.slug}`);
+    return blog;
+  } catch (e) {
+    console.error(`❌ autoGenerateOttBlog failed for "${movie?.title}":`, e.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  "NOW STREAMING ON OTT" LIVE BLOG
+//  Generated when the OTT release date has arrived (today >= ottReleaseDate).
+//  Stored in movie.ottLiveBlogId — completely separate from ottBlogId.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** SEO title for the "Now Streaming" blog.
+ *  SEO FIX: dropped the redundant "Available to Watch Online" padding
+ *  (every streaming announcement implies availability — the phrase added
+ *  no keyword value) and capped at 90 chars so long names/platforms don't
+ *  get truncated by Google with a graceful 1-lead-name fallback. */
+function buildOttLiveTitle(movie, cc) {
+  const build = (leadCount) => {
+    const leads = (cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
+    const subject = leads.length ? `${leads.join(" & ")} Starrer` : "Odia Movie";
+    return `${movie.title} Is Now Streaming on ${movie.streamingOn}: ${subject}`.replace(/\s+/g, " ").trim();
+  };
+  let title = build(2);
+  if (title.length > 90) title = build(1);
+  if (title.length > 90) title = build(0);
+  return title.length > 90 ? title.slice(0, 89).trim() + "…" : title;
+}
+
+async function generateOttLiveAiSections(movie, cc) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const ottDateFmt = isRealDate(movie.ottReleaseDate) ? formatHumanDate(movie.ottReleaseDate) : "Now";
+  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean).join(", ");
+  const genre = (movie.genre || []).join(", ") || "Odia";
+
+  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | Now Streaming on: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${genre} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"} | Streaming URL: ${movie.streamingUrl || "N/A"}`;
+
+  const userPrompt = `Write deeply detailed, SEO-rich JSON content for a "Now Streaming on OTT" announcement article on Ollypedia, an Odia (Ollywood) cinema website. The film "${movie.title}" is NOW AVAILABLE to stream on ${movie.streamingOn} as of ${ottDateFmt}. Write in an excited, celebratory, present-tense editorial tone. This must feel like a breaking news announcement for Odia cinema fans. No HTML or markdown in values.
+
+${ctx}
+
+Return a JSON object with exactly these keys (plain text only, NO HTML, NO markdown):
+- metaDescription: 150-160 characters announcing that "${movie.title}" is NOW streaming on ${movie.streamingOn}, with date, maximising click-through
+- introParagraph: 250-350 words — breaking-news style announcement that "${movie.title}" is NOW AVAILABLE on ${movie.streamingOn} as of ${ottDateFmt}. Name the lead cast, describe what kind of film it is (genre, emotional tone, story highlights), explain why this is an exciting moment for Odia cinema, and urge fans to watch it today.
+- whyWatchParagraph: 250-350 words — a compelling editorial making the case for why viewers should watch "${movie.title}" RIGHT NOW on ${movie.streamingOn}. Cover the story's emotional appeal, the quality of the performances, the director's craft, what makes this film stand out from other Odia films, and what kind of viewer will love it most.
+- synopsisParagraph: 200-280 words — a vivid, spoiler-free retelling of the film's story that makes viewers want to press play immediately. Focus on the opening setup, main conflict, and emotional stakes without revealing major plot twists. IMPORTANT: paraphrase and reframe in your own words — do not copy the source synopsis verbatim, since this same film also has separate theatrical-release and OTT-release articles with their own story sections.
+- castReviewParagraph: 220-300 words — present-tense review-style writing about the lead actors' performances in the film. Name each lead actor, describe their character briefly, and discuss what they bring to the film and why their performances are worth seeing on OTT.
+- howToWatchParagraph: 180-250 words — direct, step-by-step guide to streaming "${movie.title}" on ${movie.streamingOn} RIGHT NOW. Include app download instructions, website access, subscription info, and a call to action to start watching immediately.`;
+
+  const fallbacks = {
+    metaDescription: `${movie.title} is NOW streaming on ${movie.streamingOn}! Watch this Odia ${genre} film online today. Full details on Ollypedia.`,
+    introParagraph: `${movie.title}${leadNames ? `, starring ${leadNames},` : ""} is officially now available to stream on ${movie.streamingOn} as of ${ottDateFmt}. This eagerly awaited Odia ${genre} film has made its digital debut, giving fans across Odisha and around the world the chance to experience it from the comfort of their homes. Directed by ${cc.director || "the talented creative team"}, the film brings together a stellar cast and a compelling story that has been the talk of Ollywood since its theatrical run. With its arrival on ${movie.streamingOn}, ${movie.title} joins the growing library of premium Odia cinema available on OTT, marking another milestone for Ollywood's digital expansion.`,
+    whyWatchParagraph: `${movie.title} is the kind of Odia film that demands to be experienced \u2014 and now that it is available on ${movie.streamingOn}, there has never been a better time to press play. The film combines a gripping ${genre.toLowerCase()} narrative with outstanding performances from its lead cast, creating an experience that is both entertaining and emotionally resonant. The direction, cinematography, and production values set a new benchmark for Odia cinema, proving that Ollywood continues to grow in ambition and craft. Whether you are a long-time Odia cinema fan or a newcomer discovering Ollywood through OTT, ${movie.title} is the perfect film to start with.`,
+    // SEO FIX: previously fell back to the raw, unmodified `movie.synopsis`
+    // string — identical to the other two blog pages' fallbacks. Reframed
+    // with "now streaming" / spoiler-light viewing-decision framing instead
+    // of repeating the synopsis verbatim, so all three pages read distinctly.
+    synopsisParagraph: movie.synopsis
+      ? `Here's the setup, without spoiling the journey: ${movie.synopsis} It's a story Odia audiences have already responded to strongly, and watching it now on ${movie.streamingOn} means experiencing those emotional beats with the comfort of a pause button — perfect for catching every detail you might have missed on the big screen.`
+      : `${movie.title} is a ${genre} film set in the heart of Odisha, weaving a story that touches on themes of identity, love, struggle, and triumph. The narrative unfolds with a compelling central conflict that keeps viewers engaged from the first scene to the last. With strong character development, authentic dialogue, and a richly depicted setting, the film creates a world that feels real and emotionally involving. Without giving too much away, ${movie.title} delivers a satisfying and memorable cinematic journey that OTT viewers are sure to appreciate at home on ${movie.streamingOn}.`,
+    castReviewParagraph: leadNames ? `${leadNames} deliver performances in ${movie.title} that are among the finest of their careers in Odia cinema. Each actor brings depth, authenticity, and a genuine emotional investment to their role, creating characters that linger in the memory long after the film ends. The ensemble dynamic is one of the film's greatest strengths, with the cast working in perfect harmony to bring the story to life with nuance and power. OTT viewers on ${movie.streamingOn} are in for a treat as they experience these performances for the first time.` : `The cast of ${movie.title} delivers remarkable performances that elevate this Odia ${genre.toLowerCase()} film to a memorable cinematic experience. Available now on ${movie.streamingOn}, viewers can witness the full depth and range of the ensemble cast's talents in the comfort of their own homes.`,
+    howToWatchParagraph: `To start watching ${movie.title} on ${movie.streamingOn} right now, download the ${movie.streamingOn} app from the Google Play Store or Apple App Store on your smartphone or tablet. Alternatively, visit the ${movie.streamingOn} website directly in your browser. Create an account or log in if you already have one, then choose a subscription plan that suits you \u2014 ${movie.streamingOn} offers flexible monthly and annual options. Once subscribed, search for "${movie.title}" using the search bar and press play to begin streaming instantly. The film is available in Odia with optional subtitles for wider accessibility.`,
+  };
+
+  return callGroqStructured(
+    "You are a senior Odia cinema (Ollywood) journalist writing a 'Now Streaming on OTT' announcement article for Ollypedia. Return ONLY a valid JSON object \u2014 no markdown, no code fences, no extra text. All values must be plain text with no HTML. Write in an engaged, celebratory, present-tense tone that makes Odia cinema fans excited to watch the film right now. Every sentence must add real value.",
+    userPrompt,
+    ["metaDescription", "introParagraph", "whyWatchParagraph", "synopsisParagraph", "castReviewParagraph", "howToWatchParagraph"],
+    fallbacks,
+    4000
+  );
+}
+
+function buildOttLiveBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = []) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const ottDateFmt = isRealDate(movie.ottReleaseDate) ? formatHumanDate(movie.ottReleaseDate) : "Now Available";
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const ogImage = poster || `${SITE_URL}/logo.png`;
+  const movieUrl = `/movie/${movie.slug}`;
+  const leadCast = cc.leadCast || [];
+  const genre = (movie.genre || []).join(", ") || "Odia";
+  const imdbNum = parseFloat(movie.imdbRating);
+  const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
+  const dp = datePublished || new Date().toISOString();
+  const dm = dateModified || dp;
+
+  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
+  const h2 = `font-size:1.05rem;font-weight:800;color:#4ade80;border-left:4px solid #4ade80;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
+  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
+  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+
+  const castChips = leadCast.map(c => {
+    const url = castProfileUrl(c);
+    return `<span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#ddd;">${url ? `<a href="${url}" style="color:#4ade80;text-decoration:underline;text-underline-offset:2px;">${c.name}</a>` : c.name}</span>`;
+  }).join("");
+
+  const leadNames = leadCast.map(c => c.name).filter(Boolean);
+  const keywordsArr = [
+    movie.title, `${movie.title} OTT`, `${movie.title} streaming now`, `watch ${movie.title} online`,
+    `${movie.title} ${movie.streamingOn}`, movie.streamingOn, `${movie.streamingOn} odia movies`,
+    "Odia movie OTT", "Ollywood streaming", "watch odia movie online",
+    ...leadNames.map(n => `${n} movies`),
+  ].filter(Boolean);
+  const keywordsStr = [...new Set(keywordsArr)].join(", ");
+
+  const toc = [
+    ["Streaming Details", "stream-details"], ["Why You Should Watch", "why-watch"],
+    ["Story", "synopsis"], ["Cast Performances", "cast-review"], ["How to Watch Now", "how-to-watch"],
+    relatedMovies.length ? ["Related Movies", "related-movies"] : null,
+  ].filter(Boolean);
+  const tocHtml = `
+<nav aria-label="Table of contents" style="${card}padding:18px 24px;">
+  <strong style="color:#888;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;">On this page</strong>
+  <ul style="margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;">
+    ${toc.map(([label, id]) => `<li><a href="#${id}" style="color:#4ade80;text-decoration:none;font-size:0.85rem;">${label}</a></li>`).join("")}
+  </ul>
+</nav>`;
+
+  const plainWordCount = [ai.introParagraph, ai.whyWatchParagraph, ai.synopsisParagraph, ai.castReviewParagraph, ai.howToWatchParagraph]
+    .filter(Boolean).join(" ").split(/\s+/).filter(Boolean).length;
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — READ BY CMS
+  title:          ${seoTitle}
+  description:    ${ai.metaDescription}
+  keywords:       ${keywordsStr}
+  canonical:      ${SITE_URL}/blog/${blogSlug}
+  robots:         index, follow
+  og:site_name:   Ollypedia
+  og:title:       ${seoTitle}
+  og:description: ${ai.metaDescription}
+  og:url:         ${SITE_URL}/blog/${blogSlug}
+  og:image:       ${ogImage}
+  og:image:width: 1200
+  og:image:height: 630
+  og:type:        article
+  og:locale:      en_IN
+  article:published_time: ${dp}
+  article:modified_time:  ${dm}
+  article:author: Ollypedia Team
+  article:section: OTT Release
+  twitter:card:   summary_large_image
+  twitter:site:   @OllypediaIn
+  twitter:creator: @OllypediaIn
+  twitter:title:  ${seoTitle}
+  twitter:description: ${ai.metaDescription}
+  twitter:image:  ${ogImage}
+  twitter:image:alt: ${movie.title} Poster
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": ${JSON.stringify(seoTitle)},
+      "description": ${JSON.stringify(ai.metaDescription)},
+      "image": ${JSON.stringify(ogImage)},
+      "datePublished": "${dp}",
+      "dateModified": "${dm}",
+      "inLanguage": "en",
+      "wordCount": ${plainWordCount},
+      "keywords": ${JSON.stringify(keywordsStr)},
+      "author": [
+        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
+        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+      ],
+      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}",
+                     "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" } },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${blogSlug}" },
+      "about": {
+        "@type": "Movie",
+        "name": ${JSON.stringify(movie.title)},
+        "url": "${SITE_URL}${movieUrl}",
+        "image": ${JSON.stringify(ogImage)},
+        "inLanguage": ${JSON.stringify(movie.language || "Odia")},
+        "genre": ${JSON.stringify(genre)}${movie.releaseDate ? `,
+        "datePublished": "${movie.releaseDate}"` : ""}${movie.runtime ? `,
+        "duration": ${JSON.stringify(movie.runtime)}` : ""}${cc.director ? `,
+        "director": { "@type": "Person", "name": ${JSON.stringify(cc.director)} }` : ""}${leadCast.length ? `,
+        "actor": [${leadCast.map(a => { const u = castProfileUrl(a); return `{ "@type": "Person", "name": ${JSON.stringify(a.name)}${u ? `, "url": "${SITE_URL}${u}"` : ""} }`; }).join(", ")}]` : ""}${hasImdb ? `,
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": ${imdbNum}, "bestRating": "10"${movie.imdbVotes ? `, "ratingCount": ${JSON.stringify(String(movie.imdbVotes).replace(/[^0-9]/g, "") || "1")}` : ""} }` : ""}${movie.streamingUrl ? `,
+        "potentialAction": {
+          "@type": "WatchAction",
+          "target": ${JSON.stringify(movie.streamingUrl)}
+        }` : ""}
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
+        { "@type": "ListItem", "position": 2, "name": "Movies", "item": "${SITE_URL}/movies" },
+        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movie.title)}, "item": "${SITE_URL}${movieUrl}" },
+        { "@type": "ListItem", "position": 4, "name": "Watch Online", "item": "${SITE_URL}/blog/${blogSlug}" }
+      ]
+    }
+  ]
+}
+</script>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/movies" style="color:#777;text-decoration:none;">Movies</a>
+    <span style="color:#333;">›</span>
+    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#999;">Watch Online</span>
+  </nav>
+</div>
+
+<div class="hero-section" style="background:linear-gradient(135deg,#001a0e 0%,#121212 100%);border:1px solid #004d1a;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+  <div style="display:inline-block;background:#4ade80;color:#000;font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:20px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em;">🔴 Now Streaming</div>
+  <h1 style="color:#fff;font-size:1.4rem;font-weight:800;margin:0 0 12px;line-height:1.3;">${seoTitle}</h1>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#4ade80;font-weight:700;">📺 ${movie.streamingOn}</span>
+    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#e8c87a;font-weight:700;">🗓 ${ottDateFmt}</span>
+    ${castChips}
+  </div>
+  ${autoBlogParagraphs(ai.introParagraph)}
+  ${movie.streamingUrl ? `<a href="${movie.streamingUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.9rem;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:10px;">▶ Watch Now on ${movie.streamingOn}</a>` : ""}
+</div>
+
+${tocHtml}
+
+${BLOG_RESPONSIVE_STYLES}
+<style>
+  .blog-live-layout { display: flex; flex-direction: column; gap: 24px; }
+  .blog-live-poster { width: 100%; max-width: 300px; margin: 0 auto; }
+  .blog-live-poster img { width: 100%; height: auto; border-radius: 12px; border: 2px solid #4ade80; box-shadow: 0 8px 32px rgba(74,222,128,0.15); }
+  @media (min-width: 900px) {
+    .blog-live-layout { flex-direction: row; align-items: flex-start; }
+    .blog-live-poster { width: 240px; position: sticky; top: 80px; flex-shrink: 0; }
+  }
+</style>
+
+<div class="blog-live-layout">
+  <aside class="blog-live-poster">
+    ${poster ? `<img src="${poster}" alt="${movie.title} Poster" width="240" height="360" fetchpriority="high" style="object-fit:cover;" onError="this.style.display='none'" />` : ""}
+    ${movie.streamingUrl ? `<a href="${movie.streamingUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:block;background:#4ade80;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">▶ Watch on ${movie.streamingOn}</a>` : ""}
+  </aside>
+  <div style="flex: 1; min-width: 0;">
+    <section id="stream-details" style="${card}">
+      <h2 style="${h2}">Streaming Details</h2>
+      <table style="width:100%;border-collapse:collapse;" class="info-table">
+        <tbody>
+          <tr><td style="${tdL}">Streaming Platform</td><td style="${tdR}">${movie.streamingOn}</td></tr>
+          <tr><td style="${tdL}">OTT Release Date</td><td style="${tdR}">${ottDateFmt}</td></tr>
+          <tr><td style="${tdL}">Language</td><td style="${tdR}">${movie.language || "Odia"}</td></tr>
+          ${genre ? `<tr><td style="${tdL}">Genre</td><td style="${tdR}">${genre}</td></tr>` : ""}
+          ${movie.releaseDate ? `<tr><td style="${tdL}">Theatrical Release</td><td style="${tdR}">${formatHumanDate(movie.releaseDate)}</td></tr>` : ""}
+          ${cc.director ? `<tr><td style="${tdL}">Director</td><td style="${tdR}">${cc.director}</td></tr>` : ""}
+          ${movie.runtime ? `<tr><td style="${tdL}">Runtime</td><td style="${tdR}">${movie.runtime}</td></tr>` : ""}
+        </tbody>
+      </table>
+    </section>
+
+    <section id="why-watch" style="${card}">
+      <h2 style="${h2}">Why You Should Watch ${movie.title}</h2>
+      ${autoBlogParagraphs(ai.whyWatchParagraph)}
+    </section>
+
+    <section id="synopsis" style="${card}">
+      <h2 style="${h2}">Story</h2>
+      ${autoBlogParagraphs(ai.synopsisParagraph)}
+    </section>
+
+    <section id="cast-review" style="${card}">
+      <h2 style="${h2}">Cast Performances</h2>
+      ${autoBlogParagraphs(ai.castReviewParagraph)}
+    </section>
+
+    <section id="how-to-watch" style="${card}">
+      <h2 style="${h2}">How to Watch Now on ${movie.streamingOn}</h2>
+      ${autoBlogParagraphs(ai.howToWatchParagraph)}
+      ${movie.streamingUrl ? `<a href="${movie.streamingUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;margin-top:6px;">▶ Start Watching on ${movie.streamingOn} →</a>` : ""}
+    </section>
+
+    ${buildRelatedMoviesHtml(relatedMovies, "#4ade80", `More Odia Movies on ${movie.streamingOn}`)}
+
+    <section style="background:#111;border-radius:14px;padding:20px 26px;margin-bottom:22px;display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="${movieUrl}" style="display:inline-block;background:#c9973a;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">View Full Movie Page →</a>
+      <a href="/movies" style="display:inline-block;background:transparent;border:1px solid #333;color:#ccc;font-weight:700;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">Browse More Odia Movies →</a>
+    </section>
+  </div>
+</div>`;
+}
+
+/**
+ * autoGenerateOttLiveBlog — generates/updates the "Now Streaming on OTT" blog
+ * when the OTT release date has arrived. Stored separately in movie.ottLiveBlogId.
+ */
+async function autoGenerateOttLiveBlog(movie) {
+  try {
+    if (!movie.streamingOn) return null;
+    const cc = extractMovieCastCrew(movie);
+    const ai = await generateOttLiveAiSections(movie, cc);
+    const seoTitle = buildOttLiveTitle(movie, cc);
+    // SEO FIX: short, clean slug (≤60 chars), distinct from the OTT-release
+    // slug so the two pages never collide, e.g. "bindusagar-2026-streaming-now-tarang-plus".
+    const baseSlug = buildOttLiveSlug(movie);
+    const relatedMovies = await fetchRelatedMovies(movie, 4, true);
+
+    let blog = movie.ottLiveBlogId ? await Blog.findById(movie.ottLiveBlogId) : null;
+    if (!blog) blog = await Blog.findOne({ slug: baseSlug }); // catch orphaned/duplicate slug instead of crashing
+    const slug = blog ? blog.slug : baseSlug;
+    const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : new Date().toISOString();
+    const dateModified = new Date().toISOString();
+    const html = buildOttLiveBlogHTML(movie, cc, ai, slug, seoTitle, datePublished, dateModified, relatedMovies);
+
+    const fields = {
+      title: seoTitle,
+      excerpt: ai.metaDescription,
+      content: html,
+      category: "OTT Release",
+      tags: [movie.title, movie.streamingOn, "Now Streaming", "Odia Movie OTT", "Watch Online"],
+      coverImage: movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "",
+      movieId: movie._id,
+      movieTitle: movie.title,
+      author: "Ollypedia Team",
+      published: true,
+      readTime: Math.max(1, Math.ceil(html.split(/\s+/).length / 200)),
+      seoTitle: seoTitle,
+      seoDesc: ai.metaDescription,
+    };
+
+    if (blog) {
+      Object.assign(blog, fields);
+      await blog.save();
+    } else {
+      blog = await Blog.create({ ...fields, slug });
+      await Movie.findByIdAndUpdate(movie._id, { ottLiveBlogId: blog._id });
+    }
+    console.log(`✅ Auto-published "Now Streaming" OTT blog for "${movie.title}" → /blog/${blog.slug}`);
+    return blog;
+  } catch (e) {
+    console.error(`❌ autoGenerateOttLiveBlog failed for "${movie?.title}":`, e.message);
+    return null;
+  }
+}
+
+// ════════════════════ END AUTO-BLOG-ON-MOVIE ════════════════════
 
 // Admin User model
 const AdminUserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, trim: true },
-  email:    { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
 }, { timestamps: true });
 const AdminUser = mongoose.model("AdminUser", AdminUserSchema);
 
 // ── Contact / Enquiry ─────────────────────────────────────────────
 const ContactSchema = new mongoose.Schema({
-  name:    { type: String, required: true, trim: true },
-  email:   { type: String, required: true, lowercase: true, trim: true },
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, lowercase: true, trim: true },
   subject: { type: String, default: "General Inquiry" },
   message: { type: String, required: true },
-  read:    { type: Boolean, default: false },
+  read: { type: Boolean, default: false },
 }, { timestamps: true });
 const Contact = mongoose.model("Contact", ContactSchema);
 
@@ -475,15 +2098,15 @@ const Contact = mongoose.model("Contact", ContactSchema);
 // VISITOR ANALYTICS SCHEMA
 // ════════════════════════════════════════════════════════════════
 const VisitorLogSchema = new mongoose.Schema({
-  ip:        { type: String, default: "" },
-  country:   { type: String, default: "" },
-  city:      { type: String, default: "" },
-  device:    { type: String, default: "" },   // "Mobile" | "Desktop" | "Tablet"
-  os:        { type: String, default: "" },   // "Android" | "iOS" | "Windows" etc.
-  browser:   { type: String, default: "" },   // "Chrome" | "Safari" etc.
-  page:      { type: String, default: "/" },  // e.g. "/movies/abc"
-  referrer:  { type: String, default: "" },
-  visitedAt: { type: Date,   default: Date.now },
+  ip: { type: String, default: "" },
+  country: { type: String, default: "" },
+  city: { type: String, default: "" },
+  device: { type: String, default: "" },   // "Mobile" | "Desktop" | "Tablet"
+  os: { type: String, default: "" },   // "Android" | "iOS" | "Windows" etc.
+  browser: { type: String, default: "" },   // "Chrome" | "Safari" etc.
+  page: { type: String, default: "/" },  // e.g. "/movies/abc"
+  referrer: { type: String, default: "" },
+  visitedAt: { type: Date, default: Date.now },
 }, { timestamps: false });
 
 VisitorLogSchema.index({ visitedAt: -1 });
@@ -509,11 +2132,11 @@ const VisitorLog = mongoose.model("VisitorLog", VisitorLogSchema);
  * ObjectId instance so Mongoose can cast it against CastEntrySchema.castId.
  */
 async function resolveCastEntry(item) {
-  const name  = String(item.name  || "").trim();
-  const type  = String(item.type  || "Actor");
-  const role  = String(item.role  || "");
+  const name = String(item.name || "").trim();
+  const type = String(item.type || "Actor");
+  const role = String(item.role || "");
   const photo = String(item.photo || "");
-  const bio   = String(item.bio   || "");
+  const bio = String(item.bio || "");
 
   // item.castId could be:
   //  - a valid 24-hex string like "69afd5e377d28936ba5e0344"
@@ -528,18 +2151,18 @@ async function resolveCastEntry(item) {
     if (existing) {
       // Use the values sent from the form — they reflect the admin's edits.
       // Fall back to the stored Cast doc only if the field is empty.
-      const resolvedName  = name  || existing.name;
+      const resolvedName = name || existing.name;
       const resolvedPhoto = photo || existing.photo;   // ← was existing.photo || photo (wrong priority)
-      const resolvedType  = type  || existing.type;
+      const resolvedType = type || existing.type;
       // Also update the Cast doc itself so changes persist on the cast profile
       if (photo && photo !== existing.photo) {
         await Cast.findByIdAndUpdate(validId, { photo });
       }
       return {
         castId: existing._id,
-        name:   resolvedName,
-        photo:  resolvedPhoto,
-        type:   resolvedType,
+        name: resolvedName,
+        photo: resolvedPhoto,
+        type: resolvedType,
         role,
       };
     }
@@ -551,9 +2174,9 @@ async function resolveCastEntry(item) {
   const nc = await Cast.create({ name, type: rolesArr[0], roles: rolesArr, bio, photo });
   return {
     castId: nc._id,     // ObjectId instance
-    name:   nc.name,
-    photo:  nc.photo,
-    type:   nc.type,
+    name: nc.name,
+    photo: nc.photo,
+    type: nc.type,
     role,
   };
 }
@@ -565,8 +2188,8 @@ async function resolveCastEntry(item) {
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password, logo, bio, founded, website, location } = req.body;
-    if (!name?.trim())                    return res.status(400).json({ error: "Company name required" });
-    if (!email)                           return res.status(400).json({ error: "Email required" });
+    if (!name?.trim()) return res.status(400).json({ error: "Company name required" });
+    if (!email) return res.status(400).json({ error: "Email required" });
     if (!password || password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
     if (await Production.findOne({ email: email.toLowerCase() }))
       return res.status(400).json({ error: "Email already registered" });
@@ -602,15 +2225,15 @@ app.post("/api/auth/login", async (req, res) => {
 app.post("/api/cast-auth/register", async (req, res) => {
   try {
     const { name, email, password, roles, photo, bio, gender, location, dob } = req.body;
-    if (!name?.trim())                    return res.status(400).json({ error: "Name required" });
-    if (!email)                           return res.status(400).json({ error: "Email required" });
+    if (!name?.trim()) return res.status(400).json({ error: "Name required" });
+    if (!email) return res.status(400).json({ error: "Email required" });
     if (!password || password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
-    if (!roles?.length)                   return res.status(400).json({ error: "Select at least one role" });
+    if (!roles?.length) return res.status(400).json({ error: "Select at least one role" });
     if (await CastMember.findOne({ email: email.toLowerCase() }))
       return res.status(400).json({ error: "Email already registered" });
 
     const castDoc = await Cast.create({ name: name.trim(), type: roles[0], bio: bio || "", photo: photo || "" });
-    const member  = await CastMember.create({
+    const member = await CastMember.create({
       name: name.trim(), email: email.toLowerCase(), password: await bcrypt.hash(password, 10),
       roles, photo: photo || "", bio: bio || "", gender: gender || "", location: location || "", dob: dob || "",
       castId: castDoc._id,
@@ -647,21 +2270,21 @@ app.get("/api/cast-auth/me", castAuth, async (req, res) => {
 
 app.patch("/api/cast-auth/me", castAuth, async (req, res) => {
   try {
-    const allowed = ["name","photo","banner","bio","gender","location","dob","website","instagram","roles"];
+    const allowed = ["name", "photo", "banner", "bio", "gender", "location", "dob", "website", "instagram", "roles"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const member = await CastMember.findByIdAndUpdate(req.castMemberId, update, { new: true, select: "-password" });
     if (member?.castId) {
       const cu = {};
-      if (update.name)     cu.name     = update.name;
-      if (update.photo)    cu.photo    = update.photo;
-      if (update.bio)      cu.bio      = update.bio;
+      if (update.name) cu.name = update.name;
+      if (update.photo) cu.photo = update.photo;
+      if (update.bio) cu.bio = update.bio;
       if (update.location) cu.location = update.location;
-      if (update.website)  cu.website  = update.website;
-      if (update.instagram)cu.instagram= update.instagram;
+      if (update.website) cu.website = update.website;
+      if (update.instagram) cu.instagram = update.instagram;
       if (update.roles && Array.isArray(update.roles) && update.roles.length) {
         cu.roles = update.roles;
-        cu.type  = update.roles[0]; // keep primary type in sync
+        cu.type = update.roles[0]; // keep primary type in sync
       }
       if (Object.keys(cu).length) await Cast.findByIdAndUpdate(member.castId, cu);
     }
@@ -694,7 +2317,7 @@ app.get("/api/productions/:id/movies", async (req, res) => {
   try {
     const movies = await Movie.find({
       $or: [{ productionId: req.params.id }, { collaborators: req.params.id }]
-    }, "-reviews").populate("productionId","name logo").populate("collaborators","name logo").populate("news").lean();
+    }, "-reviews").populate("productionId", "name logo").populate("collaborators", "name logo").populate("news").lean();
     res.json(movies);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -709,7 +2332,7 @@ app.get("/api/productions/:id", async (req, res) => {
 
 app.get("/api/movies", async (req, res) => {
   try {
-    const movies = await Movie.find({}, "-reviews").populate("productionId","name logo").populate("collaborators","name logo").lean();
+    const movies = await Movie.find({}, "-reviews").populate("productionId", "name logo").populate("collaborators", "name logo").lean();
     res.json(movies);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -721,12 +2344,12 @@ app.get("/api/movies/:id", async (req, res) => {
     let movie = null;
     if (isOid(param)) {
       movie = await Movie.findById(param)
-        .populate("productionId","name logo").populate("collaborators","name logo").populate("news").lean();
+        .populate("productionId", "name logo").populate("collaborators", "name logo").populate("news").lean();
     } else {
       // Slug lookup — strip any trailing ObjectId if old URLs sneak through
       const slugPart = param.replace(/-[a-f0-9]{24}$/i, "");
       movie = await Movie.findOne({ slug: slugPart })
-        .populate("productionId","name logo").populate("collaborators","name logo").populate("news").lean();
+        .populate("productionId", "name logo").populate("collaborators", "name logo").populate("news").lean();
     }
     if (!movie) return res.status(404).json({ error: "Not found" });
     res.json(movie);
@@ -763,7 +2386,7 @@ app.get("/api/cast/:id", async (req, res) => {
     }
     if (!c) return res.status(404).json({ error: "Not found" });
     const movies = await Movie.find({ "cast.castId": c._id }, "title posterUrl releaseDate verdict productionId genre cast slug")
-      .populate("productionId","name logo").lean();
+      .populate("productionId", "name logo").lean();
     res.json({ ...c, moviesList: movies });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -788,8 +2411,8 @@ app.get("/api/news/:newsId", async (req, res) => {
     }).sort({ createdAt: -1 }).limit(4).lean();
     let movie = null;
     if (item.movieId)
-      movie = await Movie.findById(item.movieId,"title posterUrl genre verdict releaseDate productionId")
-        .populate("productionId","name logo").lean();
+      movie = await Movie.findById(item.movieId, "title posterUrl genre verdict releaseDate productionId")
+        .populate("productionId", "name logo").lean();
     res.json({ ...item, related, movie });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -804,14 +2427,14 @@ app.get("/api/songs", async (req, res) => {
 app.post("/api/movies/:id/reviews", async (req, res) => {
   try {
     const { user, rating, text } = req.body;
-    if (!user?.trim() || !text?.trim()) return res.status(400).json({ error:"Name and review required." });
+    if (!user?.trim() || !text?.trim()) return res.status(400).json({ error: "Name and review required." });
     const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
     const movie = await Movie.findOneAndUpdate(
       query,
-      { $push: { reviews: { user:user.trim(), rating:Number(rating)||5, text:text.trim(), date:new Date().toISOString().split("T")[0] } } },
+      { $push: { reviews: { user: user.trim(), rating: Number(rating) || 5, text: text.trim(), date: new Date().toISOString().split("T")[0] } } },
       { new: true }
     );
-    if (!movie) return res.status(404).json({ error:"Movie not found" });
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
     res.json(movie.reviews);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -820,11 +2443,11 @@ app.post("/api/movies/:id/reviews", async (req, res) => {
 app.post("/api/movies/:id/interested", async (req, res) => {
   try {
     const { vote } = req.body;  // "yes" | "no"
-    if (!["yes","no"].includes(vote)) return res.status(400).json({ error:"vote must be yes or no" });
-    const query  = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
-    const field  = vote === "yes" ? "interestedYes" : "interestedNo";
-    const movie  = await Movie.findOneAndUpdate(query, { $inc: { [field]: 1 } }, { new: true });
-    if (!movie) return res.status(404).json({ error:"Movie not found" });
+    if (!["yes", "no"].includes(vote)) return res.status(400).json({ error: "vote must be yes or no" });
+    const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
+    const field = vote === "yes" ? "interestedYes" : "interestedNo";
+    const movie = await Movie.findOneAndUpdate(query, { $inc: { [field]: 1 } }, { new: true });
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
     res.json({ yes: movie.interestedYes || 0, no: movie.interestedNo || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -834,7 +2457,7 @@ app.get("/api/movies/:id/interested", async (req, res) => {
   try {
     const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
     const movie = await Movie.findOne(query, "interestedYes interestedNo").lean();
-    if (!movie) return res.status(404).json({ error:"Not found" });
+    if (!movie) return res.status(404).json({ error: "Not found" });
     res.json({ yes: movie.interestedYes || 0, no: movie.interestedNo || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -873,7 +2496,7 @@ app.post("/api/movies", auth, async (req, res) => {
       if (!item) continue;
       // Must have either a name or a valid castId
       const hasName = String(item.name || "").trim().length > 0;
-      const hasId   = isOid(String(item.castId || "").trim());
+      const hasId = isOid(String(item.castId || "").trim());
       if (!hasName && !hasId) continue;
       try {
         resolvedCast.push(await resolveCastEntry(item));
@@ -911,29 +2534,29 @@ app.post("/api/movies", auth, async (req, res) => {
     };
 
     const director = resolvedCast.find(c => c.type === "Director")?.name || String(b.director || "");
-    const producer  = resolvedCast.find(c => c.type === "Producer")?.name  || String(b.producer  || "");
+    const producer = resolvedCast.find(c => c.type === "Producer")?.name || String(b.producer || "");
 
     // ── Create movie ──
     // resolvedCast is a plain array of { castId: ObjectId, name, photo, type, role }
     // Mongoose will cast this correctly against CastEntrySchema
     const movie = await Movie.create({
       title,
-      category:     String(b.category    || "Feature Film"),
-      genre:        Array.isArray(b.genre) ? b.genre.map(String) : [],
-      releaseDate:  String(b.releaseDate  || ""),
-      releaseTBA:   !!b.releaseTBA,
+      category: String(b.category || "Feature Film"),
+      genre: Array.isArray(b.genre) ? b.genre.map(String) : [],
+      releaseDate: String(b.releaseDate || ""),
+      releaseTBA: !!b.releaseTBA,
       director, producer,
-      budget:       String(b.budget      || ""),
-      language:     String(b.language    || "Odia"),
-      synopsis:     String(b.synopsis    || ""),
-      posterUrl:    String(b.posterUrl   || ""),
+      budget: String(b.budget || ""),
+      language: String(b.language || "Odia"),
+      synopsis: String(b.synopsis || ""),
+      posterUrl: String(b.posterUrl || ""),
       thumbnailUrl: String(b.thumbnailUrl || ""),
-      verdict:      String(b.verdict     || "Upcoming"),
-      status:       b.verdict && b.verdict !== "Upcoming" ? "Released" : "Upcoming",
+      verdict: String(b.verdict || "Upcoming"),
+      status: b.verdict && b.verdict !== "Upcoming" ? "Released" : "Upcoming",
       media,
-      productionId:  req.prodId,
+      productionId: req.prodId,
       collaborators: collabIds,
-      cast:          resolvedCast,
+      cast: resolvedCast,
     });
 
     // ── Back-references ──
@@ -942,8 +2565,8 @@ app.post("/api/movies", auth, async (req, res) => {
     }
 
     const populated = await Movie.findById(movie._id)
-      .populate("productionId","name logo")
-      .populate("collaborators","name logo")
+      .populate("productionId", "name logo")
+      .populate("collaborators", "name logo")
       .lean();
 
     console.log(`✅ Movie "${movie.title}" created with ${resolvedCast.length} cast member(s)`);
@@ -959,12 +2582,12 @@ app.patch("/api/movies/:id", auth, async (req, res) => {
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Not found" });
     if (!canEdit(movie, req.prodId)) return res.status(403).json({ error: "Forbidden" });
-    const allowed = ["title","category","genre","releaseDate","releaseTBA","director","producer","budget","language","synopsis","posterUrl","thumbnailUrl","verdict","status","streamingOn","streamingUrl","ottReleaseDate"];
+    const allowed = ["title", "category", "genre", "releaseDate", "releaseTBA", "director", "producer", "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status", "streamingOn", "streamingUrl", "ottReleaseDate"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     if (req.body.verdict) update.status = req.body.verdict === "Upcoming" ? "Upcoming" : "Released";
     const updated = await Movie.findByIdAndUpdate(req.params.id, update, { new: true })
-      .populate("productionId","name logo").populate("collaborators","name logo").lean();
+      .populate("productionId", "name logo").populate("collaborators", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -979,7 +2602,7 @@ app.patch("/api/movies/:id/boxoffice", auth, async (req, res) => {
       req.params.id,
       { boxOffice: { opening, firstWeek, total }, verdict, status: verdict === "Upcoming" ? "Upcoming" : "Released" },
       { new: true }
-    ).populate("productionId","name logo").lean();
+    ).populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -995,7 +2618,7 @@ app.post("/api/movies/:id/cast", auth, async (req, res) => {
     if (exists) return res.status(400).json({ error: "This person is already in the cast list" });
 
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { cast: entry } }, { new: true })
-      .populate("productionId","name logo").populate("collaborators","name logo").lean();
+      .populate("productionId", "name logo").populate("collaborators", "name logo").lean();
     await Cast.findByIdAndUpdate(entry.castId, { $addToSet: { movies: movie._id } });
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1011,7 +2634,7 @@ app.delete("/api/movies/:id/cast/:castId", auth, async (req, res) => {
       req.params.id,
       { $pull: { cast: { castId: new mongoose.Types.ObjectId(req.params.castId) } } },
       { new: true }
-    ).populate("productionId","name logo").populate("collaborators","name logo").lean();
+    ).populate("productionId", "name logo").populate("collaborators", "name logo").lean();
     const stillLinked = await Movie.exists({ "cast.castId": req.params.castId, _id: { $ne: req.params.id } });
     if (!stillLinked) await Cast.findByIdAndUpdate(req.params.castId, { $pull: { movies: movie._id } });
     res.json(updated);
@@ -1025,7 +2648,7 @@ app.post("/api/movies/:id/songs", auth, async (req, res) => {
     if (String(movie.productionId) !== req.prodId) return res.status(403).json({ error: "Forbidden" });
     const sid = ytId(req.body.ytId || req.body.url || "");
     const song = { title: String(req.body.title || ""), singer: String(req.body.singer || ""), ytId: sid, url: String(req.body.url || ""), thumbnailUrl: sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "" };
-    const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { "media.songs": song } }, { new: true }).populate("productionId","name logo").lean();
+    const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { "media.songs": song } }, { new: true }).populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1036,7 +2659,7 @@ app.delete("/api/movies/:id/songs/:songIndex", auth, async (req, res) => {
     if (!movie) return res.status(404).json({ error: "Not found" });
     if (String(movie.productionId) !== req.prodId) return res.status(403).json({ error: "Forbidden" });
     const songs = (movie.media?.songs || []).filter((_, i) => i !== parseInt(req.params.songIndex, 10));
-    const updated = await Movie.findByIdAndUpdate(req.params.id, { "media.songs": songs }, { new: true }).populate("productionId","name logo").lean();
+    const updated = await Movie.findByIdAndUpdate(req.params.id, { "media.songs": songs }, { new: true }).populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1051,7 +2674,7 @@ app.patch("/api/movies/:id/trailer", auth, async (req, res) => {
       req.params.id,
       { "media.trailer": { ytId: tid, url: req.body.url || "", thumbnailUrl: tid ? `https://img.youtube.com/vi/${tid}/hqdefault.jpg` : "" } },
       { new: true }
-    ).populate("productionId","name logo").lean();
+    ).populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1085,7 +2708,7 @@ app.patch("/api/news/:newsId", auth, async (req, res) => {
     if (!item) return res.status(404).json({ error: "Not found" });
     const movie = await Movie.findById(item.movieId);
     if (!movie || !canEdit(movie, req.prodId)) return res.status(403).json({ error: "Forbidden" });
-    const allowed = ["title","content","category","imageUrl","published"];
+    const allowed = ["title", "content", "category", "imageUrl", "published"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     res.json(await News.findByIdAndUpdate(req.params.newsId, update, { new: true }));
@@ -1106,7 +2729,7 @@ app.delete("/api/news/:newsId", auth, async (req, res) => {
 
 app.patch("/api/productions/me", auth, async (req, res) => {
   try {
-    const allowed = ["name","logo","banner","bio","founded","website","location"];
+    const allowed = ["name", "logo", "banner", "bio", "founded", "website", "location"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const prod = await Production.findByIdAndUpdate(req.prodId, update, { new: true, select: "-password -email" });
@@ -1121,7 +2744,7 @@ app.get("/api/cast/search-type/:type/:q", async (req, res) => {
   try {
     const results = await Cast.find({
       type: { $regex: req.params.type, $options: "i" },
-      name: { $regex: req.params.q,    $options: "i" },
+      name: { $regex: req.params.q, $options: "i" },
     }).limit(10).lean();
     res.json(results);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1152,7 +2775,7 @@ app.post("/api/admin/register", async (req, res) => {
     if (existingCount > 0) {
       let ok = false;
       const token = (req.headers.authorization || "").split(" ")[1];
-      if (token) { try { const d = jwt.verify(token, process.env.JWT_SECRET); if (d.isAdmin) ok = true; } catch {} }
+      if (token) { try { const d = jwt.verify(token, process.env.JWT_SECRET); if (d.isAdmin) ok = true; } catch { } }
       if (!ok && process.env.ADMIN_REGISTER_SECRET && adminSecret === process.env.ADMIN_REGISTER_SECRET) ok = true;
       if (!ok) return res.status(403).json({ error: "Admin already exists. Provide admin token or register secret." });
     }
@@ -1241,18 +2864,18 @@ function parseSongs(rawSongs) {
   return rawSongs.map(s => {
     const sid = ytId(s.ytId || s.url || "");
     return {
-      title:           String(s.title          || ""),
-      singer:          String(s.singer         || ""),
-      singerRef:       safeRefs(s.singerRef),
-      musicDirector:   String(s.musicDirector  || ""),
-      musicDirectorRef:safeRefs(s.musicDirectorRef),
-      lyricist:        String(s.lyricist       || ""),
-      lyricistRef:     safeRefs(s.lyricistRef),
-      ytId:            sid,
-      url:             String(s.url            || ""),
-      thumbnailUrl:    String(s.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
-      lyrics:          String(s.lyrics         || ""),
-      description:     String(s.description   || ""),
+      title: String(s.title || ""),
+      singer: String(s.singer || ""),
+      singerRef: safeRefs(s.singerRef),
+      musicDirector: String(s.musicDirector || ""),
+      musicDirectorRef: safeRefs(s.musicDirectorRef),
+      lyricist: String(s.lyricist || ""),
+      lyricistRef: safeRefs(s.lyricistRef),
+      ytId: sid,
+      url: String(s.url || ""),
+      thumbnailUrl: String(s.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
+      lyrics: String(s.lyrics || ""),
+      description: String(s.description || ""),
     };
   });
 }
@@ -1271,7 +2894,7 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       if (typeof item === "string") { try { item = JSON.parse(item); } catch { continue; } }
       if (!item) continue;
       const hasName = String(item.name || "").trim().length > 0;
-      const hasId   = isOid(String(item.castId || "").trim());
+      const hasId = isOid(String(item.castId || "").trim());
       if (!hasName && !hasId) continue;
       try { resolvedCast.push(await resolveCastEntry(item)); }
       catch (err) { console.warn("⚠️ Skipping cast entry:", item.name || item.castId, "—", err.message); }
@@ -1284,8 +2907,8 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
     let prods = b.productions || [];
     if (typeof prods === "string") { try { prods = JSON.parse(prods); } catch { prods = []; } }
     const validProds = Array.isArray(prods) ? prods.filter(id => isOid(String(id))).map(String) : [];
-    let validProdId  = validProds.length > 0 ? validProds[0] : null;
-    const collabIds    = validProds.slice(1);
+    let validProdId = validProds.length > 0 ? validProds[0] : null;
+    const collabIds = validProds.slice(1);
 
     if (!validProdId) {
       const adminProd = await getAdminProd();
@@ -1301,34 +2924,34 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
     };
 
     const movie = await Movie.create({
-      title:        String(b.title       || "").trim(),
-      category:     String(b.category    || "Feature Film"),
-      genre:        Array.isArray(b.genre) ? b.genre.map(String) : [],
-      releaseDate:  String(b.releaseDate  || ""),
-      releaseTBA:   !!b.releaseTBA,
-      director:     String(b.director    || ""),
-      producer:     String(b.producer    || ""),
-      budget:       String(b.budget      || ""),
-      language:     String(b.language    || "Odia"),
-      synopsis:     String(b.synopsis    || ""),
-      posterUrl:    String(b.posterUrl   || ""),
+      title: String(b.title || "").trim(),
+      category: String(b.category || "Feature Film"),
+      genre: Array.isArray(b.genre) ? b.genre.map(String) : [],
+      releaseDate: String(b.releaseDate || ""),
+      releaseTBA: !!b.releaseTBA,
+      director: String(b.director || ""),
+      producer: String(b.producer || ""),
+      budget: String(b.budget || ""),
+      language: String(b.language || "Odia"),
+      synopsis: String(b.synopsis || ""),
+      posterUrl: String(b.posterUrl || ""),
       thumbnailUrl: String(b.thumbnailUrl || ""),
-      verdict:      String(b.verdict     || "Upcoming"),
-      status:       b.verdict && b.verdict !== "Upcoming" ? "Released" : "Upcoming",
-      imdbId:        String(b.imdbId       || ""),
-      imdbRating:    String(b.imdbRating   || ""),
-      imdbVotes:     String(b.imdbVotes    || ""),
-      contentRating: String(b.contentRating|| ""),
-      runtime:       String(b.runtime      || ""),
-      bannerUrl:     String(b.bannerUrl    || ""),
-      boxOffice:    b.boxOffice || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
-      streamingOn:   String(b.streamingOn  || ""),
-      streamingUrl:  String(b.streamingUrl || ""),
-      ottReleaseDate:String(b.ottReleaseDate|| ""),
+      verdict: String(b.verdict || "Upcoming"),
+      status: b.verdict && b.verdict !== "Upcoming" ? "Released" : "Upcoming",
+      imdbId: String(b.imdbId || ""),
+      imdbRating: String(b.imdbRating || ""),
+      imdbVotes: String(b.imdbVotes || ""),
+      contentRating: String(b.contentRating || ""),
+      runtime: String(b.runtime || ""),
+      bannerUrl: String(b.bannerUrl || ""),
+      boxOffice: b.boxOffice || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
+      streamingOn: String(b.streamingOn || ""),
+      streamingUrl: String(b.streamingUrl || ""),
+      ottReleaseDate: String(b.ottReleaseDate || ""),
       media,
-      productionId:  validProdId,
+      productionId: validProdId,
       collaborators: collabIds,
-      cast:          resolvedCast,
+      cast: resolvedCast,
     });
 
     for (const entry of resolvedCast) {
@@ -1338,6 +2961,17 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
     const populated = await Movie.findById(movie._id)
       .populate("productionId", "name logo")
       .populate("collaborators", "name logo").lean();
+
+    // ── Auto-blog: Movie Details (always) + OTT Release (if OTT info given) ──
+    autoGenerateMovieDetailsBlog(movie).catch(() => { });
+    if (movie.streamingOn) {
+      autoGenerateOttBlog(movie).catch(() => { });
+      // Also trigger "Now Streaming" blog if OTT date has already arrived
+      if (isRealDate(movie.ottReleaseDate) && Date.now() >= new Date(movie.ottReleaseDate).getTime()) {
+        autoGenerateOttLiveBlog(movie).catch(() => { });
+      }
+    }
+
     res.status(201).json(populated);
   } catch (e) { console.error("Admin create movie error:", e.message); res.status(500).json({ error: e.message }); }
 });
@@ -1350,19 +2984,39 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     const update = {};
 
     // Scalar fields
-    const scalars = ["title","category","genre","releaseDate","releaseTBA","director","producer",
-      "budget","language","synopsis","posterUrl","thumbnailUrl","verdict","status",
-      "imdbId","imdbRating","imdbVotes","contentRating","runtime","bannerUrl",
-      "streamingOn","streamingUrl","ottReleaseDate"];
+    const scalars = ["title", "category", "genre", "releaseDate", "releaseTBA", "director", "producer",
+      "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status",
+      "imdbId", "imdbRating", "imdbVotes", "contentRating", "runtime", "bannerUrl",
+      "streamingOn", "streamingUrl", "ottReleaseDate"];
     scalars.forEach(k => { if (b[k] !== undefined) update[k] = b[k]; });
     if (b.verdict) update.status = b.verdict === "Upcoming" ? "Upcoming" : "Released";
     if (b.boxOffice) update.boxOffice = b.boxOffice;
+
+    // ── Auto-blog: detect whether OTT info is newly added/changed in this edit ──
+    const ottStreamingOnNew = update.streamingOn !== undefined ? update.streamingOn : movie.streamingOn;
+    const ottReleaseDateNew = update.ottReleaseDate !== undefined ? update.ottReleaseDate : movie.ottReleaseDate;
+    const ottChanged =
+      (update.streamingOn !== undefined && update.streamingOn !== movie.streamingOn) ||
+      (update.ottReleaseDate !== undefined && update.ottReleaseDate !== movie.ottReleaseDate) ||
+      (update.streamingUrl !== undefined && update.streamingUrl !== movie.streamingUrl);
+
+    // SEO FIX: previously, editing a movie's title/synopsis/cast/director/etc.
+    // never refreshed the "Movie Details" blog post — so its dateModified
+    // (and content) silently went stale the moment an editor corrected a
+    // typo or updated the cast list post-publish. Detect content-relevant
+    // field changes here and refresh the blog (only if one already exists —
+    // this never creates a new blog as a side effect of an unrelated edit).
+    const detailContentFields = ["title", "genre", "releaseDate", "releaseTBA", "director", "producer",
+      "language", "synopsis", "posterUrl", "thumbnailUrl", "bannerUrl", "imdbRating", "imdbVotes",
+      "contentRating", "runtime", "boxOffice"];
+    const detailContentChanged = detailContentFields.some(k => update[k] !== undefined) ||
+      b.cast !== undefined || b.media !== undefined;
 
     // Productions → productionId + collaborators
     // Always apply when the key is present — including clearing it (empty array)
     if (b.productions !== undefined && Array.isArray(b.productions)) {
       const validProds = b.productions.filter(id => isOid(String(id))).map(String);
-      update.productionId  = validProds.length > 0 ? validProds[0] : null;
+      update.productionId = validProds.length > 0 ? validProds[0] : null;
       update.collaborators = validProds.slice(1);
     }
 
@@ -1376,7 +3030,7 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
         if (typeof item === "string") { try { item = JSON.parse(item); } catch { continue; } }
         if (!item) continue;
         const hasName = String(item.name || "").trim().length > 0;
-        const hasId   = isOid(String(item.castId || "").trim());
+        const hasId = isOid(String(item.castId || "").trim());
         if (!hasName && !hasId) continue;
         try { resolvedCast.push(await resolveCastEntry(item)); }
         catch (err) { console.warn("⚠️ Skipping:", item.name, "—", err.message); }
@@ -1402,6 +3056,25 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     const updated = await Movie.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: false })
       .populate("productionId", "name logo")
       .populate("collaborators", "name logo").lean();
+
+    // ── Auto-blog: regenerate/update the OTT Release blog if OTT info changed ──
+    // Triggers whenever streamingOn is present, regardless of whether date is TBA or a real date
+    if (ottChanged && ottStreamingOnNew) {
+      autoGenerateOttBlog(updated).catch(() => { });
+    }
+    // ── Auto-blog: trigger "Now Streaming" live blog if OTT date is now reached ──
+    if (ottStreamingOnNew && isRealDate(ottReleaseDateNew)) {
+      const releaseMs = new Date(ottReleaseDateNew).getTime();
+      if (Date.now() >= releaseMs) {
+        autoGenerateOttLiveBlog(updated).catch(() => { });
+      }
+    }
+    // ── Auto-blog: refresh the Movie Details blog so dateModified + content
+    // actually reflect this edit (only if a Details blog already exists) ──
+    if (detailContentChanged && updated.detailBlogId) {
+      autoGenerateMovieDetailsBlog(updated).catch(() => { });
+    }
+
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1421,7 +3094,7 @@ app.post("/api/admin/movies/:id/cast", adminAuth, async (req, res) => {
     const entry = await resolveCastEntry(req.body);
     await Movie.findByIdAndUpdate(req.params.id, { $push: { cast: entry } }, { new: true });
     await Cast.findByIdAndUpdate(entry.castId, { $addToSet: { movies: movie._id } });
-    const updated = await Movie.findById(req.params.id).populate("productionId","name logo").populate("collaborators","name logo").lean();
+    const updated = await Movie.findById(req.params.id).populate("productionId", "name logo").populate("collaborators", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1434,7 +3107,7 @@ app.delete("/api/admin/movies/:id/cast/:castId", adminAuth, async (req, res) => 
       req.params.id,
       { $pull: { cast: { castId: new mongoose.Types.ObjectId(req.params.castId) } } },
       { new: true }
-    ).populate("productionId","name logo").populate("collaborators","name logo").lean();
+    ).populate("productionId", "name logo").populate("collaborators", "name logo").lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1446,20 +3119,20 @@ app.post("/api/admin/movies/:id/songs", adminAuth, async (req, res) => {
     const safeRefs = (arr) => Array.isArray(arr) ? arr.filter(id => isOid(String(id))) : [];
     const sid = ytId(req.body.ytId || req.body.url || "");
     const song = {
-      title:           String(req.body.title          || ""),
-      singer:          String(req.body.singer         || ""),
-      singerRef:       safeRefs(req.body.singerRef),
-      musicDirector:   String(req.body.musicDirector  || ""),
-      musicDirectorRef:safeRefs(req.body.musicDirectorRef),
-      lyricist:        String(req.body.lyricist       || ""),
-      lyricistRef:     safeRefs(req.body.lyricistRef),
+      title: String(req.body.title || ""),
+      singer: String(req.body.singer || ""),
+      singerRef: safeRefs(req.body.singerRef),
+      musicDirector: String(req.body.musicDirector || ""),
+      musicDirectorRef: safeRefs(req.body.musicDirectorRef),
+      lyricist: String(req.body.lyricist || ""),
+      lyricistRef: safeRefs(req.body.lyricistRef),
       ytId: sid, url: String(req.body.url || ""),
       thumbnailUrl: String(req.body.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
-      lyrics:      String(req.body.lyrics      || ""),
+      lyrics: String(req.body.lyrics || ""),
       description: String(req.body.description || ""),
     };
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { "media.songs": song } }, { new: true })
-      .populate("productionId","name logo").lean();
+      .populate("productionId", "name logo").lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1478,21 +3151,21 @@ app.patch("/api/admin/movies/:id/songs/:songIndex", adminAuth, async (req, res) 
     const s = req.body;
     const sid = ytId(s.ytId || s.url || existing.ytId || "");
     const updatedSong = {
-      title:           s.title           !== undefined ? String(s.title)          : existing.title,
-      singer:          s.singer          !== undefined ? String(s.singer)         : existing.singer,
-      singerRef:       s.singerRef       !== undefined ? safeRefs(s.singerRef)    : (existing.singerRef || []),
-      musicDirector:   s.musicDirector   !== undefined ? String(s.musicDirector)  : existing.musicDirector,
-      musicDirectorRef:s.musicDirectorRef!== undefined ? safeRefs(s.musicDirectorRef): (existing.musicDirectorRef || []),
-      lyricist:        s.lyricist        !== undefined ? String(s.lyricist)       : existing.lyricist,
-      lyricistRef:     s.lyricistRef     !== undefined ? safeRefs(s.lyricistRef)  : (existing.lyricistRef || []),
+      title: s.title !== undefined ? String(s.title) : existing.title,
+      singer: s.singer !== undefined ? String(s.singer) : existing.singer,
+      singerRef: s.singerRef !== undefined ? safeRefs(s.singerRef) : (existing.singerRef || []),
+      musicDirector: s.musicDirector !== undefined ? String(s.musicDirector) : existing.musicDirector,
+      musicDirectorRef: s.musicDirectorRef !== undefined ? safeRefs(s.musicDirectorRef) : (existing.musicDirectorRef || []),
+      lyricist: s.lyricist !== undefined ? String(s.lyricist) : existing.lyricist,
+      lyricistRef: s.lyricistRef !== undefined ? safeRefs(s.lyricistRef) : (existing.lyricistRef || []),
       ytId: sid, url: String(s.url || existing.url || ""),
       thumbnailUrl: String(s.thumbnailUrl || existing.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
-      lyrics:       s.lyrics      !== undefined ? String(s.lyrics)      : (existing.lyrics      || ""),
-      description:  s.description !== undefined ? String(s.description) : (existing.description || ""),
+      lyrics: s.lyrics !== undefined ? String(s.lyrics) : (existing.lyrics || ""),
+      description: s.description !== undefined ? String(s.description) : (existing.description || ""),
     };
     const setKey = `media.songs.${idx}`;
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $set: { [setKey]: updatedSong } }, { new: true })
-      .populate("productionId","name logo").lean();
+      .populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1505,7 +3178,7 @@ app.delete("/api/admin/movies/:id/songs/:songIndex", adminAuth, async (req, res)
     const idx = parseInt(req.params.songIndex, 10);
     const songs = (movie.media?.songs || []).filter((_, i) => i !== idx);
     const updated = await Movie.findByIdAndUpdate(req.params.id, { "media.songs": songs }, { new: true })
-      .populate("productionId","name logo").lean();
+      .populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1546,7 +3219,7 @@ app.post("/api/admin/cast", adminAuth, async (req, res) => {
 
 app.patch("/api/admin/cast/:id", adminAuth, async (req, res) => {
   try {
-    const allowed = ["name","bio","photo","dob","gender","location","website","instagram","banner"];
+    const allowed = ["name", "bio", "photo", "dob", "gender", "location", "website", "instagram", "banner"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     // Handle type / roles
@@ -1556,7 +3229,7 @@ app.patch("/api/admin/cast/:id", adminAuth, async (req, res) => {
         : (req.body.type ? req.body.type.split(",").map(r => r.trim()).filter(Boolean) : undefined);
       if (rolesArr && rolesArr.length) {
         update.roles = rolesArr;
-        update.type  = rolesArr[0]; // keep primary type in sync
+        update.type = rolesArr[0]; // keep primary type in sync
       }
     }
     const c = await Cast.findByIdAndUpdate(req.params.id, update, { new: true });
@@ -1580,7 +3253,7 @@ app.post("/api/admin/productions", adminAuth, async (req, res) => {
     const { name, logo, bio, founded, website, location } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Name required" });
     const hashed = await bcrypt.hash("changeme123", 10);
-    const p = await Production.create({ name: name.trim(), email: `${Date.now()}@admin.local`, password: hashed, logo: logo||"", bio: bio||"", founded: founded||"", website: website||"", location: location||"" });
+    const p = await Production.create({ name: name.trim(), email: `${Date.now()}@admin.local`, password: hashed, logo: logo || "", bio: bio || "", founded: founded || "", website: website || "", location: location || "" });
     const obj = p.toObject(); delete obj.password; delete obj.email;
     res.json(obj);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1588,7 +3261,7 @@ app.post("/api/admin/productions", adminAuth, async (req, res) => {
 
 app.patch("/api/admin/productions/:id", adminAuth, async (req, res) => {
   try {
-    const allowed = ["name","logo","banner","bio","founded","website","location"];
+    const allowed = ["name", "logo", "banner", "bio", "founded", "website", "location"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     const p = await Production.findByIdAndUpdate(req.params.id, update, { new: true, select: "-password -email" });
@@ -1637,38 +3310,38 @@ app.delete("/api/admin/news/:id", adminAuth, async (req, res) => {
 // GET /api/blog — list published posts (paginated)
 app.get("/api/blog", async (req, res) => {
   try {
-    const page     = parseInt(req.query.page||"1",10);
-    const limit    = parseInt(req.query.limit||"12",10);
-    const cat      = req.query.category || "";
-    const tag      = req.query.tag      || "";
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "12", 10);
+    const cat = req.query.category || "";
+    const tag = req.query.tag || "";
     const featured = req.query.featured === "true";
-    const q        = req.query.q || "";
+    const q = req.query.q || "";
 
     const filter = { published: true };
-    if (cat)      filter.category = cat;
-    if (tag)      filter.tags     = tag;
+    if (cat) filter.category = cat;
+    if (tag) filter.tags = tag;
     if (featured) filter.featured = true;
-    if (q)        filter.$or = [
-      { title:   { $regex: q, $options: "i" } },
+    if (q) filter.$or = [
+      { title: { $regex: q, $options: "i" } },
       { content: { $regex: q, $options: "i" } },
-      { tags:    { $regex: q, $options: "i" } },
+      { tags: { $regex: q, $options: "i" } },
     ];
 
     const total = await Blog.countDocuments(filter);
     const posts = await Blog.find(filter, "title slug excerpt category tags coverImage movieTitle author views readTime featured createdAt seoTitle seoDesc")
-      .sort({ featured:-1, createdAt:-1 })
-      .skip((page-1)*limit).limit(limit).lean();
-    res.json({ posts, total, page, pages: Math.ceil(total/limit) });
-  } catch(e) { res.status(500).json({ error:e.message }); }
+      .sort({ featured: -1, createdAt: -1 })
+      .skip((page - 1) * limit).limit(limit).lean();
+    res.json({ posts, total, page, pages: Math.ceil(total / limit) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/blog/:slug — single post (no view increment here — use POST /:slug/view)
 app.get("/api/blog/:slug", async (req, res) => {
   try {
     const post = await Blog.findOne({ slug: req.params.slug, published: true }).lean();
-    if (!post) return res.status(404).json({ error:"Not found" });
+    if (!post) return res.status(404).json({ error: "Not found" });
     res.json(post);
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/blog/:slug/view — increment view count (prod only, session-deduped on frontend)
@@ -1681,64 +3354,64 @@ app.post("/api/blog/:slug/view", async (req, res) => {
     ).lean();
     if (!post) return res.status(404).json({ error: "Not found" });
     res.json({ views: post.views });
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Admin Blog Routes ─────────────────────────────────────────────
 // GET /api/admin/blog
 app.get("/api/admin/blog", adminAuth, async (req, res) => {
   try {
-    const posts = await Blog.find().sort({ createdAt:-1 }).lean();
+    const posts = await Blog.find().sort({ createdAt: -1 }).lean();
     res.json(posts);
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/admin/blog
 app.post("/api/admin/blog", adminAuth, async (req, res) => {
   try {
-    const { title,excerpt,content,category,tags,coverImage,movieId,movieTitle,castId,castName,author,published,featured,seoTitle,seoDesc,youtubeVideoId } = req.body;
-    if (!title?.trim() || !content?.trim()) return res.status(400).json({ error:"Title and content required" });
+    const { title, excerpt, content, category, tags, coverImage, movieId, movieTitle, castId, castName, author, published, featured, seoTitle, seoDesc, youtubeVideoId } = req.body;
+    if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: "Title and content required" });
     const slug = req.body.slug?.trim()
       ? req.body.slug.trim()
-      : title.toLowerCase().replace(/[^a-z0-9\s-]/g,"").replace(/\s+/g,"-").replace(/-+/g,"-").trim()
-        + "-" + Date.now().toString(36);
-    const readTime = Math.max(1, Math.ceil((content||"").split(/\s+/).length/200));
+      : title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim()
+      + "-" + Date.now().toString(36);
+    const readTime = Math.max(1, Math.ceil((content || "").split(/\s+/).length / 200));
     const post = await Blog.create({
-      title:title.trim(), slug, excerpt:excerpt||"", content:content.trim(),
-      category:category||"General", tags:Array.isArray(tags)?tags:(tags||"").split(",").map(t=>t.trim()).filter(Boolean),
-      coverImage:coverImage||"", movieId:movieId||undefined, movieTitle:movieTitle||"",
-      castId: isOid(castId) ? castId : undefined, castName: castName||"",
-      author:author||"Ollypedia Team", published:!!published, featured:!!featured, readTime,
-      seoTitle:seoTitle||title, seoDesc:seoDesc||excerpt||"",
+      title: title.trim(), slug, excerpt: excerpt || "", content: content.trim(),
+      category: category || "General", tags: Array.isArray(tags) ? tags : (tags || "").split(",").map(t => t.trim()).filter(Boolean),
+      coverImage: coverImage || "", movieId: movieId || undefined, movieTitle: movieTitle || "",
+      castId: isOid(castId) ? castId : undefined, castName: castName || "",
+      author: author || "Ollypedia Team", published: !!published, featured: !!featured, readTime,
+      seoTitle: seoTitle || title, seoDesc: seoDesc || excerpt || "",
       youtubeVideoId: youtubeVideoId?.trim() || "",
     });
     res.status(201).json(post);
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // PATCH /api/admin/blog/:id
 app.patch("/api/admin/blog/:id", adminAuth, async (req, res) => {
   try {
-    const allowed = ["title","excerpt","content","category","tags","coverImage","movieId","movieTitle","castId","castName","author","published","featured","seoTitle","seoDesc","youtubeVideoId"];
+    const allowed = ["title", "excerpt", "content", "category", "tags", "coverImage", "movieId", "movieTitle", "castId", "castName", "author", "published", "featured", "seoTitle", "seoDesc", "youtubeVideoId"];
     const update = {};
     for (const k of allowed) if (req.body[k] !== undefined) update[k] = req.body[k];
     // Validate ObjectId fields — reject invalid strings to prevent Mongoose cast errors
-    if (update.castId  !== undefined && !isOid(update.castId))  update.castId  = null;
+    if (update.castId !== undefined && !isOid(update.castId)) update.castId = null;
     if (update.movieId !== undefined && !isOid(update.movieId)) update.movieId = null;
-    if (update.content) update.readTime = Math.max(1, Math.ceil(update.content.split(/\s+/).length/200));
-    if (update.tags && !Array.isArray(update.tags)) update.tags = update.tags.split(",").map(t=>t.trim()).filter(Boolean);
-    const post = await Blog.findByIdAndUpdate(req.params.id, update, { new:true });
-    if (!post) return res.status(404).json({ error:"Not found" });
+    if (update.content) update.readTime = Math.max(1, Math.ceil(update.content.split(/\s+/).length / 200));
+    if (update.tags && !Array.isArray(update.tags)) update.tags = update.tags.split(",").map(t => t.trim()).filter(Boolean);
+    const post = await Blog.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!post) return res.status(404).json({ error: "Not found" });
     res.json(post);
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /api/admin/blog/:id
 app.delete("/api/admin/blog/:id", adminAuth, async (req, res) => {
   try {
     await Blog.findByIdAndDelete(req.params.id);
-    res.json({ message:"Deleted" });
-  } catch(e) { res.status(500).json({ error:e.message }); }
+    res.json({ message: "Deleted" });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Blog Reviews ──────────────────────────────────────────────────
@@ -1754,7 +3427,7 @@ app.post("/api/blog/:id/reviews", async (req, res) => {
     ).lean();
     if (!post) return res.status(404).json({ error: "Post not found" });
     res.json(post.reviews);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/blog/:id/reviews/:idx/like
@@ -1767,7 +3440,7 @@ app.post("/api/blog/:id/reviews/:idx/like", async (req, res) => {
     post.reviews[idx].likes = (post.reviews[idx].likes || 0) + 1;
     await post.save();
     res.json({ likes: post.reviews[idx].likes });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/blog/:id/reviews/:idx/reply
@@ -1782,7 +3455,7 @@ app.post("/api/blog/:id/reviews/:idx/reply", async (req, res) => {
     post.reviews[idx].replies.push({ user: user || "Anonymous", text: text.trim(), date: date || new Date().toISOString().split("T")[0] });
     await post.save();
     res.json(post.reviews[idx].replies);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Review Likes & Replies ────────────────────────────────────────
@@ -1790,30 +3463,30 @@ app.post("/api/blog/:id/reviews/:idx/reply", async (req, res) => {
 app.post("/api/movies/:id/reviews/:reviewIdx/like", async (req, res) => {
   try {
     const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
-    const idx   = parseInt(req.params.reviewIdx, 10);
+    const idx = parseInt(req.params.reviewIdx, 10);
     const movie = await Movie.findOne(query);
-    if (!movie || !movie.reviews[idx]) return res.status(404).json({ error:"Not found" });
-    movie.reviews[idx].likes = (movie.reviews[idx].likes||0) + 1;
+    if (!movie || !movie.reviews[idx]) return res.status(404).json({ error: "Not found" });
+    movie.reviews[idx].likes = (movie.reviews[idx].likes || 0) + 1;
     await movie.save();
     res.json({ likes: movie.reviews[idx].likes });
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/movies/:id/reviews/:reviewIdx/reply
 app.post("/api/movies/:id/reviews/:reviewIdx/reply", async (req, res) => {
   try {
     const { user, text } = req.body;
-    if (!text?.trim()) return res.status(400).json({ error:"Text required" });
+    if (!text?.trim()) return res.status(400).json({ error: "Text required" });
     const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
-    const idx   = parseInt(req.params.reviewIdx, 10);
+    const idx = parseInt(req.params.reviewIdx, 10);
     const movie = await Movie.findOne(query);
-    if (!movie || !movie.reviews[idx]) return res.status(404).json({ error:"Not found" });
-    const reply = { user:user?.trim()||"Anonymous", text:text.trim(), date:new Date().toISOString().split("T")[0] };
+    if (!movie || !movie.reviews[idx]) return res.status(404).json({ error: "Not found" });
+    const reply = { user: user?.trim() || "Anonymous", text: text.trim(), date: new Date().toISOString().split("T")[0] };
     if (!movie.reviews[idx].replies) movie.reviews[idx].replies = [];
     movie.reviews[idx].replies.push(reply);
     await movie.save();
     res.json(movie.reviews[idx].replies);
-  } catch(e) { res.status(500).json({ error:e.message }); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ════════════════════════════════════════════════════════════════
@@ -1827,8 +3500,8 @@ app.post("/api/contact", async (req, res) => {
     if (!name?.trim() || !email?.trim() || !message?.trim())
       return res.status(400).json({ error: "Name, email and message are required." });
     const item = await Contact.create({
-      name:    name.trim(),
-      email:   email.trim().toLowerCase(),
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
       subject: subject || "General Inquiry",
       message: message.trim(),
     });
@@ -1900,43 +3573,46 @@ app.post("/api/admin/backfill-slugs", adminAuth, async (req, res) => {
 // ═════════════════════════════════════════════════════════════════
 // SEO — robots.txt
 // ═════════════════════════════════════════════════════════════════
-const SITE_URL = process.env.SITE_URL || "https://www.ollypedia.in";
+// (SITE_URL is declared near the top of the file, in the HELPERS section,
+// so it's available to the blog-HTML builders as well.)
 
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain").send(
-`User-agent: *
+    `User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /portal
 Disallow: /api/
 Sitemap: ${SITE_URL}/sitemap.xml
 Sitemap: ${SITE_URL}/sitemap-movies.xml
-Sitemap: ${SITE_URL}/sitemap-cast.xml`
+Sitemap: ${SITE_URL}/sitemap-cast.xml
+Sitemap: ${SITE_URL}/sitemap-blogs.xml
+Sitemap: ${SITE_URL}/sitemap-boxoffice.xml`
   );
 });
 
 // ─── helpers ───────────────────────────────────────────────────
-function xmlEsc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-function urlEntry(loc, lastmod, freq="monthly", pri="0.7") {
-  return `  <url>\n    <loc>${xmlEsc(loc)}</loc>\n    <lastmod>${lastmod||new Date().toISOString().slice(0,10)}</lastmod>\n    <changefreq>${freq}</changefreq>\n    <priority>${pri}</priority>\n  </url>`;
+function xmlEsc(s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function urlEntry(loc, lastmod, freq = "monthly", pri = "0.7") {
+  return `  <url>\n    <loc>${xmlEsc(loc)}</loc>\n    <lastmod>${lastmod || new Date().toISOString().slice(0, 10)}</lastmod>\n    <changefreq>${freq}</changefreq>\n    <priority>${pri}</priority>\n  </url>`;
 }
 
 // ─── Main sitemap (static pages + recent news) ─────────────────
 app.get("/sitemap.xml", async (req, res) => {
-  const today = new Date().toISOString().slice(0,10);
+  const today = new Date().toISOString().slice(0, 10);
   const statics = [
-    ["", "daily", "1.0"], ["/movies","daily","0.9"], ["/cast","weekly","0.8"],
-    ["/songs","weekly","0.8"], ["/news","daily","0.8"],
-    ["/about","monthly","0.4"], ["/contact","monthly","0.4"], ["/privacy","monthly","0.3"],
+    ["", "daily", "1.0"], ["/movies", "daily", "0.9"], ["/cast", "weekly", "0.8"],
+    ["/songs", "weekly", "0.8"], ["/news", "daily", "0.8"],
+    ["/about", "monthly", "0.4"], ["/contact", "monthly", "0.4"], ["/privacy", "monthly", "0.3"],
   ];
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-  statics.forEach(([p,f,pr]) => { xml += urlEntry(`${SITE_URL}${p}`, today, f, pr) + "\n"; });
+  statics.forEach(([p, f, pr]) => { xml += urlEntry(`${SITE_URL}${p}`, today, f, pr) + "\n"; });
   try {
-    const recentNews = await News.find({ published:true }).sort({ createdAt:-1 }).limit(50).lean();
+    const recentNews = await News.find({ published: true }).sort({ createdAt: -1 }).limit(50).lean();
     recentNews.forEach(n => {
-      xml += urlEntry(`${SITE_URL}/news/${n._id}`, n.updatedAt?new Date(n.updatedAt).toISOString().slice(0,10):today, "weekly","0.6") + "\n";
+      xml += urlEntry(`${SITE_URL}/news/${n._id}`, n.updatedAt ? new Date(n.updatedAt).toISOString().slice(0, 10) : today, "weekly", "0.6") + "\n";
     });
-  } catch {}
+  } catch { }
   res.type("application/xml").send(xml + "</urlset>");
 });
 
@@ -1946,11 +3622,11 @@ app.get("/sitemap-movies.xml", async (req, res) => {
   try {
     const movies = await Movie.find({}, "title releaseDate slug updatedAt").lean();
     movies.forEach(m => {
-      const slug    = m.slug || makeMovieSlug(m.title, m.releaseDate);
-      const lastmod = m.updatedAt ? new Date(m.updatedAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-      xml += urlEntry(`${SITE_URL}/movie/${slug}`, lastmod, "weekly","0.8") + "\n";
+      const slug = m.slug || makeMovieSlug(m.title, m.releaseDate);
+      const lastmod = m.updatedAt ? new Date(m.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      xml += urlEntry(`${SITE_URL}/movie/${slug}`, lastmod, "weekly", "0.8") + "\n";
     });
-  } catch {}
+  } catch { }
   res.type("application/xml").send(xml + "</urlset>");
 });
 
@@ -1960,12 +3636,31 @@ app.get("/sitemap-cast.xml", async (req, res) => {
   try {
     const cast = await Cast.find({}, "name type updatedAt").lean();
     cast.forEach(c => {
-      const slug = String(c.name||"").toLowerCase().replace(/[^a-z0-9\s]/g,"").replace(/\s+/g,"-").trim();
-      const role = String(c.type||"artist").toLowerCase().replace(/\s+/g,"-");
-      const lastmod = c.updatedAt ? new Date(c.updatedAt).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-      xml += urlEntry(`${SITE_URL}/cast/${c._id}/${slug}-odia-${role}`, lastmod, "monthly","0.7") + "\n";
+      const slug = String(c.name || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, "-").trim();
+      const role = String(c.type || "artist").toLowerCase().replace(/\s+/g, "-");
+      const lastmod = c.updatedAt ? new Date(c.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      xml += urlEntry(`${SITE_URL}/cast/${c._id}/${slug}-odia-${role}`, lastmod, "monthly", "0.7") + "\n";
     });
-  } catch {}
+  } catch { }
+  res.type("application/xml").send(xml + "</urlset>");
+});
+
+// ─── Blogs sitemap ──────────────────────────────────────────────
+// SEO FIX: this sitemap didn't exist before — every auto-generated blog
+// post (Movie Details / OTT Release / Now Streaming) was reachable only by
+// crawl discovery via internal links, with no sitemap entry point. Only
+// published posts are listed, and lastmod uses the real updatedAt so
+// crawlers can prioritize freshly-edited posts.
+app.get("/sitemap-blogs.xml", async (req, res) => {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+  try {
+    const blogs = await Blog.find({ published: true }, "slug updatedAt createdAt").lean();
+    blogs.forEach(b => {
+      if (!b.slug) return;
+      const lastmod = b.updatedAt ? new Date(b.updatedAt).toISOString().slice(0, 10) : (b.createdAt ? new Date(b.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+      xml += urlEntry(`${SITE_URL}/blog/${b.slug}`, lastmod, "weekly", "0.75") + "\n";
+    });
+  } catch { }
   res.type("application/xml").send(xml + "</urlset>");
 });
 
@@ -2020,16 +3715,16 @@ app.post("/api/admin/generate-article", adminAuth, async (req, res) => {
             content: prompt,
           },
         ],
-        max_tokens:  1500,
+        max_tokens: 1500,
         temperature: 0.7,
-        top_p:       0.9,
+        top_p: 0.9,
         response_format: { type: "json_object" },
       }),
     });
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      const errMsg  = errData?.error?.message || `Groq API error (${response.status})`;
+      const errMsg = errData?.error?.message || `Groq API error (${response.status})`;
 
       // Friendly messages for common Groq errors
       if (response.status === 401) {
@@ -2042,7 +3737,7 @@ app.post("/api/admin/generate-article", adminAuth, async (req, res) => {
     }
 
     const data = await response.json();
-    const text  = (data.choices?.[0]?.message?.content || "").trim();
+    const text = (data.choices?.[0]?.message?.content || "").trim();
     if (!text) return res.status(500).json({ error: "Groq returned an empty response. Try again." });
 
     res.json({ text });
@@ -2062,7 +3757,7 @@ app.get("/api/movies/:id/boxoffice-days", async (req, res) => {
     res.json(days);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
- 
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN — POST /api/admin/movies/:id/boxoffice-days
 // Add a new day entry (prevents duplicate day numbers)
@@ -2071,39 +3766,39 @@ app.post("/api/admin/movies/:id/boxoffice-days", adminAuth, async (req, res) => 
   try {
     if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
     const { day, net, gross, date, note } = req.body;
- 
+
     if (!day || isNaN(parseInt(day, 10))) return res.status(400).json({ error: "day is required (integer)" });
     const dayNum = parseInt(day, 10);
- 
+
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
- 
+
     // Prevent duplicate
     const exists = (movie.boxOfficeDays || []).some((d) => d.day === dayNum);
     if (exists) return res.status(409).json({ error: `Day ${dayNum} already exists. Use PATCH to update.` });
 
     // Normalize net/gross — parse whatever the frontend sends ("7", "7L", "₹7.00 L", "700000")
     // and re-format as a clean "₹X.XX L / Cr" string before storing.
-    const netNum   = parseToRupeesGlobal(net   || "0");
+    const netNum = parseToRupeesGlobal(net || "0");
     const grossNum = parseToRupeesGlobal(gross || "0");
-    const netStored   = netNum   > 0 ? formatINRGlobal(netNum)   : (net   || "");
+    const netStored = netNum > 0 ? formatINRGlobal(netNum) : (net || "");
     const grossStored = grossNum > 0 ? formatINRGlobal(grossNum) : (gross || "");
 
     movie.boxOfficeDays.push({ day: dayNum, net: netStored, gross: grossStored, date: date || "", note: note || "" });
     movie.boxOfficeDays.sort((a, b) => a.day - b.day);
- 
+
     // Auto-update boxOffice summary totals
     const totalNet = movie.boxOfficeDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
     if (totalNet > 0) {
       movie.boxOffice = movie.boxOffice || {};
       movie.boxOffice.total = formatINRGlobal(totalNet);
     }
- 
+
     await movie.save({ validateBeforeSave: false });
     res.status(201).json({ success: true, days: movie.boxOfficeDays });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
- 
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN — PATCH /api/admin/movies/:id/boxoffice-days/:day
 // Update an existing day entry
@@ -2113,13 +3808,13 @@ app.patch("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, re
     if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
     const dayNum = parseInt(req.params.day, 10);
     if (isNaN(dayNum)) return res.status(400).json({ error: "Invalid day number" });
- 
+
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
- 
+
     const idx = (movie.boxOfficeDays || []).findIndex((d) => d.day === dayNum);
     if (idx === -1) return res.status(404).json({ error: `Day ${dayNum} not found` });
- 
+
     const { net, gross, date, note } = req.body;
     if (net !== undefined) {
       const n = parseToRupeesGlobal(net);
@@ -2129,21 +3824,21 @@ app.patch("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, re
       const g = parseToRupeesGlobal(gross);
       movie.boxOfficeDays[idx].gross = g > 0 ? formatINRGlobal(g) : gross;
     }
-    if (date  !== undefined) movie.boxOfficeDays[idx].date  = date;
-    if (note  !== undefined) movie.boxOfficeDays[idx].note  = note;
- 
+    if (date !== undefined) movie.boxOfficeDays[idx].date = date;
+    if (note !== undefined) movie.boxOfficeDays[idx].note = note;
+
     // Re-sync total
     const totalNetPatch = movie.boxOfficeDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
     if (totalNetPatch > 0) {
       movie.boxOffice = movie.boxOffice || {};
       movie.boxOffice.total = formatINRGlobal(totalNetPatch);
     }
- 
+
     await movie.save({ validateBeforeSave: false });
     res.json({ success: true, days: movie.boxOfficeDays });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
- 
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN — DELETE /api/admin/movies/:id/boxoffice-days/:day
 // Remove a day entry
@@ -2153,21 +3848,21 @@ app.delete("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, r
     if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
     const dayNum = parseInt(req.params.day, 10);
     if (isNaN(dayNum)) return res.status(400).json({ error: "Invalid day number" });
- 
+
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
- 
+
     const before = (movie.boxOfficeDays || []).length;
     movie.boxOfficeDays = (movie.boxOfficeDays || []).filter((d) => d.day !== dayNum);
     if (movie.boxOfficeDays.length === before) {
       return res.status(404).json({ error: `Day ${dayNum} not found` });
     }
- 
+
     await movie.save({ validateBeforeSave: false });
     res.json({ success: true, days: movie.boxOfficeDays });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
- 
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN — POST /api/admin/movies/:id/boxoffice-days/bulk
 // Bulk add/update day entries in one shot — powers the "Bulk Upload"
@@ -2208,10 +3903,10 @@ app.post("/api/admin/movies/:id/boxoffice-days/bulk", adminAuth, async (req, res
       const netNum = parseToRupeesGlobal(entry?.net || "0");
       if (netNum <= 0) { skipped.push(dayNum); continue; } // blank/unreadable row — skip silently
 
-      const grossNum     = Math.round(netNum * GST_RATE_GLOBAL);
-      const netStored     = formatINRGlobal(netNum);
-      const grossStored   = formatINRGlobal(grossNum);
-      const dateStored    = addDaysToISO(movie.releaseDate, dayNum); // always derived from releaseDate
+      const grossNum = Math.round(netNum * GST_RATE_GLOBAL);
+      const netStored = formatINRGlobal(netNum);
+      const grossStored = formatINRGlobal(grossNum);
+      const dateStored = addDaysToISO(movie.releaseDate, dayNum); // always derived from releaseDate
 
       const idx = movie.boxOfficeDays.findIndex((d) => d.day === dayNum);
       if (idx === -1) {
@@ -2221,9 +3916,9 @@ app.post("/api/admin/movies/:id/boxoffice-days/bulk", adminAuth, async (req, res
         });
         added++;
       } else {
-        movie.boxOfficeDays[idx].net   = netStored;
+        movie.boxOfficeDays[idx].net = netStored;
         movie.boxOfficeDays[idx].gross = grossStored;
-        movie.boxOfficeDays[idx].date  = dateStored;
+        movie.boxOfficeDays[idx].date = dateStored;
         if (entry?.note !== undefined) movie.boxOfficeDays[idx].note = entry.note;
         updated++;
       }
@@ -2253,19 +3948,19 @@ app.get("/api/admin/boxoffice/all-movies", adminAuth, async (req, res) => {
   try {
     const movies = await Movie
       .find({ "boxOfficeDays.0": { $exists: true } },
-            "title slug posterUrl thumbnailUrl releaseDate language verdict boxOffice boxOfficeDays budget")
+        "title slug posterUrl thumbnailUrl releaseDate language verdict boxOffice boxOfficeDays budget")
       .sort({ updatedAt: -1 })
       .lean();
     res.json(movies);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
- 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SITEMAP EXTENSION
 // Add this block inside your existing sitemap-movies.xml route so box office
 // pages are indexed. OR add a separate /sitemap-boxoffice.xml as shown below.
 // ─────────────────────────────────────────────────────────────────────────────
- 
+
 app.get("/sitemap-boxoffice.xml", async (req, res) => {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
   try {
@@ -2274,11 +3969,11 @@ app.get("/sitemap-boxoffice.xml", async (req, res) => {
       .lean();
     const SITE_URL_LOCAL = process.env.SITE_URL || "https://www.ollypedia.in";
     movies.forEach((m) => {
-      const slug    = m.slug || (String(m.title || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
+      const slug = m.slug || (String(m.title || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
       const lastmod = m.updatedAt ? new Date(m.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
       xml += `  <url>\n    <loc>${SITE_URL_LOCAL}/box-office/${slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.85</priority>\n  </url>\n`;
     });
-  } catch {}
+  } catch { }
   res.type("application/xml").send(xml + "</urlset>");
 });
 // ────────────────────────────────────────────────────────────────────
@@ -2299,7 +3994,7 @@ app.post("/api/admin/merge/cast/preview", adminAuth, async (req, res) => {
     if (duplicateIds.some(id => !isOid(id)))
       return res.status(400).json({ error: "One or more duplicateIds are invalid" });
 
-    const primary    = await Cast.findById(primaryId).lean();
+    const primary = await Cast.findById(primaryId).lean();
     if (!primary) return res.status(404).json({ error: "Primary cast member not found" });
 
     const duplicates = await Cast.find({ _id: { $in: duplicateIds } }).lean();
@@ -2312,13 +4007,13 @@ app.post("/api/admin/merge/cast/preview", adminAuth, async (req, res) => {
     ).lean();
 
     res.json({
-      primary:        { _id: primary._id, name: primary.name, type: primary.type, photo: primary.photo },
-      duplicates:     duplicates.map(d => ({ _id: d._id, name: d.name, type: d.type })),
+      primary: { _id: primary._id, name: primary.name, type: primary.type, photo: primary.photo },
+      duplicates: duplicates.map(d => ({ _id: d._id, name: d.name, type: d.type })),
       moviesAffected: affectedMovies.length,
-      movieList:      affectedMovies.map(m => ({
-        _id:   m._id,
+      movieList: affectedMovies.map(m => ({
+        _id: m._id,
         title: m.title,
-        slug:  m.slug,
+        slug: m.slug,
         castEntriesReplaced: m.cast.filter(c => duplicateIds.includes(String(c.castId))).length,
       })),
     });
@@ -2346,7 +4041,7 @@ app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
     if (!primary) return res.status(404).json({ error: "Primary cast member not found" });
 
     const dupObjectIds = duplicateIds.map(id => new mongoose.Types.ObjectId(id));
-    const primaryOid   = new mongoose.Types.ObjectId(primaryId);
+    const primaryOid = new mongoose.Types.ObjectId(primaryId);
 
     // 1. Find all movies that reference any duplicate
     const affectedMovies = await Movie.find({ "cast.castId": { $in: dupObjectIds } });
@@ -2359,7 +4054,7 @@ app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
       const newCast = [];
       for (const entry of movie.cast) {
         const idStr = String(entry.castId);
-        const isPrimary   = idStr === primaryId;
+        const isPrimary = idStr === primaryId;
         const isDuplicate = duplicateIds.includes(idStr);
 
         if (isPrimary) {
@@ -2370,10 +4065,10 @@ app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
             // Replace this duplicate entry with primary's data but keep role
             newCast.push({
               castId: primaryOid,
-              name:   primary.name,
-              photo:  primary.photo || entry.photo || "",
-              type:   primary.type  || entry.type  || "Actor",
-              role:   entry.role    || "",
+              name: primary.name,
+              photo: primary.photo || entry.photo || "",
+              type: primary.type || entry.type || "Actor",
+              role: entry.role || "",
             });
             seen.add(primaryId);
             changed = true;
@@ -2396,9 +4091,9 @@ app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
     // Also fix Song refs (singerRef, musicDirectorRef, lyricistRef) inside movies
     const songMovies = await Movie.find({
       $or: [
-        { "media.songs.singerRef":       { $in: dupObjectIds } },
-        { "media.songs.musicDirectorRef":{ $in: dupObjectIds } },
-        { "media.songs.lyricistRef":     { $in: dupObjectIds } },
+        { "media.songs.singerRef": { $in: dupObjectIds } },
+        { "media.songs.musicDirectorRef": { $in: dupObjectIds } },
+        { "media.songs.lyricistRef": { $in: dupObjectIds } },
       ]
     });
     for (const movie of songMovies) {
@@ -2415,9 +4110,9 @@ app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
           // de-dup
           return [...new Set(next.map(String))].map(s => new mongoose.Types.ObjectId(s));
         };
-        song.singerRef        = replaceRefs(song.singerRef);
+        song.singerRef = replaceRefs(song.singerRef);
         song.musicDirectorRef = replaceRefs(song.musicDirectorRef);
-        song.lyricistRef      = replaceRefs(song.lyricistRef);
+        song.lyricistRef = replaceRefs(song.lyricistRef);
       }
       if (changed) await movie.save({ validateBeforeSave: false });
     }
@@ -2426,17 +4121,17 @@ app.post("/api/admin/merge/cast", adminAuth, async (req, res) => {
     const dupDocs = await Cast.find({ _id: { $in: dupObjectIds } }).lean();
     const allMovieRefs = dupDocs.flatMap(d => (d.movies || []).map(String));
     const existingRefs = (primary.movies || []).map(String);
-    const mergedRefs   = [...new Set([...existingRefs, ...allMovieRefs])];
-    primary.movies     = mergedRefs.map(id => new mongoose.Types.ObjectId(id));
+    const mergedRefs = [...new Set([...existingRefs, ...allMovieRefs])];
+    primary.movies = mergedRefs.map(id => new mongoose.Types.ObjectId(id));
     await primary.save({ validateBeforeSave: false });
 
     // 3. Delete duplicates
     const deleteResult = await Cast.deleteMany({ _id: { $in: dupObjectIds } });
 
     res.json({
-      success:       true,
+      success: true,
       moviesUpdated,
-      deleted:       deleteResult.deletedCount,
+      deleted: deleteResult.deletedCount,
       primaryId,
       duplicateIds,
     });
@@ -2484,7 +4179,7 @@ app.post("/api/admin/merge/movie", adminAuth, async (req, res) => {
     }
 
     // 3. Merge songs (union by title+singer)
-    const songKey = (s) => `${(s.title||"").toLowerCase().trim()}|${(s.singer||"").toLowerCase().trim()}`;
+    const songKey = (s) => `${(s.title || "").toLowerCase().trim()}|${(s.singer || "").toLowerCase().trim()}`;
     const existingSongKeys = new Set((primary.media?.songs || []).map(songKey));
     for (const dup of dupDocs) {
       for (const song of (dup.media?.songs || [])) {
@@ -2513,7 +4208,7 @@ app.post("/api/admin/merge/movie", adminAuth, async (req, res) => {
     const primaryOid = new mongoose.Types.ObjectId(primaryId);
     await Cast.updateMany(
       { movies: { $in: dupOids } },
-      { $pull:  { movies: { $in: dupOids } } }
+      { $pull: { movies: { $in: dupOids } } }
     );
     await Cast.updateMany(
       { "movies": { $nin: [primaryOid] }, _id: { $in: primary.cast.map(c => c.castId) } },
@@ -2580,36 +4275,36 @@ app.post("/api/admin/merge/song", adminAuth, async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 const OccupancySnapshotSchema = new mongoose.Schema({
-  movieId:      { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
-  movieTitle:   { type: String, default: "" },
-  bmsUrl:       { type: String, default: "" },
-  runAt:        { type: Date, default: Date.now, index: true },
-  status:       { type: String, enum: ["running","done","error"], default: "running" },
-  errorMsg:     { type: String, default: "" },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
+  movieTitle: { type: String, default: "" },
+  bmsUrl: { type: String, default: "" },
+  runAt: { type: Date, default: Date.now, index: true },
+  status: { type: String, enum: ["running", "done", "error"], default: "running" },
+  errorMsg: { type: String, default: "" },
   // Overall aggregates
-  totalShows:   { type: Number, default: 0 },
-  totalSeats:   { type: Number, default: 0 },
-  totalSold:    { type: Number, default: 0 },
+  totalShows: { type: Number, default: 0 },
+  totalSeats: { type: Number, default: 0 },
+  totalSold: { type: Number, default: 0 },
   avgOccupancy: { type: Number, default: 0 }, // 0-100
-  estCollection:{ type: Number, default: 0 }, // rupees
-  cityCount:    { type: Number, default: 0 },
+  estCollection: { type: Number, default: 0 }, // rupees
+  cityCount: { type: Number, default: 0 },
   theatreCount: { type: Number, default: 0 },
   // City-wise breakdown
   cities: [{
-    name:         String,
-    shows:        Number,
-    totalSeats:   Number,
-    soldSeats:    Number,
-    occupancy:    Number, // 0-100
-    estCollection:Number,
+    name: String,
+    shows: Number,
+    totalSeats: Number,
+    soldSeats: Number,
+    occupancy: Number, // 0-100
+    estCollection: Number,
     theatres: [{
-      name:         String,
-      location:     String,
-      shows:        Number,
-      totalSeats:   Number,
-      soldSeats:    Number,
-      occupancy:    Number,
-      estCollection:Number,
+      name: String,
+      location: String,
+      shows: Number,
+      totalSeats: Number,
+      soldSeats: Number,
+      occupancy: Number,
+      estCollection: Number,
     }],
   }],
 }, { timestamps: true });
@@ -2657,24 +4352,26 @@ app.post("/api/admin/tracker/save-snapshot", adminAuth, async (req, res) => {
       let cShows = 0, cSeats = 0, cSold = 0, cColl = 0;
       const theatres = (city.theatres || []).map(th => {
         theatreSet.add(`${city.name}::${th.name}`);
-        cShows   += (th.shows || 0);
-        cSeats   += (th.totalSeats || 0);
-        cSold    += (th.soldSeats  || 0);
-        cColl    += (th.estCollection || 0);
+        cShows += (th.shows || 0);
+        cSeats += (th.totalSeats || 0);
+        cSold += (th.soldSeats || 0);
+        cColl += (th.estCollection || 0);
         const occ = th.totalSeats > 0 ? Math.round((th.soldSeats / th.totalSeats) * 100) : 0;
         return { ...th, occupancy: occ };
       });
       cShows = city.shows || cShows;
       cSeats = city.totalSeats || cSeats;
-      cSold  = city.soldSeats  || cSold;
-      cColl  = city.estCollection || cColl;
+      cSold = city.soldSeats || cSold;
+      cColl = city.estCollection || cColl;
       const occ = cSeats > 0 ? Math.round((cSold / cSeats) * 100) : 0;
-      totalShows   += cShows;
-      totalSeats   += cSeats;
-      totalSold    += cSold;
-      estCollection+= cColl;
-      return { name: city.name, shows: cShows, totalSeats: cSeats, soldSeats: cSold,
-               occupancy: occ, estCollection: cColl, theatres };
+      totalShows += cShows;
+      totalSeats += cSeats;
+      totalSold += cSold;
+      estCollection += cColl;
+      return {
+        name: city.name, shows: cShows, totalSeats: cSeats, soldSeats: cSold,
+        occupancy: occ, estCollection: cColl, theatres
+      };
     });
 
     const avgOccupancy = totalSeats > 0 ? Math.round((totalSold / totalSeats) * 100) : 0;
@@ -2706,8 +4403,8 @@ app.get("/api/admin/tracker/all-active", adminAuth, async (req, res) => {
   try {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const movies = await Movie
-      .find({ releaseDate: { $gte: cutoff.toISOString().slice(0,10) }, status: { $ne: "Upcoming" } },
-            "title slug posterUrl thumbnailUrl releaseDate")
+      .find({ releaseDate: { $gte: cutoff.toISOString().slice(0, 10) }, status: { $ne: "Upcoming" } },
+        "title slug posterUrl thumbnailUrl releaseDate")
       .sort({ releaseDate: -1 }).lean();
 
     // Attach latest snapshot to each movie
@@ -2742,19 +4439,19 @@ const cron = require("node-cron");
 // One doc per movie. Stores the Sacnilk URL and schedule config.
 
 const SacnilkConfigSchema = new mongoose.Schema({
-  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, unique: true, index: true },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, unique: true, index: true },
   movieTitle: { type: String, default: "" },
   sacnilkUrl: { type: String, default: "" },   // e.g. https://www.sacnilk.com/movie/Mantra_Muugdha_2026
-  active:     { type: Boolean, default: true }, // if false, cron skips it
-  lastLog:    {
-    runAt:    { type: Date,   default: null },
-    status:   { type: String, default: "" },   // "success" | "error"
-    net:      { type: String, default: "" },   // e.g. "₹2.10 Cr"  (daily net, not cumulative)
-    gross:    { type: String, default: "" },   // e.g. "₹2.48 Cr"  (daily gross = net × 1.18)
-    date:     { type: String, default: "" },   // YYYY-MM-DD of box office date (yesterday IST)
-    day:      { type: Number, default: null },
+  active: { type: Boolean, default: true }, // if false, cron skips it
+  lastLog: {
+    runAt: { type: Date, default: null },
+    status: { type: String, default: "" },   // "success" | "error"
+    net: { type: String, default: "" },   // e.g. "₹2.10 Cr"  (daily net, not cumulative)
+    gross: { type: String, default: "" },   // e.g. "₹2.48 Cr"  (daily gross = net × 1.18)
+    date: { type: String, default: "" },   // YYYY-MM-DD of box office date (yesterday IST)
+    day: { type: Number, default: null },
     blogSlug: { type: String, default: "" },
-    error:    { type: String, default: "" },
+    error: { type: String, default: "" },
   },
 }, { timestamps: true });
 
@@ -2765,15 +4462,15 @@ const SacnilkConfig = mongoose.models.SacnilkConfig ||
 // Detailed per-run logs. Kept last 30 per movie.
 
 const SacnilkLogSchema = new mongoose.Schema({
-  movieId:    { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
-  runAt:      { type: Date, default: Date.now },
-  status:     { type: String, enum: ["success", "error", "skipped"], default: "error" },
-  net:        { type: String, default: "" },   // daily net (delta)
-  gross:      { type: String, default: "" },   // daily gross (net × 1.18)
-  date:       { type: String, default: "" },   // box office date YYYY-MM-DD (yesterday IST)
-  day:        { type: Number, default: null },
-  blogSlug:   { type: String, default: "" },
-  error:      { type: String, default: "" },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
+  runAt: { type: Date, default: Date.now },
+  status: { type: String, enum: ["success", "error", "skipped"], default: "error" },
+  net: { type: String, default: "" },   // daily net (delta)
+  gross: { type: String, default: "" },   // daily gross (net × 1.18)
+  date: { type: String, default: "" },   // box office date YYYY-MM-DD (yesterday IST)
+  day: { type: Number, default: null },
+  blogSlug: { type: String, default: "" },
+  error: { type: String, default: "" },
   rawSnippet: { type: String, default: "" }, // first 500 chars of scraped HTML for debug
 }, { timestamps: false });
 
@@ -2818,7 +4515,7 @@ async function scrapeSacnilkForMovie(movieId) {
   const formatINR = (n) => {
     if (!n || isNaN(n)) return "—";
     if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
-    if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
+    if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(2)} L`;
     return `₹${Number(n).toLocaleString("en-IN")}`;
   };
 
@@ -2860,31 +4557,31 @@ async function scrapeSacnilkForMovie(movieId) {
     const directorEntry = cast.find((m) => {
       const r = (m.role || m.type || "").toLowerCase().trim();
       return r === "director" || r === "film director" || r === "movie director" ||
-        (r.includes("director") && !["music","art","action","stunt","assistant","co-","associate"].some(x => r.includes(x)));
+        (r.includes("director") && !["music", "art", "action", "stunt", "assistant", "co-", "associate"].some(x => r.includes(x)));
     });
     const directorName = directorEntry?.name || movie.director || null;
 
     const producerEntry = cast.find((m) => {
       const r = (m.role || m.type || "").toLowerCase().trim();
       return r === "producer" ||
-        (r.includes("producer") && !["executive","co-","line","associate","assistant"].some(x => r.includes(x)));
+        (r.includes("producer") && !["executive", "co-", "line", "associate", "assistant"].some(x => r.includes(x)));
     });
     const producerName = producerEntry?.name || movie.producer || null;
 
     const musicDirector = findByRole(["music director"]) || null;
-    const writer        = findByRole(["writer","screenplay","story","dialogue"]) || null;
-    const dop           = findByRole(["cinematographer","dop","director of photography"]) || null;
-    const editor        = findByRole(["editor"]) || null;
+    const writer = findByRole(["writer", "screenplay", "story", "dialogue"]) || null;
+    const dop = findByRole(["cinematographer", "dop", "director of photography"]) || null;
+    const editor = findByRole(["editor"]) || null;
 
-    const CREW_KW  = ["director","producer","writer","screenplay","story","dialogue","music director","cinematographer","dop","editor","choreographer","art director","costume","sound","stunt","vfx"];
-    const actingKW = ["actor","actress","lead","hero","heroine","supporting","cameo","special appearance"];
-    const actors   = cast.filter((m) => {
+    const CREW_KW = ["director", "producer", "writer", "screenplay", "story", "dialogue", "music director", "cinematographer", "dop", "editor", "choreographer", "art director", "costume", "sound", "stunt", "vfx"];
+    const actingKW = ["actor", "actress", "lead", "hero", "heroine", "supporting", "cameo", "special appearance"];
+    const actors = cast.filter((m) => {
       const r = (m.role || m.type || "").toLowerCase();
       const isCrew = CREW_KW.some((k) => r.includes(k)) && !actingKW.some((k) => r.includes(k));
       return !isCrew;
     });
 
-    const leadActors    = actors.slice(0, 4).map((m) => m.name).filter(Boolean);
+    const leadActors = actors.slice(0, 4).map((m) => m.name).filter(Boolean);
     const leadActresses = actors
       .filter((m) => { const r = (m.role || m.type || "").toLowerCase(); return r.includes("actress") || r.includes("heroine"); })
       .slice(0, 2).map((m) => m.name).filter(Boolean);
@@ -2897,31 +4594,31 @@ async function scrapeSacnilkForMovie(movieId) {
     const year = getYear(movie.releaseDate);
     const fallback = (key) => {
       const defaults = {
-        seoHeadline:         `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection Report`,
-        introParagraph:      `${movie.title}${year ? ` (${year})` : ""} continues its theatrical run. On Day ${targetDay}, the film has collected a total net of ${formatINR(totalNet)} and gross of ${formatINR(totalGross)} at the Odia box office.`,
-        boxOfficeAnalysis:   `${movie.title} has shown a consistent run at the box office. The day-wise figures indicate steady audience interest across the state of Odisha.`,
-        audienceResponse:    `Audiences across Odisha have given ${movie.title} a warm response. The film continues to attract viewers with positive word of mouth.`,
+        seoHeadline: `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection Report`,
+        introParagraph: `${movie.title}${year ? ` (${year})` : ""} continues its theatrical run. On Day ${targetDay}, the film has collected a total net of ${formatINR(totalNet)} and gross of ${formatINR(totalGross)} at the Odia box office.`,
+        boxOfficeAnalysis: `${movie.title} has shown a consistent run at the box office. The day-wise figures indicate steady audience interest across the state of Odisha.`,
+        audienceResponse: `Audiences across Odisha have given ${movie.title} a warm response. The film continues to attract viewers with positive word of mouth.`,
         performanceAnalysis: `With a total net collection of ${formatINR(totalNet)} and gross of ${formatINR(totalGross)}, ${movie.title} has delivered a notable performance for Odia cinema.`,
-        prediction:          `Based on current trends, ${movie.title} is expected to maintain momentum in the coming days, especially during weekends.`,
-        finalVerdict:        `${movie.title} has collected ${formatINR(totalNet)} net and ${formatINR(totalGross)} gross after ${targetDay} days. All figures are industry estimates. Source: Sacnilk via Ollypedia.`,
+        prediction: `Based on current trends, ${movie.title} is expected to maintain momentum in the coming days, especially during weekends.`,
+        finalVerdict: `${movie.title} has collected ${formatINR(totalNet)} net and ${formatINR(totalGross)} gross after ${targetDay} days. All figures are industry estimates. Source: Sacnilk via Ollypedia.`,
       };
       return defaults[key] || "";
     };
-    const keys = ["seoHeadline","introParagraph","boxOfficeAnalysis","audienceResponse","performanceAnalysis","prediction","finalVerdict"];
+    const keys = ["seoHeadline", "introParagraph", "boxOfficeAnalysis", "audienceResponse", "performanceAnalysis", "prediction", "finalVerdict"];
     if (!aiText?.trim()) return Object.fromEntries(keys.map(k => [k, fallback(k)]));
     try {
-      const clean  = aiText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const clean = aiText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
       const parsed = JSON.parse(clean);
       return Object.fromEntries(keys.map(k => [k, parsed[k] || fallback(k)]));
     } catch {
       return {
-        seoHeadline:        fallback("seoHeadline"),
-        introParagraph:     fallback("introParagraph"),
-        boxOfficeAnalysis:  aiText.trim(),
-        audienceResponse:   fallback("audienceResponse"),
+        seoHeadline: fallback("seoHeadline"),
+        introParagraph: fallback("introParagraph"),
+        boxOfficeAnalysis: aiText.trim(),
+        audienceResponse: fallback("audienceResponse"),
         performanceAnalysis: fallback("performanceAnalysis"),
-        prediction:         fallback("prediction"),
-        finalVerdict:       fallback("finalVerdict"),
+        prediction: fallback("prediction"),
+        finalVerdict: fallback("finalVerdict"),
       };
     }
   };
@@ -2941,10 +4638,10 @@ async function scrapeSacnilkForMovie(movieId) {
   try {
     const resp = await fetch(cfg.sacnilkUrl, {
       headers: {
-        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept":          "text/html,application/xhtml+xml",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer":         "https://www.sacnilk.com/",
+        "Referer": "https://www.sacnilk.com/",
       },
       signal: AbortSignal.timeout(20000),
     });
@@ -2993,21 +4690,21 @@ async function scrapeSacnilkForMovie(movieId) {
   if (!movie) throw new Error("Movie not found");
 
   // IST helpers
-  const nowIST    = new Date(Date.now() + (5.5 * 60 * 60 * 1000)); // UTC+5:30
-  const todayStr  = nowIST.toISOString().slice(0, 10);             // YYYY-MM-DD today (IST)
+  const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000)); // UTC+5:30
+  const todayStr = nowIST.toISOString().slice(0, 10);             // YYYY-MM-DD today (IST)
 
   // §4a  BOX OFFICE DATE = YESTERDAY (IST)
   //  Sacnilk posts previous-day figures in the morning.
   //  The cron runs at 8 AM IST → data is always for yesterday.
   //  We auto-compute yesterday so the admin never has to change the date manually.
-  const yesterdayIST  = new Date(nowIST);
+  const yesterdayIST = new Date(nowIST);
   yesterdayIST.setDate(yesterdayIST.getDate() - 1);
-  const yesterdayStr  = yesterdayIST.toISOString().slice(0, 10); // YYYY-MM-DD yesterday (IST)
+  const yesterdayStr = yesterdayIST.toISOString().slice(0, 10); // YYYY-MM-DD yesterday (IST)
 
   movie.boxOfficeDays = movie.boxOfficeDays || [];
-  const existingDays  = movie.boxOfficeDays;
+  const existingDays = movie.boxOfficeDays;
 
-// §4b  PREVIOUS STORED CUMULATIVE TOTAL
+  // §4b  PREVIOUS STORED CUMULATIVE TOTAL
   //  Use movie.boxOffice.total — set to formatINRGlobal(scrapedCumulativeNum) on every
   //  successful scrape run, so it's always a clean "₹X.XX Cr" string.
   //  Summing individual day nets is unreliable if any entry has a corrupted value
@@ -3029,65 +4726,67 @@ async function scrapeSacnilkForMovie(movieId) {
     // Log the skip
     await SacnilkLog.create({
       movieId,
-      runAt:      new Date(),
-      status:     "skipped",
-      net:        "₹0",
-      gross:      "",
-      date:       yesterdayStr,
-      day:        null,
-      blogSlug:   "",
+      runAt: new Date(),
+      status: "skipped",
+      net: "₹0",
+      gross: "",
+      date: yesterdayStr,
+      day: null,
+      blogSlug: "",
       rawSnippet: html.slice(0, 500),
-      error:      `Scraped total (${scrapedCumulativeRaw}) equals stored total — no new data yet.`,
+      error: `Scraped total (${scrapedCumulativeRaw}) equals stored total — no new data yet.`,
     });
     await SacnilkConfig.findOneAndUpdate(
       { movieId },
-      { $set: {
-        "lastLog.runAt":   new Date(),
-        "lastLog.status":  "skipped",
-        "lastLog.net":     "₹0",
-        "lastLog.gross":   "",
-        "lastLog.date":    yesterdayStr,
-        "lastLog.error":   `No new data — scraped total ${scrapedCumulativeRaw} matches stored total.`,
-      }}
+      {
+        $set: {
+          "lastLog.runAt": new Date(),
+          "lastLog.status": "skipped",
+          "lastLog.net": "₹0",
+          "lastLog.gross": "",
+          "lastLog.date": yesterdayStr,
+          "lastLog.error": `No new data — scraped total ${scrapedCumulativeRaw} matches stored total.`,
+        }
+      }
     );
     return {
-      netRaw:       "₹0",
-      grossRaw:     "",
+      netRaw: "₹0",
+      grossRaw: "",
       scrapedTotal: scrapedCumulativeRaw,
-      day:          null,
-      date:         yesterdayStr,
-      blogSlug:     "",
-      skipped:      true,
-      reason:       `Scraped total (${scrapedCumulativeRaw}) equals previously stored total — Sacnilk hasn't updated yet.`,
+      day: null,
+      date: yesterdayStr,
+      blogSlug: "",
+      skipped: true,
+      reason: `Scraped total (${scrapedCumulativeRaw}) equals previously stored total — Sacnilk hasn't updated yet.`,
     };
   }
 
   // §4d  GROSS = Net × 1.18 (same GST_RATE as BoxOfficePanel)
-  const GST_RATE    = 1.18;
+  const GST_RATE = 1.18;
   const dailyGrossNum = Math.round(dailyNetNum * GST_RATE);
   const dailyGrossRaw = dailyGrossNum > 0 ? formatINR(dailyGrossNum) : "";
 
   // §4e  Determine day number
   const existingDayNums = existingDays.map(d => d.day);
-  const maxDay          = existingDayNums.length > 0 ? Math.max(...existingDayNums) : 0;
+  const maxDay = existingDayNums.length > 0 ? Math.max(...existingDayNums) : 0;
 
   let actualDay;
 
   if (yesterdayEntry) {
     // Re-scrape for same day — update existing entry only if new value is non-zero
-    yesterdayEntry.net   = dailyNetRaw;
+    yesterdayEntry.net = dailyNetRaw;
     yesterdayEntry.gross = dailyGrossRaw;
-    yesterdayEntry.note  = "Ollypedia Tracker (updated)";
+    yesterdayEntry.note = "Ollypedia Tracker (updated)";
     actualDay = yesterdayEntry.day;
   } else {
     // New day entry
     actualDay = maxDay + 1;
     existingDays.push({
-      day:   actualDay,
-      net:   dailyNetRaw,
+      day: actualDay,
+      net: dailyNetRaw,
       gross: dailyGrossRaw,
-      date:  yesterdayStr,
-      note:  "Ollypedia Tracker",
+      date: yesterdayStr,
+      note: "Ollypedia Tracker",
     });
   }
 
@@ -3095,8 +4794,8 @@ async function scrapeSacnilkForMovie(movieId) {
 
   // §4f  Update boxOffice.total (running cumulative net)
   const newTotalNet = scrapedCumulativeNum; // Sacnilk cumulative IS the new total
-  movie.boxOffice        = movie.boxOffice || {};
-  movie.boxOffice.total  = formatINR(newTotalNet);
+  movie.boxOffice = movie.boxOffice || {};
+  movie.boxOffice.total = formatINR(newTotalNet);
 
   await movie.save({ validateBeforeSave: false });
 
@@ -3104,39 +4803,39 @@ async function scrapeSacnilkForMovie(movieId) {
   //  §5  BUILD BLOG CONTENT  (full BoxOfficePanel template)
   // ─────────────────────────────────────────────────────────────────────────
 
-  const daysUpToN     = movie.boxOfficeDays.filter(d => d.day <= actualDay);
-  const sortedDays    = [...daysUpToN].sort((a, b) => a.day - b.day);
+  const daysUpToN = movie.boxOfficeDays.filter(d => d.day <= actualDay);
+  const sortedDays = [...daysUpToN].sort((a, b) => a.day - b.day);
 
   // Recalculate totals from sorted days (net may differ from cumulative due to rounding)
-  const totalNet      = newTotalNet;
+  const totalNet = newTotalNet;
   const totalGrossNum = sortedDays.reduce((s, d) => s + parseToRupees(d.gross || "0"), 0);
 
-  const totalNetStr   = formatINR(totalNet);
+  const totalNetStr = formatINR(totalNet);
   const totalGrossStr = totalGrossNum > 0 ? formatINR(totalGrossNum) : "—";
 
-  const year          = getYear(movie.releaseDate);
-  const movieName     = movie.title || "Unknown Movie";
+  const year = getYear(movie.releaseDate);
+  const movieName = movie.title || "Unknown Movie";
   const movieNameNoSp = movieName.replace(/\s+/g, "");
   const releaseDateFmt = movie.releaseDate
     ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
     : "";
-  const genreArr      = Array.isArray(movie.genre) ? movie.genre : (movie.genre ? [movie.genre] : []);
-  const genre         = genreArr.join(", ") || "Drama";
-  const movieSlug     = slugify(`${movieName}${year ? ` (${year})` : ""}`);
-  const boxOfficeUrl  = `/box-office/${movieSlug}`;
+  const genreArr = Array.isArray(movie.genre) ? movie.genre : (movie.genre ? [movie.genre] : []);
+  const genre = genreArr.join(", ") || "Drama";
+  const movieSlug = slugify(`${movieName}${year ? ` (${year})` : ""}`);
+  const boxOfficeUrl = `/box-office/${movieSlug}`;
 
   // Blog slug — deterministic per movie+day (no timestamp suffix)
-  const blogSlugBase  = slugify(`${movieName}${year ? ` ${year}` : ""} day ${actualDay} box office collection`);
-  const blogSlug      = blogSlugBase; // stable per day → create-or-update
+  const blogSlugBase = slugify(`${movieName}${year ? ` ${year}` : ""} day ${actualDay} box office collection`);
+  const blogSlug = blogSlugBase; // stable per day → create-or-update
 
-  const blogTitle     = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross`;
+  const blogTitle = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross`;
 
   const crew = extractCastInfo(movie);
   const { directorName, producerName, musicDirector, writer, dop, editor, leadActors, leadActresses } = crew;
 
   const currentDayObj = sortedDays.find(d => d.day === actualDay) || sortedDays[sortedDays.length - 1] || {};
-  const dayNet        = currentDayObj.net   ? formatINR(parseToRupees(currentDayObj.net))   : dailyNetRaw;
-  const dayGross      = currentDayObj.gross ? formatINR(parseToRupees(currentDayObj.gross)) : (dailyGrossRaw || "—");
+  const dayNet = currentDayObj.net ? formatINR(parseToRupees(currentDayObj.net)) : dailyNetRaw;
+  const dayGross = currentDayObj.gross ? formatINR(parseToRupees(currentDayObj.gross)) : (dailyGrossRaw || "—");
 
   // ─────────────────────────────────────────────────────────────────────────
   //  §6  GROQ AI — 7-section editorial content (same model + prompt as BoxOfficePanel)
@@ -3147,11 +4846,11 @@ async function scrapeSacnilkForMovie(movieId) {
     .map((d) => `Day ${d.day}${d.date ? ` (${d.date})` : ""}: Net ${formatINR(parseToRupees(d.net))}, Gross ${formatINR(parseToRupees(d.gross))}${d.note ? ` — ${d.note}` : ""}`)
     .join("\n");
   const castLine = [
-    directorName   ? `Director: ${directorName}`         : "",
-    producerName   ? `Producer: ${producerName}`         : "",
-    musicDirector  ? `Music Director: ${musicDirector}`  : "",
-    writer         ? `Writer: ${writer}`                 : "",
-    leadActors.length   ? `Cast: ${leadActors.join(", ")}`       : "",
+    directorName ? `Director: ${directorName}` : "",
+    producerName ? `Producer: ${producerName}` : "",
+    musicDirector ? `Music Director: ${musicDirector}` : "",
+    writer ? `Writer: ${writer}` : "",
+    leadActors.length ? `Cast: ${leadActors.join(", ")}` : "",
     leadActresses.length ? `Actresses: ${leadActresses.join(", ")}` : "",
   ].filter(Boolean).join("\n");
 
@@ -3192,19 +4891,19 @@ Rules:
   const groqKey = process.env.GROQ_API_KEY || "";
   if (groqKey) {
     try {
-      const model   = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+      const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${groqKey}` },
         body: JSON.stringify({
           model,
-          max_tokens:      1500,
-          temperature:     0.7,
-          top_p:           0.9,
+          max_tokens: 1500,
+          temperature: 0.7,
+          top_p: 0.9,
           response_format: { type: "json_object" },
           messages: [
             {
-              role:    "system",
+              role: "system",
               content: "You are an expert Odia cinema journalist writing for Ollypedia. When asked to return JSON, you MUST return ONLY a valid JSON object with no extra text, no markdown, no code fences. All string values must be plain text — no HTML tags, no bullet points.",
             },
             { role: "user", content: aiPrompt },
@@ -3243,23 +4942,23 @@ Rules:
     year ? `${movieName} (${year}) Box Office Collection` : null,
     year ? `${movieName} (${year}) Total Collection` : null,
   );
-  if (directorName)  kw.push(directorName, `${directorName} Movie`, `${directorName} Odia Movie`, `${directorName} Director`);
-  if (producerName)  kw.push(producerName, `${producerName} Producer`);
-  leadActors.forEach(a    => kw.push(a, `${a} Movie`, `${a} Odia Movie`));
+  if (directorName) kw.push(directorName, `${directorName} Movie`, `${directorName} Odia Movie`, `${directorName} Director`);
+  if (producerName) kw.push(producerName, `${producerName} Producer`);
+  leadActors.forEach(a => kw.push(a, `${a} Movie`, `${a} Odia Movie`));
   leadActresses.forEach(a => kw.push(a, `${a} Movie`, `${a} Odia Movie`));
   if (musicDirector) kw.push(musicDirector, `${musicDirector} Music Director`);
-  if (writer)        kw.push(writer, `${writer} Writer`);
-  if (dop)           kw.push(dop, `${dop} Cinematographer`);
-  if (editor)        kw.push(editor, `${editor} Editor`);
+  if (writer) kw.push(writer, `${writer} Writer`);
+  if (dop) kw.push(dop, `${dop} Cinematographer`);
+  if (editor) kw.push(editor, `${editor} Editor`);
   genreArr.forEach(g => kw.push(`${g} Odia Movie`, `Odia ${g} Film`));
   kw.push(
-    "Odia Movie Collection","Odia Movie Details","Odia Movie Cast","Odia Movie Review",
-    "Odia Movie Trailer","Odia Movie Release Date","Odia Movie Box Office",
-    "Odia Box Office Collection","Ollywood Box Office Collection","Ollywood Movie Collection",
-    "Ollywood Movie Details","Ollywood News","Latest Odia Movie News","Odia Cinema News",
-    "Odia Film Industry","Trending Odia Movie",
+    "Odia Movie Collection", "Odia Movie Details", "Odia Movie Cast", "Odia Movie Review",
+    "Odia Movie Trailer", "Odia Movie Release Date", "Odia Movie Box Office",
+    "Odia Box Office Collection", "Ollywood Box Office Collection", "Ollywood Movie Collection",
+    "Ollywood Movie Details", "Ollywood News", "Latest Odia Movie News", "Odia Cinema News",
+    "Odia Film Industry", "Trending Odia Movie",
     year ? `New Odia Movie ${year}` : "New Odia Movie",
-    "Best Odia Movies","Ollywood Updates",
+    "Best Odia Movies", "Ollywood Updates",
   );
   const keywordsStr = kw.filter(Boolean).join(",\n");
 
@@ -3270,13 +4969,13 @@ Rules:
   const tags = [
     `#${movieNameNoSp}`, `#${movieNameNoSp}Collection`, `#${movieNameNoSp}BoxOffice`,
     `#${movieNameNoSp}Day${actualDay}`,
-    directorName  ? `#${directorName.replace(/\s+/g,"")}` : null,
-    producerName  ? `#${producerName.replace(/\s+/g,"")}` : null,
-    musicDirector ? `#${musicDirector.replace(/\s+/g,"")}` : null,
-    ...leadActors.map(a     => `#${a.replace(/\s+/g,"")}`),
-    ...leadActresses.map(a  => `#${a.replace(/\s+/g,"")}`),
-    "#OdiaMovie","#Ollywood","#OdiaCinema","#Ollypedia",
-    "#BoxOfficeCollection","#OllywoodBoxOffice","#OllywoodNews",
+    directorName ? `#${directorName.replace(/\s+/g, "")}` : null,
+    producerName ? `#${producerName.replace(/\s+/g, "")}` : null,
+    musicDirector ? `#${musicDirector.replace(/\s+/g, "")}` : null,
+    ...leadActors.map(a => `#${a.replace(/\s+/g, "")}`),
+    ...leadActresses.map(a => `#${a.replace(/\s+/g, "")}`),
+    "#OdiaMovie", "#Ollywood", "#OdiaCinema", "#Ollypedia",
+    "#BoxOfficeCollection", "#OllywoodBoxOffice", "#OllywoodNews",
     year ? `#OdiaMovie${year}` : null,
   ].filter(Boolean);
 
@@ -3289,20 +4988,20 @@ Rules:
   // ─────────────────────────────────────────────────────────────────────────
 
   const infoRows = [
-    ["Movie Name",     movieName],
-    ["Language",       "Odia"],
-    ["Industry",       "Ollywood"],
-    ["Genre",          genre],
-    releaseDateFmt      ? ["Release Date",    releaseDateFmt]             : null,
-    directorName        ? ["Director",        directorName]               : null,
-    producerName        ? ["Producer",        producerName]               : null,
-    musicDirector       ? ["Music Director",  musicDirector]              : null,
-    writer              ? ["Writer",          writer]                     : null,
-    dop                 ? ["Cinematographer", dop]                        : null,
-    editor              ? ["Editor",          editor]                     : null,
-    leadActors.length   ? ["Cast",            leadActors.join(", ")]      : null,
-    leadActresses.length ? ["Actress",        leadActresses.join(", ")]   : null,
-    movie.budget        ? ["Budget",          movie.budget]               : null,
+    ["Movie Name", movieName],
+    ["Language", "Odia"],
+    ["Industry", "Ollywood"],
+    ["Genre", genre],
+    releaseDateFmt ? ["Release Date", releaseDateFmt] : null,
+    directorName ? ["Director", directorName] : null,
+    producerName ? ["Producer", producerName] : null,
+    musicDirector ? ["Music Director", musicDirector] : null,
+    writer ? ["Writer", writer] : null,
+    dop ? ["Cinematographer", dop] : null,
+    editor ? ["Editor", editor] : null,
+    leadActors.length ? ["Cast", leadActors.join(", ")] : null,
+    leadActresses.length ? ["Actress", leadActresses.join(", ")] : null,
+    movie.budget ? ["Budget", movie.budget] : null,
   ].filter(Boolean);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -3313,9 +5012,9 @@ Rules:
 
   let cumulativeNet = 0, cumulativeGross = 0;
   const dataTableRows = sortedDays.map((d, i) => {
-    const netNum    = parseNum(d.net);
-    const grossNum  = parseNum(d.gross);
-    cumulativeNet   += netNum;
+    const netNum = parseNum(d.net);
+    const grossNum = parseNum(d.gross);
+    cumulativeNet += netNum;
     cumulativeGross += grossNum;
 
     const prevNetNum = i > 0 ? parseNum(sortedDays[i - 1].net) : null;
@@ -3330,8 +5029,8 @@ Rules:
       trendHtml = `<span style="display:inline-block;background:rgba(201,151,58,0.2);color:#c9973a;border-radius:4px;padding:2px 7px;font-size:0.72rem;font-weight:700;">Opening</span>`;
     }
 
-    const isToday  = d.day === actualDay;
-    const dateStr  = d.date
+    const isToday = d.day === actualDay;
+    const dateStr = d.date
       ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
       : "—";
 
@@ -3353,15 +5052,15 @@ Rules:
   // ─────────────────────────────────────────────────────────────────────────
 
   const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:26px;`;
-  const h2   = `font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 20px;line-height:1.3;`;
-  const h3   = `font-size:0.85rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.09em;margin:0 0 12px;`;
-  const tdL  = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:42%;vertical-align:top;`;
-  const tdR  = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
-  const th   = `padding:11px 14px;background:#1f1f1f;color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;text-align:left;border-bottom:2px solid #2a2a2a;`;
+  const h2 = `font-size:1.05rem;font-weight:800;color:#ff6b00;border-left:4px solid #ff6b00;padding-left:12px;margin:0 0 20px;line-height:1.3;`;
+  const h3 = `font-size:0.85rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.09em;margin:0 0 12px;`;
+  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:42%;vertical-align:top;`;
+  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+  const th = `padding:11px 14px;background:#1f1f1f;color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;text-align:left;border-bottom:2px solid #2a2a2a;`;
 
   // Prev / Next slugs
-  const prevSlug     = slugify(`${movieName}${year ? ` (${year})` : ""} day ${actualDay - 1} box office collection`);
-  const nextSlug     = slugify(`${movieName}${year ? ` (${year})` : ""} day ${actualDay + 1} box office collection`);
+  const prevSlug = slugify(`${movieName}${year ? ` (${year})` : ""} day ${actualDay - 1} box office collection`);
+  const nextSlug = slugify(`${movieName}${year ? ` (${year})` : ""} day ${actualDay + 1} box office collection`);
   const prevDayLabel = `${movieName} Day ${actualDay - 1}`;
   const nextDayLabel = `${movieName} Day ${actualDay + 1}`;
 
@@ -3374,16 +5073,28 @@ Rules:
   title:          ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross | Ollypedia
   description:    ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection: Collected ${totalNetStr} net and ${totalGrossStr} gross in ${actualDay} day${actualDay !== 1 ? "s" : ""}. Complete day-wise breakdown, audience response, performance analysis & predictions on Ollypedia.
   keywords:       ${keywordsStr}
-  canonical:      https://ollypedia.in/blog/${blogSlug}
+  canonical:      ${SITE_URL}/blog/${blogSlug}
+  robots:         index, follow
+  og:site_name:   Ollypedia
   og:title:       ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross | Ollypedia
   og:description: ${movieName} has collected ${totalNetStr} net and ${totalGrossStr} gross after ${actualDay} days. Full report on Ollypedia. Complete day-wise breakdown, audience response, performance analysis & predictions on Ollypedia.
-  og:url:         https://ollypedia.in/blog/${blogSlug}
-  og:image:       ${movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "https://ollypedia.in/logo.png"}
+  og:url:         ${SITE_URL}/blog/${blogSlug}
+  og:image:       ${movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || `${SITE_URL}/logo.png`}
+  og:image:width: 1200
+  og:image:height: 630
   og:type:        article
+  og:locale:      en_IN
+  article:published_time: ${yesterdayStr}
+  article:modified_time:  ${todayStr}
+  article:author: Ollypedia Team
+  article:section: Box Office
   twitter:card:   summary_large_image
+  twitter:site:   @OllypediaIn
+  twitter:creator: @OllypediaIn
   twitter:title:  ${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection | Ollypedia
   twitter:description: ${movieName} Day ${actualDay} — Net ${dayNet}, Total ${totalNetStr}. Full breakdown on Ollypedia.
-  twitter:image:  ${movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "https://ollypedia.in/logo.png"}
+  twitter:image:  ${movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || `${SITE_URL}/logo.png`}
+  twitter:image:alt: ${movieName} Box Office Collection
 ════════════════════════════════════════════════════════════════ -->
 
 <!-- ─────────────────────────────────────────────
@@ -3399,13 +5110,18 @@ Rules:
       "description": "${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection: Collected ${totalNetStr} net and ${totalGrossStr} gross in ${actualDay} day${actualDay !== 1 ? "s" : ""}.",
       "datePublished": "${yesterdayStr}",
       "dateModified":  "${todayStr}",
-      "author":    { "@type": "Organization", "name": "Ollypedia", "url": "https://ollypedia.in" },
-      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "https://ollypedia.in",
-                     "logo": { "@type": "ImageObject", "url": "https://ollypedia.in/logo.png" } },
-      "mainEntityOfPage": { "@type": "WebPage", "@id": "https://ollypedia.in/blog/${blogSlug}" },
+      "inLanguage": "en",
+      "author": [
+        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
+        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+      ],
+      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}",
+                     "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" } },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${blogSlug}" },
       "about": {
         "@type": "Movie",
         "name":       "${movieName}",
+        "url": "${SITE_URL}${boxOfficeUrl}",
         "inLanguage": "Odia",
         "genre":      "${genre}"${releaseDateFmt ? `,
         "datePublished": "${releaseDateFmt}"` : ""}${directorName ? `,
@@ -3417,10 +5133,10 @@ Rules:
     {
       "@type": "BreadcrumbList",
       "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": "Home",        "item": "https://ollypedia.in" },
-        { "@type": "ListItem", "position": 2, "name": "Box Office",  "item": "https://ollypedia.in/box-office" },
-        { "@type": "ListItem", "position": 3, "name": "${movieName}","item": "https://ollypedia.in${boxOfficeUrl}" },
-        { "@type": "ListItem", "position": 4, "name": "Day ${actualDay} Collection", "item": "https://ollypedia.in/blog/${blogSlug}" }
+        { "@type": "ListItem", "position": 1, "name": "Home",        "item": "${SITE_URL}" },
+        { "@type": "ListItem", "position": 2, "name": "Box Office",  "item": "${SITE_URL}/box-office" },
+        { "@type": "ListItem", "position": 3, "name": "${movieName}","item": "${SITE_URL}${boxOfficeUrl}" },
+        { "@type": "ListItem", "position": 4, "name": "Day ${actualDay} Collection", "item": "${SITE_URL}/blog/${blogSlug}" }
       ]
     },
     {
@@ -3475,42 +5191,42 @@ Rules:
 
 <!-- MOBILE RESPONSIVE STYLES — scoped, presentation-only, no logic/SEO impact -->
 <style>
-.ollypedia-blog-content img,
-.ollypedia-blog-content table,
-.ollypedia-blog-content div,
-.ollypedia-blog-content section,
-.ollypedia-blog-content td,
-.ollypedia-blog-content th { box-sizing: border-box; }
+.bp-article-html img,
+.bp-article-html table,
+.bp-article-html div,
+.bp-article-html section,
+.bp-article-html td,
+.bp-article-html th { box-sizing: border-box; }
 
-.ollypedia-blog-content { overflow-x: hidden; word-break: break-word; }
+.bp-article-html { overflow-x: hidden; word-break: break-word; }
 
-.ollypedia-blog-content p,
-.ollypedia-blog-content span,
-.ollypedia-blog-content strong,
-.ollypedia-blog-content em,
-.ollypedia-blog-content a,
-.ollypedia-blog-content h1,
-.ollypedia-blog-content h2,
-.ollypedia-blog-content h3,
-.ollypedia-blog-content td,
-.ollypedia-blog-content th {
+.bp-article-html p,
+.bp-article-html span,
+.bp-article-html strong,
+.bp-article-html em,
+.bp-article-html a,
+.bp-article-html h1,
+.bp-article-html h2,
+.bp-article-html h3,
+.bp-article-html td,
+.bp-article-html th {
   overflow-wrap: break-word;
   word-break: break-word;
   max-width: 100%;
 }
 
-.ollypedia-blog-content img,
-.ollypedia-blog-content svg,
-.ollypedia-blog-content video,
-.ollypedia-blog-content iframe,
-.ollypedia-blog-content embed,
-.ollypedia-blog-content object,
-.ollypedia-blog-content canvas {
+.bp-article-html img,
+.bp-article-html svg,
+.bp-article-html video,
+.bp-article-html iframe,
+.bp-article-html embed,
+.bp-article-html object,
+.bp-article-html canvas {
   max-width: 100%;
   height: auto;
 }
 
-.ollypedia-blog-content pre {
+.bp-article-html pre {
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
@@ -3518,76 +5234,76 @@ Rules:
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
 }
-.ollypedia-blog-content code {
+.bp-article-html code {
   overflow-wrap: break-word;
   word-break: break-word;
 }
-.ollypedia-blog-content blockquote {
+.bp-article-html blockquote {
   max-width: 100%;
   overflow-wrap: break-word;
   word-break: break-word;
 }
 
-.ollypedia-blog-content table { max-width: 100%; }
+.bp-article-html table { max-width: 100%; }
 
-.ollypedia-blog-content .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.bp-article-html .tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 @media (max-width: 640px) {
-  .ollypedia-blog-content .hero-section {
+  .bp-article-html .hero-section {
     padding: 20px 16px 18px !important;
   }
-  .ollypedia-blog-content section[style*="background:#181818"],
-  .ollypedia-blog-content section[style*="background: #181818"] {
+  .bp-article-html section[style*="background:#181818"],
+  .bp-article-html section[style*="background: #181818"] {
     padding: 18px 14px !important;
   }
-  .ollypedia-blog-content section[style*="background:#111"] {
+  .bp-article-html section[style*="background:#111"] {
     padding: 16px 14px !important;
   }
-  .ollypedia-blog-content .stat-chips {
+  .bp-article-html .stat-chips {
     grid-template-columns: 1fr 1fr !important;
   }
-  .ollypedia-blog-content .perf-stats {
+  .bp-article-html .perf-stats {
     flex-direction: column !important;
     gap: 12px !important;
   }
-  .ollypedia-blog-content nav[aria-label="Day navigation"] {
+  .bp-article-html nav[aria-label="Day navigation"] {
     flex-direction: column !important;
   }
-  .ollypedia-blog-content .info-table td:first-child {
+  .bp-article-html .info-table td:first-child {
     width: 38% !important;
     font-size: 0.8rem !important;
   }
-  .ollypedia-blog-content .data-table td,
-  .ollypedia-blog-content .data-table th {
+  .bp-article-html .data-table td,
+  .bp-article-html .data-table th {
     padding: 8px 8px !important;
     font-size: 0.78rem !important;
   }
-  .ollypedia-blog-content .bar-table td {
+  .bp-article-html .bar-table td {
     padding: 8px 8px !important;
   }
-  .ollypedia-blog-content .also-read-grid {
+  .bp-article-html .also-read-grid {
     grid-template-columns: 1fr !important;
   }
-  .ollypedia-blog-content .tag-chip {
+  .bp-article-html .tag-chip {
     font-size: 0.7rem !important;
     padding: 3px 10px !important;
   }
-  .ollypedia-blog-content .cta-btn {
+  .bp-article-html .cta-btn {
     display: block !important;
     width: 100% !important;
     box-sizing: border-box !important;
     text-align: center !important;
   }
-  .ollypedia-blog-content .faq-section {
+  .bp-article-html .faq-section {
     padding: 18px 14px !important;
   }
 }
 
 @media (max-width: 400px) {
-  .ollypedia-blog-content .stat-chips {
+  .bp-article-html .stat-chips {
     grid-template-columns: 1fr !important;
   }
-  .ollypedia-blog-content h1 {
+  .bp-article-html h1 {
     font-size: 1.1rem !important;
   }
 }
@@ -3626,7 +5342,7 @@ Rules:
       According to industry trade estimates, <strong style="color:#fff;">${movieName}</strong> has collected approximately
       <strong style="color:#c9973a;">${totalNetStr} Net</strong> and
       <strong style="color:#7ec8e3;">${totalGrossStr} Gross</strong> in its first ${actualDay} day${actualDay !== 1 ? "s" : ""} of theatrical release.
-      ${directorName ? `Directed by <strong style="color:#ddd;">${directorName}</strong>, the` : "The"} film has been running across Odisha${leadActors.length ? ` with <strong style="color:#ddd;">${leadActors.slice(0,2).join(" and ")}</strong> in the lead roles.` : " with strong audience support."}
+      ${directorName ? `Directed by <strong style="color:#ddd;">${directorName}</strong>, the` : "The"} film has been running across Odisha${leadActors.length ? ` with <strong style="color:#ddd;">${leadActors.slice(0, 2).join(" and ")}</strong> in the lead roles.` : " with strong audience support."}
     </p>
     <div class="stat-chips" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-top:20px;">
       <div style="background:rgba(0,0,0,0.5);border:1px solid #2e2000;border-radius:10px;padding:14px 16px;">
@@ -3771,7 +5487,7 @@ Rules:
 <!-- PREV / NEXT DAY NAVIGATION -->
 <nav aria-label="Day navigation" style="display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap;">
   ${actualDay > 1
-    ? `<a href="/blog/${prevSlug}" rel="prev" style="flex:1;min-width:140px;display:flex;align-items:center;gap:10px;background:#181818;border:1px solid #242424;border-radius:12px;padding:14px 18px;text-decoration:none;">
+      ? `<a href="/blog/${prevSlug}" rel="prev" style="flex:1;min-width:140px;display:flex;align-items:center;gap:10px;background:#181818;border:1px solid #242424;border-radius:12px;padding:14px 18px;text-decoration:none;">
     <span style="font-size:1.1rem;color:#555;">←</span>
     <div>
       <div style="font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Previous</div>
@@ -3779,8 +5495,8 @@ Rules:
       <div style="font-size:0.72rem;color:#555;">Box Office Collection</div>
     </div>
   </a>`
-    : `<div style="flex:1;min-width:140px;"></div>`
-  }
+      : `<div style="flex:1;min-width:140px;"></div>`
+    }
   <a href="/blog/${nextSlug}" rel="next" style="flex:1;min-width:140px;display:flex;align-items:center;justify-content:flex-end;gap:10px;background:#181818;border:1px solid #242424;border-radius:12px;padding:14px 18px;text-decoration:none;text-align:right;">
     <div>
       <div style="font-size:0.65rem;color:#555;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Next</div>
@@ -3917,16 +5633,16 @@ Rules:
   // ─────────────────────────────────────────────────────────────────────────
 
   const seoTitle = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross | Ollypedia`;
-  const seoDesc  = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection: The film has collected ${totalNetStr} net and ${totalGrossStr} gross in ${actualDay} day${actualDay !== 1 ? "s" : ""}. Check complete day-wise breakdown, audience response, and performance analysis on Ollypedia.`;
-  const excerpt  = sections.introParagraph ||
+  const seoDesc = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection: The film has collected ${totalNetStr} net and ${totalGrossStr} gross in ${actualDay} day${actualDay !== 1 ? "s" : ""}. Check complete day-wise breakdown, audience response, and performance analysis on Ollypedia.`;
+  const excerpt = sections.introParagraph ||
     `${movieName} Day ${actualDay} box office collection: Net ${dayNet}, Gross ${dayGross}. Total ${totalNetStr} net in ${sortedDays.length} days.`;
 
   const blogPayload = {
-    title:      blogTitle,
-    slug:       blogSlug,
+    title: blogTitle,
+    slug: blogSlug,
     excerpt,
-    content:    blogContent,
-    category:   "Box Office",
+    content: blogContent,
+    category: "Box Office",
     tags: [
       movieName, "Box Office", "Odia Cinema", "Ollywood",
       `Day ${actualDay}`, year ? String(year) : null,
@@ -3934,11 +5650,11 @@ Rules:
       ...leadActors, ...leadActresses,
     ].filter(Boolean),
     coverImage: movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "",
-    movieId:     movie._id,
-    movieTitle:  movieName,
-    author:      "Ollypedia Team",
-    published:   true,
-    featured:    false,
+    movieId: movie._id,
+    movieTitle: movieName,
+    author: "Ollypedia Team",
+    published: true,
+    featured: false,
     seoTitle,
     seoDesc,
   };
@@ -3976,14 +5692,14 @@ Rules:
   // ─────────────────────────────────────────────────────────────────────────
 
   cfg.lastLog = {
-    runAt:    new Date(),
-    status:   "success",
-    net:      dailyNetRaw,
-    gross:    dailyGrossRaw,
-    date:     yesterdayStr,
-    day:      actualDay,
+    runAt: new Date(),
+    status: "success",
+    net: dailyNetRaw,
+    gross: dailyGrossRaw,
+    date: yesterdayStr,
+    day: actualDay,
     blogSlug: finalSlug,
-    error:    "",
+    error: "",
   };
   await cfg.save();
 
@@ -3993,13 +5709,13 @@ Rules:
 
   await SacnilkLog.create({
     movieId,
-    runAt:      new Date(),
-    status:     "success",
-    net:        dailyNetRaw,
-    gross:      dailyGrossRaw,
-    date:       yesterdayStr,
-    day:        actualDay,
-    blogSlug:   finalSlug,
+    runAt: new Date(),
+    status: "success",
+    net: dailyNetRaw,
+    gross: dailyGrossRaw,
+    date: yesterdayStr,
+    day: actualDay,
+    blogSlug: finalSlug,
     rawSnippet: html.slice(0, 500),
   });
 
@@ -4020,12 +5736,12 @@ Rules:
   // } catch { /* non-fatal */ }
 
   return {
-    netRaw:        dailyNetRaw,
-    grossRaw:      dailyGrossRaw,
-    scrapedTotal:  scrapedCumulativeRaw,
-    day:           actualDay,
-    date:          yesterdayStr,
-    blogSlug:      finalSlug,
+    netRaw: dailyNetRaw,
+    grossRaw: dailyGrossRaw,
+    scrapedTotal: scrapedCumulativeRaw,
+    day: actualDay,
+    date: yesterdayStr,
+    blogSlug: finalSlug,
   };
 }
 
@@ -4055,7 +5771,7 @@ app.put("/api/admin/sacnilk/configs/:movieId", adminAuth, async (req, res) => {
     const { sacnilkUrl, active } = req.body;
     const update = { movieTitle: movie.title };
     if (sacnilkUrl !== undefined) update.sacnilkUrl = sacnilkUrl;
-    if (active !== undefined)     update.active     = active;
+    if (active !== undefined) update.active = active;
 
     const cfg = await SacnilkConfig.findOneAndUpdate(
       { movieId },
@@ -4099,29 +5815,29 @@ app.post("/api/admin/sacnilk/scrape/:movieId", adminAuth, async (req, res) => {
     // Sacnilk hadn't updated yet — no new data, nothing saved, no blog published
     if (result.skipped) {
       return res.json({
-        success:      true,
-        skipped:      true,
+        success: true,
+        skipped: true,
         netCollection: "₹0",
-        netRaw:        result.netRaw,
-        grossRaw:      result.grossRaw,
-        scrapedTotal:  result.scrapedTotal,
-        day:           null,
-        date:          result.date,
-        blogSlug:      "",
-        message:       `⏭ Skipped — ${result.reason}`,
+        netRaw: result.netRaw,
+        grossRaw: result.grossRaw,
+        scrapedTotal: result.scrapedTotal,
+        day: null,
+        date: result.date,
+        blogSlug: "",
+        message: `⏭ Skipped — ${result.reason}`,
       });
     }
 
     res.json({
-      success:       true,
-      skipped:       false,
+      success: true,
+      skipped: false,
       netCollection: result.netRaw,   // legacy field kept for backwards compat
-      netRaw:        result.netRaw,
-      grossRaw:      result.grossRaw,
-      scrapedTotal:  result.scrapedTotal,
-      day:           result.day,
-      date:          result.date,
-      blogSlug:      result.blogSlug,
+      netRaw: result.netRaw,
+      grossRaw: result.grossRaw,
+      scrapedTotal: result.scrapedTotal,
+      day: result.day,
+      date: result.date,
+      blogSlug: result.blogSlug,
       message: `Day ${result.day} (${result.date}) — Net ${result.netRaw}, Gross ${result.grossRaw}. Blog: /blog/${result.blogSlug}`,
     });
   } catch (e) {
@@ -4152,15 +5868,15 @@ app.post("/api/admin/sacnilk/scrape-all", adminAuth, async (req, res) => {
         const r = await scrapeSacnilkForMovie(String(cfg.movieId));
         successCount++;
         results.push({
-          movieId:      cfg.movieId,
-          movieTitle:   cfg.movieTitle,
-          status:       "success",
-          netRaw:       r.netRaw,
-          grossRaw:     r.grossRaw,
+          movieId: cfg.movieId,
+          movieTitle: cfg.movieTitle,
+          status: "success",
+          netRaw: r.netRaw,
+          grossRaw: r.grossRaw,
           scrapedTotal: r.scrapedTotal,
-          day:          r.day,
-          date:         r.date,
-          blogSlug:     r.blogSlug,
+          day: r.day,
+          date: r.date,
+          blogSlug: r.blogSlug,
         });
       } catch (e) {
         failCount++;
@@ -4197,8 +5913,8 @@ cron.schedule("30 6 * * *", async () => {
 
   try {
     const configs = await SacnilkConfig.find({
-      active:      true,
-      sacnilkUrl:  { $ne: "" },
+      active: true,
+      sacnilkUrl: { $ne: "" },
     }).lean();
 
     console.log(`[Sacnilk Cron] ${configs.length} active movie(s) to scrape`);
@@ -4243,32 +5959,32 @@ app.post("/api/track", async (req, res) => {
   res.json({ ok: true }); // respond immediately, never block the user
 
   try {
-    const ua  = req.headers["user-agent"] || "";
-    const ip  = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-                || req.socket?.remoteAddress || "";
+    const ua = req.headers["user-agent"] || "";
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+      || req.socket?.remoteAddress || "";
     const { page = "/", referrer = "" } = req.body;
 
     const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
-    const device   = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
+    const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
 
-    const os = /Windows/i.test(ua)    ? "Windows"
-             : /Android/i.test(ua)    ? "Android"
-             : /iPhone|iPad/i.test(ua) ? "iOS"
-             : /Mac/i.test(ua)         ? "macOS"
-             : /Linux/i.test(ua)       ? "Linux" : "Other";
+    const os = /Windows/i.test(ua) ? "Windows"
+      : /Android/i.test(ua) ? "Android"
+        : /iPhone|iPad/i.test(ua) ? "iOS"
+          : /Mac/i.test(ua) ? "macOS"
+            : /Linux/i.test(ua) ? "Linux" : "Other";
 
-    const browser = /Edg\//i.test(ua)   ? "Edge"
-                  : /OPR\//i.test(ua)   ? "Opera"
-                  : /Chrome/i.test(ua)  ? "Chrome"
-                  : /Firefox/i.test(ua) ? "Firefox"
-                  : /Safari/i.test(ua)  ? "Safari" : "Other";
+    const browser = /Edg\//i.test(ua) ? "Edge"
+      : /OPR\//i.test(ua) ? "Opera"
+        : /Chrome/i.test(ua) ? "Chrome"
+          : /Firefox/i.test(ua) ? "Firefox"
+            : /Safari/i.test(ua) ? "Safari" : "Other";
 
     let country = "", city = "";
     if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
       try {
         const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
-        const gd  = await geo.json();
+        const gd = await geo.json();
         if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
       } catch { /* geo timeout */ }
     }
@@ -4280,9 +5996,9 @@ app.post("/api/track", async (req, res) => {
 // GET /api/admin/analytics — full analytics dashboard data
 app.get("/api/admin/analytics", adminAuth, async (req, res) => {
   try {
-    const now   = new Date();
-    const day   = new Date(now); day.setHours(0, 0, 0, 0);
-    const week  = new Date(now); week.setDate(now.getDate() - 7);
+    const now = new Date();
+    const day = new Date(now); day.setHours(0, 0, 0, 0);
+    const week = new Date(now); week.setDate(now.getDate() - 7);
     const month = new Date(now); month.setDate(now.getDate() - 30);
 
     const [
@@ -4294,8 +6010,8 @@ app.get("/api/admin/analytics", adminAuth, async (req, res) => {
       VisitorLog.countDocuments({ visitedAt: { $gte: week } }),
       VisitorLog.countDocuments({ visitedAt: { $gte: month } }),
 
-      VisitorLog.aggregate([{ $group: { _id: "$device",  count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
-      VisitorLog.aggregate([{ $group: { _id: "$os",      count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      VisitorLog.aggregate([{ $group: { _id: "$device", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+      VisitorLog.aggregate([{ $group: { _id: "$os", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
       VisitorLog.aggregate([{ $group: { _id: "$browser", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
       VisitorLog.aggregate([
         { $match: { country: { $ne: "" } } },
@@ -4309,10 +6025,12 @@ app.get("/api/admin/analytics", adminAuth, async (req, res) => {
       VisitorLog.find().sort({ visitedAt: -1 }).limit(50).lean(),
       VisitorLog.aggregate([
         { $match: { visitedAt: { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } } },
-        { $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$visitedAt", timezone: "Asia/Kolkata" } },
-          count: { $sum: 1 },
-        }},
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$visitedAt", timezone: "Asia/Kolkata" } },
+            count: { $sum: 1 },
+          }
+        },
         { $sort: { _id: 1 } },
       ]),
     ]);

@@ -128,7 +128,7 @@ async function generate() {
   // =====================
   castList.forEach(c => {
     urls.add(urlEntry({
-      loc: `/cast/${castSlug(c)}`,
+      loc: `/cast/${c._id}`,
       lastmod: c.updatedAt,
       priority: "0.8",
     }));

@@ -15,12 +15,6 @@ const CLIENT_DIST = path.join(__dirname, "dist/client");
 const SERVER_DIST = path.join(__dirname, "dist/server");
 const INDEX_HTML = path.join(CLIENT_DIST, "index.html");
 
-// Bot detection
-const BOT_RE =
-  /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|sogou|facebot|ia_archiver|linkedinbot|twitterbot|whatsapp|telegrambot|discordbot|facebookexternalhit/i;
-
-const isBot = (req) =>
-  BOT_RE.test(req.headers["user-agent"] || "");
 
 // Page request filter
 const isPageRequest = (req) => {
@@ -121,19 +115,11 @@ async function createServer() {
     try {
       let indexHtml = fs.readFileSync(INDEX_HTML, "utf-8");
 
-      // 🟢 Normal users → SPA
-      if (!isBot(req)) {
-        return res
-          .status(200)
-          .set("Content-Type", "text/html")
-          .send(indexHtml);
-      }
-
-      // 🔵 Bots → SSR
+      // Check SSR cache first
       const cached = getCache(url);
       if (cached) {
         console.log(`[CACHE HIT] ${url}`);
-        return res.status(200).send(cached);
+        return res.status(200).set("Content-Type", "text/html").send(cached);
       }
 
       console.log(`[SSR] Rendering ${url}`);
