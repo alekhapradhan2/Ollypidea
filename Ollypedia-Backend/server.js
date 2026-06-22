@@ -6319,7 +6319,7 @@ function getMilestoneTitle(movieTitle, milestoneClean, seed) {
     `${movieTitle} Box Office: ₹${milestoneClean} Milestone Achieved! Complete Details`,
     `${movieTitle} Hits ₹${milestoneClean} Net Collection — Ollywood Box Office Milestone`,
     `${movieTitle} Surpasses ₹${milestoneClean} Net at Odia Box Office`,
-    `${movieTitle} ₹${milestoneClean} and Counting — Milestone Box Office Report`
+    `${movieTitle} Collected ₹${milestoneClean} and Counting — Milestone Box Office Report`
   ];
   return templates[seed % templates.length];
 }
@@ -6798,12 +6798,12 @@ function buildWeekendBlogHTML(movie, days, totalNet, weekendLabel, ai, slug, tit
   if (weekendLabel.includes("Second")) weekendNum = 2;
   else if (weekendLabel.includes("Third")) weekendNum = 3;
   else if (weekendLabel.includes("Weekend ")) weekendNum = parseInt(weekendLabel.replace("Weekend ", ""), 10) || 1;
-  
+
   const fridayDay = (weekendNum - 1) * 7 + 1;
   const weekendDays = days.filter(d => d.day >= fridayDay && d.day <= fridayDay + 2);
-  
+
   let prevCumulative = days.filter(d => d.day < fridayDay).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
-  
+
   const dataTableRows = weekendDays.map((d, i) => {
     const netNum = parseToRupeesGlobal(d.net || "0");
     prevCumulative += netNum;
@@ -7052,7 +7052,7 @@ function buildMilestoneBlogHTML(movie, milestoneKey, totalNet, ai, slug, title, 
   ];
   const keywordsStr = [...new Set(keywordsArr)].join(", ");
   const plainWordCount = Object.values(ai).join(" ").split(/\s+/).filter(Boolean).length;
-  
+
   let milestoneTableHtml = "";
   if (sortedDays && sortedDays.length > 0) {
     const tableDays = [];
@@ -7060,14 +7060,14 @@ function buildMilestoneBlogHTML(movie, milestoneKey, totalNet, ai, slug, title, 
     if (sortedDays.length >= 3) tableDays.push(sortedDays.find(d => d.day === 3) || sortedDays[2]);
     if (sortedDays.length >= 7) tableDays.push(sortedDays.find(d => d.day === 7) || sortedDays[6]);
     if (sortedDays.length > 7) tableDays.push(sortedDays[sortedDays.length - 1]);
-    
+
     const uniqueDays = tableDays.filter((d, index, self) => index === self.findIndex(t => t.day === d.day));
-    
+
     let cumNet = 0;
     const allCumulatives = sortedDays.reduce((acc, d) => {
-        cumNet += parseToRupeesGlobal(d.net || "0");
-        acc[d.day] = cumNet;
-        return acc;
+      cumNet += parseToRupeesGlobal(d.net || "0");
+      acc[d.day] = cumNet;
+      return acc;
     }, {});
 
     const rows = uniqueDays.map((d, i) => {
