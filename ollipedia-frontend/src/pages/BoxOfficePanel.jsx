@@ -233,6 +233,56 @@ const extractCastInfo = (movie) => {
   return { directorName, producerName, musicDirector, writer, dop, editor, leadActors, leadActresses };
 };
 
+/**
+ * classifyBoxOfficeDayType — SEO ENHANCEMENT (mirrors server.js)
+ * Computes a contextual "angle" for targetDay purely from data already
+ * passed into buildAiPrompt/parseAiSections — no new props, no signature
+ * changes at call sites, no schema changes.
+ */
+const classifyBoxOfficeDayType = (targetDay, daysUpToN, totalNet, movie) => {
+  const sorted = [...(daysUpToN || [])].sort((a, b) => a.day - b.day);
+  const todayEntry = sorted.find((d) => d.day === targetDay);
+  const dateStr = todayEntry?.date || "";
+  const prevTotalNetNum = sorted
+    .filter((d) => d.day < targetDay)
+    .reduce((s, d) => s + (parseNum(d.net) || 0), 0);
+
+  const tags = [];
+  const dow = dateStr ? new Date(dateStr).getDay() : null;
+  const isWeekend = dow === 0 || dow === 5 || dow === 6;
+
+  if (targetDay === 1) tags.push("opening-day");
+  else if (targetDay === 2) tags.push("day-two");
+  else if (targetDay === 3) tags.push("day-three");
+  else if (targetDay === 7) tags.push("first-week-closing");
+  else if (targetDay === 10) tags.push("day-ten");
+  else if (targetDay === 15) tags.push("day-fifteen");
+
+  if (targetDay > 3) tags.push(isWeekend ? "weekend" : "weekday");
+
+  const MILESTONES_CR = [1, 2, 3, 5, 10, 15, 20, 25, 35, 50, 75, 100, 150, 200];
+  const crossed = MILESTONES_CR.find((cr) => {
+    const r = cr * 1_00_00_000;
+    return prevTotalNetNum < r && (totalNet || 0) >= r;
+  }) || null;
+  if (crossed) tags.push(`milestone-${crossed}cr`);
+
+  if (movie?.ottReleaseDate && dateStr) {
+    const ottD = new Date(movie.ottReleaseDate);
+    const curD = new Date(dateStr);
+    if (!isNaN(ottD.getTime())) {
+      const diffDays = Math.round((ottD - curD) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0 && diffDays <= 7) tags.push("approaching-ott");
+      if (diffDays < 0) tags.push("post-ott-theatrical");
+    }
+  }
+
+  if (targetDay >= 25) tags.push("extended-run");
+  if (!tags.length) tags.push("standard-day");
+
+  return { tags, isWeekend, milestoneCroreCrossed: crossed };
+};
+
 // Builds the AI prompt — returns structured JSON sections for the sample HTML template
 const buildAiPrompt = (movie, daysUpToN, totalNet, totalGross, targetDay) => {
   const year   = getYear(movie.releaseDate);
@@ -251,6 +301,10 @@ const buildAiPrompt = (movie, daysUpToN, totalNet, totalGross, targetDay) => {
     ci.leadActresses.length ? `Actresses: ${ci.leadActresses.join(", ")}` : "",
   ].filter(Boolean).join("\n");
 
+  const dayClass = classifyBoxOfficeDayType(targetDay, daysUpToN, totalNet, movie);
+  const dayTags = dayClass.tags;
+  const dayTagLine = dayTags.join(", ");
+
   return `You are writing a box office collection article for the Odia film website Ollypedia.
 
 Movie: ${movie.title}${year ? ` (${year})` : ""}
@@ -266,15 +320,28 @@ ${tableText}
 Total Net: ${fmtINR(totalNet)}
 Total Gross: ${fmtINR(totalGross)}
 
+CONTEXT FOR TODAY (Day ${targetDay}): ${dayTagLine}.
+${dayTags.includes("opening-day") ? "This is the FILM'S OPENING DAY — focus on first impressions, opening-day buzz, and how it compares to expectations going in." : ""}
+${dayTags.includes("weekend") ? "Today falls in the WEEKEND box-office window — focus heavily on weekend vs weekday performance and family/leisure footfalls." : ""}
+${dayTags.includes("weekday") ? "Today is a WEEKDAY — focus on how the film is holding up after the opening rush and what weekday collections reveal about word-of-mouth." : ""}
+${dayTags.includes("first-week-closing") ? "Today marks the close of WEEK ONE — focus on the overall week-one verdict and what it signals for week two." : ""}
+${dayTags.some(t => t.startsWith("milestone-")) ? `The film has just CROSSED A COLLECTION MILESTONE today (${dayTags.find(t => t.startsWith("milestone-"))}) — lead with this milestone and what it means for the film's standing in Ollywood.` : ""}
+${dayTags.includes("approaching-ott") ? "The film's OTT release is approaching within the next week — mention how the theatrical run is winding down ahead of the digital premiere." : ""}
+${dayTags.includes("extended-run") ? "The film is in an EXTENDED THEATRICAL RUN (25+ days) — focus on staying power, repeat audiences, and longevity rather than day-on-day swings." : ""}
+
 You must respond ONLY with a valid JSON object (no markdown, no code fences, no extra text). The JSON must have exactly these keys:
 
 {
-  "seoHeadline": "A compelling 10-15 word headline for the h1 tag",
-  "introParagraph": "2-3 sentences introducing the film and Day ${targetDay} performance. Mention the net and gross figures naturally.",
-  "boxOfficeAnalysis": "2-3 paragraphs (plain text, no HTML tags) covering the day-wise journey, trending up or down, weekend/weekday patterns. Mention each day's figures naturally.",
-  "audienceResponse": "1-2 paragraphs about how Odia audiences are responding — word of mouth, social media buzz, repeat viewing. Keep it positive and engaging.",
+  "seoHeadline": "A compelling 10-15 word headline for the h1 tag, reflecting today's specific context above (not a generic 'Day N collection' phrase)",
+  "introParagraph": "2-3 sentences introducing the film and Day ${targetDay} performance. Mention the net and gross figures naturally, and reflect today's context.",
+  "boxOfficeAnalysis": "2-3 paragraphs (plain text, no HTML tags) covering the day-wise journey and trend, written specifically through today's context above — do NOT just restate yesterday's analysis with new numbers.",
+  "audienceResponse": "1-2 paragraphs about how Odia audiences and reviewers are responding — word of mouth, social media buzz, repeat viewing. Vary the framing based on how many days the film has run.",
   "performanceAnalysis": "2 paragraphs analysing the film's performance relative to its budget and typical Odia cinema benchmarks. Mention total net ${fmtINR(totalNet)} and gross ${fmtINR(totalGross)}.",
+  "weekendWeekdayComparison": "1-2 paragraphs specifically comparing weekend and weekday collection patterns for this film so far, and what that pattern suggests about audience type (family/youth/repeat viewers).",
+  "occupancyTrend": "1 paragraph describing the likely occupancy trend (rising, falling, steady) across screens based on the collection numbers — do not invent exact percentages, describe the trend qualitatively.",
   "prediction": "1-2 paragraphs predicting upcoming weekend/week performance based on current trend.",
+  "industryImpact": "1 paragraph on what this film's performance means for the wider Ollywood (Odia film industry) — e.g. theatre footfalls, confidence in the genre, impact on upcoming Odia releases.",
+  "futureOutlook": "1-2 paragraphs on the film's likely box office path from here — upcoming milestones, competition from other releases, or OTT timing if relevant.",
   "finalVerdict": "2-3 sentences summarising the film's box office status after Day ${targetDay}. Do NOT use words like Hit, Flop, Average, Super-Hit — just describe the collection factually."
 }
 
@@ -282,42 +349,64 @@ Rules:
 - All values must be plain text only — no HTML, no bullet points, no markdown
 - Write for an Odia cinema (Ollywood) audience
 - Keep each section concise but informative
+- Make this article meaningfully different from a generic "Day N" template — lean into today's specific context listed above
 - Do not invent or fabricate collection figures — only use the data provided above`;
 };
 
 // Parse AI JSON response into sections (with safe fallbacks)
-const parseAiSections = (aiText, movie, targetDay, totalNet, totalGross) => {
+// SEO ENHANCEMENT: extended from 7 to 11 sections so every day's blog gets
+// genuinely different analysis instead of a reworded copy of the previous
+// day. Fallbacks vary by the day's contextual tags (opening day, weekend,
+// milestone crossed, etc.) even when the AI call is skipped/unavailable.
+const parseAiSections = (aiText, movie, targetDay, totalNet, totalGross, daysUpToN = []) => {
   const year = getYear(movie.releaseDate);
+  const dayClass = classifyBoxOfficeDayType(targetDay, daysUpToN, totalNet, movie);
+  const tagSet = new Set(dayClass.tags);
+  const isWeekendDay = tagSet.has("weekend");
+  const milestoneCr = [...tagSet].find(t => t.startsWith("milestone-"))?.replace("milestone-", "").replace("cr", "");
+
   const fallback = (key) => {
     const defaults = {
       seoHeadline:       `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection Report`,
       introParagraph:    `${movie.title}${year ? ` (${year})` : ""} continues its theatrical run. On Day ${targetDay}, the film has collected a total net of ${fmtINR(totalNet)} and gross of ${fmtINR(totalGross)} at the Odia box office.`,
-      boxOfficeAnalysis: `${movie.title} has shown a consistent run at the box office. The day-wise figures indicate steady audience interest across the state of Odisha.`,
-      audienceResponse:  `Audiences across Odisha have given ${movie.title} a warm response. The film continues to attract viewers with positive word of mouth.`,
+      boxOfficeAnalysis: tagSet.has("opening-day")
+        ? `${movie.title} opened in theatres across Odisha with this Day 1 collection setting the baseline for the film's theatrical run.`
+        : tagSet.has("first-week-closing")
+          ? `${movie.title} has now completed its first full week in theatres, with a week-one tally of ${fmtINR(totalNet)} net.`
+          : isWeekendDay
+            ? `${movie.title} is riding the weekend box office window on Day ${targetDay}, typically a period of higher footfalls than weekdays.`
+            : `${movie.title} has shown a steady run at the box office on Day ${targetDay}, a regular weekday in its theatrical journey.`,
+      audienceResponse:  `Audiences across Odisha have given ${movie.title} a warm response. The film continues to attract viewers with positive word of mouth${tagSet.has("extended-run") ? ", helping it sustain a long theatrical run" : ""}.`,
       performanceAnalysis:`With a total net collection of ${fmtINR(totalNet)} and gross of ${fmtINR(totalGross)}, ${movie.title} has delivered a notable performance for Odia cinema.`,
+      weekendWeekdayComparison: isWeekendDay
+        ? `Day ${targetDay} falls within the weekend box office window, when Odia films typically see higher occupancy than weekdays.`
+        : `Day ${targetDay} is a weekday for ${movie.title}, and weekday collections are usually lower than the opening weekend.`,
+      occupancyTrend: `Occupancy levels for ${movie.title} on Day ${targetDay} are estimated based on trade trends for similarly positioned Odia releases${isWeekendDay ? ", with weekend shows typically running fuller" : ", with weekday shows generally running at moderate occupancy"}.`,
       prediction:        `Based on current trends, ${movie.title} is expected to maintain momentum in the coming days, especially during weekends.`,
+      industryImpact: `${movie.title}'s box office run is being closely watched within Ollywood as a marker of audience appetite for this genre of Odia cinema.`,
+      futureOutlook: milestoneCr
+        ? `Having just crossed the ₹${milestoneCr} Cr mark, ${movie.title} enters its next phase of theatrical run with a fresh milestone to build on.`
+        : `Looking ahead, ${movie.title}'s box office trajectory will depend on how it performs through the next weekend.`,
       finalVerdict:      `${movie.title} has collected ${fmtINR(totalNet)} net and ${fmtINR(totalGross)} gross after ${targetDay} days. All figures are industry estimates. Source: Ollypedia.`,
     };
     return defaults[key] || "";
   };
 
+  const keys = [
+    "seoHeadline", "introParagraph", "boxOfficeAnalysis", "audienceResponse",
+    "performanceAnalysis", "weekendWeekdayComparison", "occupancyTrend",
+    "prediction", "industryImpact", "futureOutlook", "finalVerdict",
+  ];
+
   if (!aiText?.trim()) {
-    return Object.fromEntries(["seoHeadline","introParagraph","boxOfficeAnalysis","audienceResponse","performanceAnalysis","prediction","finalVerdict"].map(k => [k, fallback(k)]));
+    return Object.fromEntries(keys.map(k => [k, fallback(k)]));
   }
 
   try {
     // Strip markdown code fences if present
     const clean = aiText.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
     const parsed = JSON.parse(clean);
-    return {
-      seoHeadline:       parsed.seoHeadline       || fallback("seoHeadline"),
-      introParagraph:    parsed.introParagraph     || fallback("introParagraph"),
-      boxOfficeAnalysis: parsed.boxOfficeAnalysis  || fallback("boxOfficeAnalysis"),
-      audienceResponse:  parsed.audienceResponse   || fallback("audienceResponse"),
-      performanceAnalysis: parsed.performanceAnalysis || fallback("performanceAnalysis"),
-      prediction:        parsed.prediction         || fallback("prediction"),
-      finalVerdict:      parsed.finalVerdict       || fallback("finalVerdict"),
-    };
+    return Object.fromEntries(keys.map(k => [k, parsed[k] || fallback(k)]));
   } catch {
     // AI returned prose instead of JSON — use it as the analysis section, rest as fallbacks
     return {
@@ -326,7 +415,11 @@ const parseAiSections = (aiText, movie, targetDay, totalNet, totalGross) => {
       boxOfficeAnalysis:  aiText.trim(),
       audienceResponse:   fallback("audienceResponse"),
       performanceAnalysis: fallback("performanceAnalysis"),
+      weekendWeekdayComparison: fallback("weekendWeekdayComparison"),
+      occupancyTrend:     fallback("occupancyTrend"),
       prediction:         fallback("prediction"),
+      industryImpact:     fallback("industryImpact"),
+      futureOutlook:       fallback("futureOutlook"),
       finalVerdict:       fallback("finalVerdict"),
     };
   }
@@ -363,7 +456,7 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
   const sorted        = [...daysUpToN].sort((a, b) => a.day - b.day);
   const sections      = (sectionsOrRaw && typeof sectionsOrRaw === "object" && "seoHeadline" in sectionsOrRaw)
     ? sectionsOrRaw
-    : parseAiSections(sectionsOrRaw, movie, targetDay, totalNet, totalGross);
+    : parseAiSections(sectionsOrRaw, movie, targetDay, totalNet, totalGross, daysUpToN);
 
   const movieName        = movie.title || "Unknown Movie";
   const movieNameNoSpace = movieName.replace(/\s+/g, "");
@@ -1109,8 +1202,18 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 </section>
 
 <section style="${card}">
+  <h2 style="${h2}">Weekend vs Weekday Performance</h2>
+  ${pWrap(sections.weekendWeekdayComparison)}
+</section>
+
+<section style="${card}">
   <h2 style="${h2}">Audience Response</h2>
   ${pWrap(sections.audienceResponse)}
+</section>
+
+<section style="${card}">
+  <h2 style="${h2}">Occupancy Trends</h2>
+  ${pWrap(sections.occupancyTrend)}
 </section>
 
 <section style="${card}">
@@ -1133,8 +1236,14 @@ const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sec
 </section>
 
 <section style="${card}">
-  <h2 style="${h2}">Future Box Office Prediction</h2>
+  <h2 style="${h2}">Impact on the Ollywood Industry</h2>
+  ${pWrap(sections.industryImpact)}
+</section>
+
+<section style="${card}">
+  <h2 style="${h2}">Future Box Office Outlook</h2>
   ${pWrap(sections.prediction)}
+  ${pWrap(sections.futureOutlook)}
 </section>
 
 <section style="${card}">
@@ -1416,7 +1525,7 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
       const _days = getDaysUpToN();
       const _tN   = _days.reduce((s,d)=>s+parseNum(d.net),0);
       const _tG   = _days.reduce((s,d)=>s+parseNum(d.gross),0);
-      setAiSections(parseAiSections(rawText, movie, parseInt(form.day,10), _tN, _tG));
+      setAiSections(parseAiSections(rawText, movie, parseInt(form.day,10), _tN, _tG, _days));
       setAiStatus("done");
     } catch (e) {
       setAiStatus("error");
@@ -1457,7 +1566,7 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
         const blogTitle  = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross`;
         const blogSlugBase = `${movie.title}${year ? ` (${year})` : ""} day ${targetDay} box office collection`;
         const blogSlug   = slugify(blogSlugBase);
-        const parsedSecs = aiSections || parseAiSections(aiText, movie, targetDay, totalNet, totalGross);
+        const parsedSecs = aiSections || parseAiSections(aiText, movie, targetDay, totalNet, totalGross, daysUpToN);
         const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs, blogSlug);
         const excerpt    = parsedSecs.introParagraph ||
           `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} days.`;
