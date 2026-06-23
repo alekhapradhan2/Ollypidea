@@ -4835,17 +4835,29 @@ async function scrapeSacnilkForMovie(movieId) {
 
     const fallback = (key) => {
       const defaults = {
-        seoHeadline: `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} Box Office Collection Report`,
-        introParagraph: `${movie.title}${year ? ` (${year})` : ""} continues its theatrical run. On Day ${targetDay}, the film has collected a total net of ${formatINR(totalNet)} and gross of ${formatINR(totalGross)} at the Odia box office.`,
+        seoHeadline: (() => {
+          if (tagSet.has("opening-day")) return `Opening Day Performance Analysis`;
+          if (tagSet.has("opening-weekend") || targetDay <= 3) return `Opening Weekend Collection Report`;
+          if (tagSet.has("first-week-closing") || targetDay === 7) return `First Week Closing Report`;
+          if (tagSet.has("silver-jubilee-run")) return `25 Days Theatrical Run Report`;
+          if (tagSet.has("golden-run")) return `50 Days Theatrical Run Report`;
+          return `Day ${targetDay} Collection Report & Analysis`;
+        })(),
+        introParagraph: (() => {
+          if (tagSet.has("opening-day")) return `The Odia box office has finally opened its doors to ${movie.title}. The much-awaited film has marked its Day 1 presence with an estimated net collection of ${formatINR(totalNet)}. Early footfalls give us a glimpse of the initial audience reaction across Odisha.`;
+          if (tagSet.has("opening-weekend") || targetDay <= 3) return `The opening weekend is turning out to be a crucial period for ${movie.title}. By Day ${targetDay}, the film has pushed its total net collection to an estimated ${formatINR(totalNet)}. The weekend crowd has significantly influenced these initial numbers.`;
+          if (tagSet.has("first-week-closing") || targetDay === 7) return `A full week has passed since ${movie.title} hit the screens. Wrapping up its first seven days, the film's total net collection stands at an estimated ${formatINR(totalNet)}, painting a clear picture of its week-one box office trajectory in the Odia circuit.`;
+          return `The theatrical journey of ${movie.title} continues at the Odia box office. As of Day ${targetDay}, the film has managed to pull an estimated net collection of ${formatINR(totalNet)} and a gross of ${formatINR(totalGross)}, holding its ground as audiences continue to visit the theatres.`;
+        })(),
         boxOfficeAnalysis: tagSet.has("opening-day")
-          ? `${movie.title} opened in theatres across Odisha with this Day 1 collection setting the baseline for the film's theatrical run. Early estimates suggest the opening was driven largely by ${tagSet.has("weekend") ? "the weekend release window" : "weekday footfalls"} and the existing buzz around the film.`
-          : tagSet.has("first-week-closing")
-            ? `${movie.title} has now completed its first full week in theatres. The week-one tally of ${formatINR(totalNet)} net gives the clearest early signal of how the film is being received, ahead of the crucial second-week and word-of-mouth phase.`
+          ? `Opening day figures are crucial for any Odia film, and ${movie.title} has taken its first major step. The Day 1 numbers provide a solid baseline for the upcoming weekend. Initial reports indicate that ${tagSet.has("weekend") ? "the holiday/weekend timing" : "the dedicated fanbase"} played a significant role in driving these early ticket sales.`
+          : tagSet.has("first-week-closing") || targetDay === 7
+            ? `Closing the first week with ${formatINR(totalNet)} net is a key milestone for ${movie.title}. Week-one numbers often dictate screen retention in the second week. These figures suggest how the core Odia audience has received the film before word-of-mouth takes over completely.`
             : isWeekendDay
-              ? `${movie.title} is riding the weekend box office window on Day ${targetDay}, a period that typically delivers a noticeable bump over weekday numbers due to higher footfalls and family audiences.`
-              : `${movie.title} has shown a steady run at the box office on Day ${targetDay}, a regular weekday in its theatrical journey, with the day-wise figures indicating how audience interest is evolving across Odisha.`,
-        audienceResponse: `Audiences across Odisha have given ${movie.title} a warm response. The film continues to attract viewers with positive word of mouth${tagSet.has("extended-run") || tagSet.has("silver-jubilee-run") || tagSet.has("golden-run") ? ", helping it sustain a long theatrical run well beyond the opening weeks" : ""}.`,
-        performanceAnalysis: `With a total net collection of ${formatINR(totalNet)} and gross of ${formatINR(totalGross)}, ${movie.title} has delivered a notable performance for Odia cinema${movie.budget ? ` against a reported budget of ${movie.budget}` : ""}.`,
+              ? `Weekends are the lifeblood of the Odia film trade, and ${movie.title} is looking to capitalize on this window on Day ${targetDay}. Families and casual viewers typically flock to cinemas during these days, providing a much-needed spike in the overall collection graph.`
+              : `Sustaining collections on weekdays is the real test of a film's content. On Day ${targetDay}, ${movie.title} witnessed the usual midweek settling of footfalls. The day-wise hold will be closely monitored by trade analysts to gauge the film's lifetime potential.`,
+        audienceResponse: `Word of mouth is the ultimate decider in Ollywood. For ${movie.title}, audience feedback has been pivotal in shaping its box office journey so far. ${tagSet.has("extended-run") || tagSet.has("silver-jubilee-run") || tagSet.has("golden-run") ? "The fact that it is still running strong proves that the Odia audience has deeply connected with the content." : "Reactions from the cinema halls across Odisha are setting the tone for the coming days."}`,
+        performanceAnalysis: `Looking at the numbers, a total net of ${formatINR(totalNet)} (and ${formatINR(totalGross)} gross) gives ${movie.title} a respectable standing in the current Odia cinema landscape. ${movie.budget ? `When weighed against its reported budget of ${movie.budget}, the recovery path is being closely analyzed.` : "The trajectory over the next few days will determine its ultimate box office verdict."}`,
         weekendWeekdayComparison: (() => {
           if (tagSet.has("opening-weekend"))
             return `The opening weekend (Days 1-3) is the most critical window for any Odia film, and ${movie.title} is currently in the thick of it. Opening weekends typically set the tone for the entire theatrical run — a strong three-day total builds confidence among exhibitors and can lead to screen additions for the second week.`;
@@ -5222,14 +5234,14 @@ Rules:
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${groqKey}` },
         body: JSON.stringify({
           model,
-          max_tokens: 1500,
+          max_tokens: 2200,
           temperature: 0.7,
           top_p: 0.9,
           response_format: { type: "json_object" },
           messages: [
             {
               role: "system",
-              content: "You are an expert Odia cinema journalist writing for Ollypedia. When asked to return JSON, you MUST return ONLY a valid JSON object with no extra text, no markdown, no code fences. All string values must be plain text — no HTML tags, no bullet points.",
+              content: getDayStageSystemPrompt,
             },
             { role: "user", content: aiPrompt },
           ],
@@ -5388,6 +5400,349 @@ Rules:
   const nextSlug = slugify(`${movieName}${year ? ` (${year})` : ""} day ${actualDay + 1} box office collection`);
   const prevDayLabel = `${movieName} Day ${actualDay - 1}`;
   const nextDayLabel = `${movieName} Day ${actualDay + 1}`;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  §12b  DAY-STAGE CONTENT HELPERS
+  //  Computed from existing in-memory data — no new DB calls, no schema changes.
+  //  These variables are interpolated into §13 blogContent template.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Day-stage AI system prompt — varies editorial persona + bans AI clichés
+  const getDayStageSystemPrompt = (() => {
+    const _ts = new Set(dayTags);
+    const _anti = `Forbidden phrases — never write: "it is worth noting", "it is important to note", "needless to say", "in conclusion", "in summary", "it goes without saying", "delve into", "dive deep", "leverage", "in the realm of", "as we know", "at the end of the day". Never start two consecutive sentences with the same word. Avoid passive constructions such as "it has been observed" or "it can be seen". Every paragraph must open with something other than the film title. Mix short punchy sentences with longer analytical ones. Reference specific Odia cities (Bhubaneswar, Cuttack, Sambalpur, Berhampur, Rourkela) when discussing audience patterns. Write as a journalist who personally tracked the footfalls — not someone reading a spreadsheet.`;
+    if (actualDay === 1)
+      return `You are a senior Odia entertainment journalist writing the Opening Day box office report for Ollypedia — the most-read article in any film's box office series. Write with the energy of a reporter who just returned from the cinema hall. Thousands of Odia cinema fans want to know if this film delivered on opening day. Your writing must feel human, warm, and editorially authoritative. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+    if (actualDay <= 3 || _ts.has("opening-weekend"))
+      return `You are a senior Odia film trade analyst writing the Opening Weekend verdict for Ollypedia. Think like someone who personally monitored footfalls at cinemas across Bhubaneswar, Cuttack, and Sambalpur this weekend. Opening weekend numbers decide how exhibitors treat this film in the weeks ahead — write with that commercial urgency and insider intelligence. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+    if (actualDay === 7 || _ts.has("first-week-closing"))
+      return `You are writing the definitive First Week closing verdict for Ollypedia. This is a considered editorial, not a collection note — give your honest, nuanced professional assessment of what week-one performance means for the filmmakers, the cast, and Odia cinema broadly. Write it with the weight it deserves. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+    if (actualDay <= 14 || _ts.has("second-week-closing"))
+      return `You are a film trade journalist writing the second-week box office analysis for Ollypedia. The opening buzz has settled — this is about whether the film has genuine audience legs. Compare the week-two trend to week-one with real editorial judgment. Your reader is a sophisticated Odia cinema follower who will instantly spot generic filler. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+    if (_ts.has("golden-run"))
+      return `You are covering a historic moment in Odia cinema — a film crossing 50 days in theatres. Write with the gravitas this achievement deserves. This is a landmark editorial piece, not a daily collection note, and it will be widely shared and cited. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+    if (_ts.has("silver-jubilee-run") || _ts.has("extended-run") || actualDay >= 15)
+      return `You are writing about an Odia film that has defied industry expectations and is still drawing audiences weeks into its run. Write with genuine editorial admiration for its staying power — sustained theatrical runs are rare in Ollywood and deserve analysis that goes beyond day-on-day number comparisons. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+    return `You are a senior Odia entertainment journalist writing a box office update for Ollypedia. Write with the authority of someone who deeply understands both the commercial mechanics and cultural significance of Odia cinema. Every sentence must earn its place — no filler, no obvious observations, no AI-pattern phrasing. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML. ${_anti}`;
+  })();
+
+  // Day-stage H2 headings — 8 distinct ranges so no two day-stage blogs share headings
+  const headings = (() => {
+    const _ts = new Set(dayTags);
+    if (actualDay === 1) return {
+      boxOfficeAnalysis: `Opening Day at the Odia Box Office`,
+      weekendWeekday: `Day 1 Footfalls — What the Numbers Signal`,
+      audienceResponse: `First Impressions — Audience Reaction on Opening Day`,
+      occupancy: `Theatre Occupancy on Opening Day`,
+      performance: `Opening Day Performance in Context`,
+      industryImpact: `What This Opening Means for Ollywood`,
+      outlook: `Heading Into the Weekend — The Week Ahead`,
+      verdict: `Opening Day Verdict`,
+    };
+    if (actualDay <= 3 || _ts.has("opening-weekend")) return {
+      boxOfficeAnalysis: `Opening Weekend — The Box Office Story So Far`,
+      weekendWeekday: `Weekend Momentum — How Each Day Has Tracked`,
+      audienceResponse: `Opening Weekend Audience Buzz`,
+      occupancy: `Weekend Occupancy Across Odisha`,
+      performance: `Opening Weekend in Numbers`,
+      industryImpact: `What This Opening Weekend Signals for Odia Cinema`,
+      outlook: `Heading Into the Weekdays`,
+      verdict: `Opening Weekend Verdict`,
+    };
+    if (actualDay >= 4 && actualDay <= 6) return {
+      boxOfficeAnalysis: `Weekday Hold — How ${movieName} Is Pacing`,
+      weekendWeekday: `Weekdays vs Opening Weekend — The Real Test`,
+      audienceResponse: `Word of Mouth — What's Driving Tickets Midweek`,
+      occupancy: `Weekday Occupancy Trends`,
+      performance: `Weekday Performance Assessment`,
+      industryImpact: `What the Weekday Hold Tells the Odia Film Trade`,
+      outlook: `Approaching the First Week Close`,
+      verdict: `Weekday Hold Verdict`,
+    };
+    if (actualDay === 7 || _ts.has("first-week-closing")) return {
+      boxOfficeAnalysis: `The First Week Story — Day by Day`,
+      weekendWeekday: `Opening Weekend vs Weekdays — The Week-One Arc`,
+      audienceResponse: `One Week of Audience Reaction — The Honest Picture`,
+      occupancy: `Week-One Occupancy — How Full Were Odisha's Halls?`,
+      performance: `First Week Performance — A Complete Breakdown`,
+      industryImpact: `What ${movieName}'s First Week Means for Odia Cinema`,
+      outlook: `Second Week Outlook — Will the Momentum Hold?`,
+      verdict: `First Week Closing Verdict`,
+    };
+    if (actualDay <= 14) return {
+      boxOfficeAnalysis: `Second Week — Separating Genuine Pull from Opening Buzz`,
+      weekendWeekday: `Second Weekend vs First Weekend — The Drop Decoded`,
+      audienceResponse: `Who's Still Watching? The Second-Week Audience Profile`,
+      occupancy: `Second Week Occupancy Across Odisha`,
+      performance: `Week Two vs Week One — The Numbers`,
+      industryImpact: `Second Week Signals for the Odia Film Trade`,
+      outlook: `Third Week and the Lifetime Collection Path`,
+      verdict: `Second Week Verdict`,
+    };
+    if (actualDay <= 21) return {
+      boxOfficeAnalysis: `Third Week Theatrical Stamina`,
+      weekendWeekday: `Three Weekends In — The Pattern That Has Emerged`,
+      audienceResponse: `Loyal Audiences — Who Is Still Filling the Seats`,
+      occupancy: `Third Week Occupancy — The Long Tail`,
+      performance: `Three Weeks at the Odia Box Office`,
+      industryImpact: `What a Three-Week Run Tells Ollywood`,
+      outlook: `Lifetime Collection Forecast`,
+      verdict: `Third Week Verdict`,
+    };
+    if (actualDay <= 30) return {
+      boxOfficeAnalysis: `Extended Run — What's Keeping ${movieName} in Theatres`,
+      weekendWeekday: `Weekend vs Weekday Deep in the Run`,
+      audienceResponse: `The Repeat Viewer Effect — A Month In`,
+      occupancy: `Late-Run Occupancy — Single Screens Leading the Way`,
+      performance: `Four Weeks at the Odia Box Office`,
+      industryImpact: `An Extended Run and Its Significance for Ollywood`,
+      outlook: `The Final Stretch of the Theatrical Run`,
+      verdict: `Extended Run Verdict`,
+    };
+    return {
+      boxOfficeAnalysis: `Theatrical Longevity — The ${movieName} Story`,
+      weekendWeekday: `Weekend Collections Deep Into the Run`,
+      audienceResponse: `A Devoted Audience — The Community Around This Film`,
+      occupancy: `Long-Run Occupancy — A Different Kind of Success`,
+      performance: `A Remarkable Theatrical Run, by the Numbers`,
+      industryImpact: `What ${movieName}'s Run Teaches Odia Cinema`,
+      outlook: `Legacy Collection and What Lies Ahead`,
+      verdict: `Long-Run Theatrical Verdict`,
+    };
+  })();
+
+  // Day-stage SEO meta description (160 char limit)
+  const seoDescDynamic = (() => {
+    const _ts = new Set(dayTags);
+    const _f = `${movieName}${year ? ` (${year})` : ""}`;
+    if (actualDay === 1)
+      return `${_f} opens at the Odia box office! Day 1 collection: ${dayNet} net. Opening day analysis, audience reaction, and first impressions on Ollypedia.`.slice(0, 160);
+    if (actualDay <= 3 || _ts.has("opening-weekend"))
+      return `${_f} Opening Weekend: ${totalNetStr} net over ${actualDay} days. Day-wise breakdown, occupancy, and audience verdict from the Odia box office on Ollypedia.`.slice(0, 160);
+    if (actualDay >= 4 && actualDay <= 6)
+      return `${_f} Day ${actualDay}: ${totalNetStr} total net. Weekday hold analysis, word-of-mouth verdict, and box office performance on Ollypedia.`.slice(0, 160);
+    if (actualDay === 7 || _ts.has("first-week-closing"))
+      return `${_f} First Week Verdict: ${totalNetStr} net in 7 days. Complete day-wise breakdown, first week analysis, and Week 2 outlook on Ollypedia.`.slice(0, 160);
+    if (actualDay <= 14)
+      return `${_f} enters Week 2 with ${totalNetStr} cumulative net. Week-on-week analysis and Odia box office verdict on Ollypedia.`.slice(0, 160);
+    if (_ts.has("silver-jubilee-run"))
+      return `${_f} Silver Jubilee Run — 25 days in theatres! Total ${totalNetStr} net. Extended run analysis and longevity report on Ollypedia.`.slice(0, 160);
+    if (_ts.has("golden-run"))
+      return `${_f} Golden Jubilee — 50 days in theatres! Total ${totalNetStr} net. Historic theatrical run landmark report on Ollypedia.`.slice(0, 160);
+    return `${_f} Day ${actualDay}: ${totalNetStr} net total at the Odia box office. Day-wise breakdown, audience analysis, and performance verdict on Ollypedia.`.slice(0, 160);
+  })();
+
+  // Callout box variables (day-stage specific emoji, label, body)
+  const _calloutEmoji = (() => {
+    const _ts = new Set(dayTags);
+    if (actualDay === 1) return "🎬";
+    if (actualDay <= 3 || _ts.has("opening-weekend")) return "🎉";
+    if (actualDay === 7 || _ts.has("first-week-closing")) return "🏁";
+    if (actualDay <= 14) return "📈";
+    if (dayTags.some(t => t.startsWith("milestone-"))) return "🏆";
+    if (_ts.has("silver-jubilee-run") || _ts.has("golden-run")) return "🥈";
+    return "📊";
+  })();
+  const _calloutLabel = (() => {
+    const _ts = new Set(dayTags);
+    if (actualDay === 1) return "Opening Day";
+    if (actualDay <= 3 || _ts.has("opening-weekend")) return "Opening Weekend";
+    if (actualDay === 7 || _ts.has("first-week-closing")) return "One Week Complete";
+    if (actualDay <= 14) return "Second Week Watch";
+    if (dayTags.some(t => t.startsWith("milestone-"))) return "Milestone Crossed";
+    if (_ts.has("silver-jubilee-run")) return "Silver Jubilee Run";
+    if (_ts.has("golden-run")) return "Golden Jubilee Run";
+    return "Box Office Update";
+  })();
+  const _calloutBody = (() => {
+    const _ts = new Set(dayTags);
+    if (actualDay === 1)
+      return `The box office doors have opened for <strong style="color:#fff;">${movieName}</strong>. Day 1 net stands at <strong style="color:#c9973a;">${dayNet}</strong>. The cumulative total builds from here.`;
+    if (actualDay <= 3 || _ts.has("opening-weekend"))
+      return `<strong style="color:#fff;">${movieName}</strong> is mid-opening weekend. Running total: <strong style="color:#c9973a;">${totalNetStr} net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> after ${actualDay} day${actualDay !== 1 ? "s" : ""}.`;
+    if (actualDay === 7 || _ts.has("first-week-closing"))
+      return `<strong style="color:#fff;">${movieName}</strong> completes its first week. Total: <strong style="color:#c9973a;">${totalNetStr} net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> in 7 days — the full picture is below.`;
+    if (actualDay <= 14)
+      return `The opening buzz has settled. <strong style="color:#fff;">${movieName}</strong> carries <strong style="color:#c9973a;">${totalNetStr} net</strong> into its second week. Now the real test begins.`;
+    if (_ts.has("silver-jubilee-run") || _ts.has("golden-run"))
+      return `Day ${actualDay}, and <strong style="color:#fff;">${movieName}</strong> is still running in Odia theatres. Cumulative: <strong style="color:#c9973a;">${totalNetStr} net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong>.`;
+    return `<strong style="color:#fff;">${movieName}</strong> has collected an estimated <strong style="color:#c9973a;">${totalNetStr} net</strong> and <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> after <strong style="color:#fff;">${actualDay} day${actualDay !== 1 ? "s" : ""}</strong> in theatres.${totalNet >= 1_00_00_000 ? ` The film has crossed the <strong style="color:#c9973a;">&#8377;${(totalNet / 1_00_00_000).toFixed(0)} Cr mark</strong> at the Odia box office.` : ""}`;
+  })();
+
+  // Day Hold % mini-card (Days 4–14 only, requires Day 1 data)
+  const _holdPercentBlock = (() => {
+    if (actualDay < 4 || actualDay > 14 || sortedDays.length < 2) return "";
+    const _d1 = sortedDays.find(d => d.day === 1);
+    const _dToday = sortedDays.find(d => d.day === actualDay);
+    if (!_d1 || !_dToday) return "";
+    const _d1Net = parseToRupees(_d1.net || "0");
+    const _dTodayNet = parseToRupees(_dToday.net || "0");
+    if (!_d1Net || !_dTodayNet) return "";
+    const _holdPct = Math.round((_dTodayNet / _d1Net) * 100);
+    const _hColor = _holdPct >= 70 ? "#5dba7d" : _holdPct >= 45 ? "#c9973a" : "#e07070";
+    const _hNote = _holdPct >= 70
+      ? "Strong hold — word-of-mouth is carrying this film effectively."
+      : _holdPct >= 45
+        ? "Healthy hold — within the expected range for well-received Odia releases."
+        : "Standard midweek drop — footfalls settling after the opening rush.";
+    return `<div style="background:#111;border:1px solid #1e1e1e;border-radius:12px;padding:16px 20px;margin-bottom:22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+  <div style="text-align:center;min-width:72px;">
+    <div style="font-size:1.8rem;font-weight:900;color:${_hColor};">${_holdPct}%</div>
+    <div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;">Day ${actualDay} Hold</div>
+  </div>
+  <div style="flex:1;min-width:160px;">
+    <div style="font-size:0.82rem;font-weight:700;color:#ddd;margin-bottom:4px;">Hold vs Opening Day (${formatINR(_d1Net)})</div>
+    <div style="font-size:0.78rem;color:#888;line-height:1.5;">${_hNote}</div>
+  </div>
+</div>`;
+  })();
+
+  // First Week Scorecard (Day 7 only, requires all 7 days)
+  const _firstWeekCard = (() => {
+    if (actualDay !== 7) return "";
+    const _w1 = sortedDays.filter(d => d.day <= 7);
+    if (_w1.length < 7) return "";
+    const _w1Net = _w1.reduce((s, d) => s + parseToRupees(d.net || "0"), 0);
+    const _w1Avg = Math.round(_w1Net / _w1.length);
+    const _best = [..._w1].sort((a, b) => parseToRupees(b.net || "0") - parseToRupees(a.net || "0"))[0];
+    const _d1n = parseToRupees(_w1[0]?.net || "0");
+    const _d7n = parseToRupees(_w1[_w1.length - 1]?.net || "0");
+    const _hp = _d1n > 0 ? Math.round((_d7n / _d1n) * 100) : 0;
+    const _hpColor = _hp >= 40 ? "#5dba7d" : "#e07070";
+    return `<section style="${card}">
+  <h2 style="${h2}">First Week Scorecard — ${movieName}</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:18px;">
+    <div style="background:#1a1200;border:1px solid #2e2000;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.6rem;color:#666;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Week 1 Total</div>
+      <div style="font-size:1.1rem;font-weight:800;color:#c9973a;">${formatINR(_w1Net)}</div>
+    </div>
+    <div style="background:#181818;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.6rem;color:#666;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Daily Average</div>
+      <div style="font-size:1.1rem;font-weight:800;color:#fff;">${formatINR(_w1Avg)}</div>
+    </div>
+    <div style="background:#181818;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.6rem;color:#666;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Best Day</div>
+      <div style="font-size:1.1rem;font-weight:800;color:#5dba7d;">Day ${_best?.day}</div>
+      <div style="font-size:0.7rem;color:#666;">${formatINR(parseToRupees(_best?.net || "0"))}</div>
+    </div>
+    <div style="background:#181818;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:0.6rem;color:#666;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Day 7 Hold</div>
+      <div style="font-size:1.1rem;font-weight:800;color:${_hpColor};">${_hp}%</div>
+      <div style="font-size:0.7rem;color:#666;">vs Day 1</div>
+    </div>
+  </div>
+  <p style="color:#888;font-size:0.82rem;line-height:1.7;margin:0;">A Day 7 hold of ${_hp}% against opening day is ${_hp >= 55 ? "solid for an Odia release — this film has genuine legs heading into Week 2" : _hp >= 35 ? "within the normal range for Odia theatrical runs at this stage" : "a signal that Week 2 will depend heavily on fresh competition and screen availability"}.</p>
+</section>`;
+  })();
+
+  // OTT Countdown strip (only when OTT premiere within 7 days)
+  const _ottCountdown = (() => {
+    if (!dayTags.includes("approaching-ott") || !movie.ottReleaseDate) return "";
+    const _ottD = new Date(movie.ottReleaseDate);
+    const _curD = new Date(yesterdayStr);
+    if (isNaN(_ottD.getTime())) return "";
+    const _dLeft = Math.max(0, Math.round((_ottD - _curD) / (1000 * 60 * 60 * 24)));
+    const _plat = movie.streamingOn || "OTT";
+    return `<div style="background:linear-gradient(90deg,#0a1628 0%,#111 100%);border:1px solid #1a3050;border-radius:12px;padding:16px 20px;margin-bottom:22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+  <div style="text-align:center;min-width:64px;">
+    <div style="font-size:1.8rem;font-weight:900;color:#7ec8e3;">${_dLeft}</div>
+    <div style="font-size:0.6rem;color:#445;text-transform:uppercase;letter-spacing:0.08em;">Days Left</div>
+  </div>
+  <div style="flex:1;min-width:160px;">
+    <div style="font-size:0.85rem;font-weight:700;color:#7ec8e3;margin-bottom:3px;">📺 OTT Premiere Approaching — ${_plat}</div>
+    <div style="font-size:0.78rem;color:#666;line-height:1.5;">The theatrical window is in its final days. Catch ${movieName} on the big screen before the digital premiere arrives.</div>
+  </div>
+</div>`;
+  })();
+
+  // Silver / Golden jubilee run badge
+  const _extendedRunBlock = (() => {
+    const _ts = new Set(dayTags);
+    if (!_ts.has("silver-jubilee-run") && !_ts.has("golden-run")) return "";
+    const _isGolden = _ts.has("golden-run");
+    const _label = _isGolden ? `🥇 Golden Jubilee Run — ${actualDay} Days in Theatres` : `🥈 Silver Jubilee Run — ${actualDay} Days in Theatres`;
+    const _color = _isGolden ? "#f5c518" : "#c9a0e8";
+    const _bg = _isGolden ? "#1a1500" : "#1a0a2e";
+    const _bdr = _isGolden ? "#3a3000" : "#3a1a5a";
+    const _note = _isGolden
+      ? `Crossing 50 days in Odia theatres is a feat achieved by very few films. ${movieName} has joined a select group of Ollywood releases with this kind of sustained audience loyalty.`
+      : `Reaching 25 days in Odia theatres separates content-driven successes from one-week wonders. ${movieName} has earned this milestone through genuine audience commitment.`;
+    return `<div style="background:${_bg};border:1px solid ${_bdr};border-radius:12px;padding:18px 22px;margin-bottom:22px;">
+  <div style="font-size:0.85rem;font-weight:800;color:${_color};margin-bottom:8px;">${_label}</div>
+  <p style="color:#aaa;font-size:0.85rem;line-height:1.7;margin:0;">${_note}</p>
+</div>`;
+  })();
+
+  // ── Build editorial sections HTML in day-stage order ──────────────────────
+  const _mkSec = (h2Text, bodyContent) =>
+    `<section style="${card}">
+  <h2 style="${h2}">${h2Text}</h2>
+  ${toParagraphs(bodyContent)}
+</section>`;
+
+  const _perfSec = `<section style="${card}">
+  <h2 style="${h2}">${headings.performance}</h2>
+  <div class="perf-stats" style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
+    <div><div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Net</div><div style="font-size:1.2rem;font-weight:800;color:#c9973a;">${totalNetStr}</div></div>
+    <div><div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Gross</div><div style="font-size:1.2rem;font-weight:800;color:#7ec8e3;">${totalGrossStr}</div></div>
+    <div><div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Days Tracked</div><div style="font-size:1.2rem;font-weight:800;color:#fff;">${sortedDays.length}</div></div>
+  </div>
+  ${toParagraphs(sections.performanceAnalysis)}
+</section>`;
+
+  const _verdictSec = `<section style="${card}">
+  <h2 style="${h2}">${headings.verdict}</h2>
+  <div style="border-left:4px solid #c9973a;padding-left:16px;margin-bottom:16px;">
+    ${toParagraphs(sections.finalVerdict)}
+  </div>
+  <p style="color:#555;font-size:0.8rem;line-height:1.6;margin:0;"><em>* All collection figures are industry estimates sourced by Ollypedia Box Office Tracking via Ollypedia Tracker. Figures may differ from official studio numbers.</em></p>
+</section>`;
+
+  const _weekOneTwoSec = sections.weekOneTwoComparison ? `<section style="${card}">
+  <h2 style="${h2}">Week-on-Week Performance Comparison</h2>
+  ${toParagraphs(sections.weekOneTwoComparison)}
+</section>` : "";
+
+  const _festivalSec = sections.festivalImpact ? `<section style="${card}">
+  <h2 style="${h2}">Festival Season Impact — ${dayClassification.festival}</h2>
+  ${toParagraphs(sections.festivalImpact)}
+</section>` : "";
+
+  const _sectMap = {
+    analysis:      _mkSec(headings.boxOfficeAnalysis,  sections.boxOfficeAnalysis),
+    weekendWeekday:_mkSec(headings.weekendWeekday,     sections.weekendWeekdayComparison),
+    audience:      _mkSec(headings.audienceResponse,   sections.audienceResponse),
+    occupancy:     _mkSec(headings.occupancy,          sections.occupancyTrend),
+    perf:          _perfSec,
+    industry:      _mkSec(headings.industryImpact,     sections.industryImpact),
+    outlook:       _mkSec(headings.outlook,            (sections.prediction || "") + "\n\n" + (sections.futureOutlook || "")),
+  };
+
+  const _editorialOrder = (() => {
+    const _ts = new Set(dayTags);
+    if (actualDay === 1)
+      return ["analysis", "audience", "occupancy", "industry", "perf", "weekendWeekday", "outlook"];
+    if (actualDay <= 3 || _ts.has("opening-weekend"))
+      return ["audience", "analysis", "weekendWeekday", "occupancy", "perf", "industry", "outlook"];
+    if (actualDay >= 4 && actualDay <= 6)
+      return ["weekendWeekday", "analysis", "occupancy", "audience", "perf", "industry", "outlook"];
+    if (actualDay === 7 || _ts.has("first-week-closing"))
+      return ["analysis", "perf", "audience", "industry", "weekendWeekday", "occupancy", "outlook"];
+    if (actualDay <= 14)
+      return ["analysis", "audience", "weekendWeekday", "occupancy", "perf", "industry", "outlook"];
+    return ["analysis", "industry", "audience", "perf", "weekendWeekday", "occupancy", "outlook"];
+  })();
+
+  const editorialSectionsHtml = [
+    _extendedRunBlock,
+    _holdPercentBlock,
+    ..._editorialOrder.map(k => _sectMap[k] || ""),
+    _weekOneTwoSec,
+    _festivalSec,
+    _firstWeekCard,
+    _ottCountdown,
+    _verdictSec,
+  ].filter(Boolean).join("\n\n");
 
   // ─────────────────────────────────────────────────────────────────────────
   //  §13  ASSEMBLE FULL BLOG HTML (exact BoxOfficePanel structure)
@@ -5699,12 +6054,8 @@ Rules:
 
 <!-- KEY HIGHLIGHT CALLOUT -->
 <div style="background:#180e00;border-left:4px solid #ff9800;border-radius:0 10px 10px 0;padding:14px 20px;margin-bottom:22px;">
-  <strong style="color:#ff9800;">📊 Box Office Update:</strong>
-  <span style="color:#ccc;"> <strong style="color:#fff;">${movieName}</strong> has collected an estimated
-  <strong style="color:#c9973a;">${totalNetStr} net</strong> and
-  <strong style="color:#7ec8e3;">${totalGrossStr} gross</strong> after
-  <strong style="color:#fff;">${actualDay} day${actualDay !== 1 ? "s" : ""}</strong> in theatres.
-  ${totalNet >= 1_00_00_000 ? `The film has crossed the <strong style="color:#c9973a;">₹${(totalNet / 1_00_00_000).toFixed(0)} Cr mark</strong> at the Odia box office.` : ""}</span>
+  <strong style="color:#ff9800;">${_calloutEmoji} ${_calloutLabel}:</strong>
+  <span style="color:#ccc;"> ${_calloutBody}</span>
 </div>
 
 
@@ -5832,78 +6183,7 @@ ${(() => {
     })()}
 
 
-<!-- EDITORIAL SECTIONS (AI-written) -->
-<section style="${card}">
-  <h2 style="${h2}">Box Office Journey — ${movieName}</h2>
-  ${toParagraphs(sections.boxOfficeAnalysis)}
-</section>
-
-<section style="${card}">
-  <h2 style="${h2}">Weekend vs Weekday Performance</h2>
-  ${toParagraphs(sections.weekendWeekdayComparison)}
-</section>
-
-<section style="${card}">
-  <h2 style="${h2}">Audience Response</h2>
-  ${toParagraphs(sections.audienceResponse)}
-</section>
-
-<section style="${card}">
-  <h2 style="${h2}">Occupancy Trends</h2>
-  ${toParagraphs(sections.occupancyTrend)}
-</section>
-
-${sections.weekOneTwoComparison ? `
-<section style="${card}">
-  <h2 style="${h2}">Week-on-Week Performance Comparison</h2>
-  ${toParagraphs(sections.weekOneTwoComparison)}
-</section>` : ""}
-
-${sections.festivalImpact ? `
-<section style="${card}">
-  <h2 style="${h2}">Festival Season Impact — ${dayClassification.festival}</h2>
-  ${toParagraphs(sections.festivalImpact)}
-</section>` : ""}
-
-<section style="${card}">
-  <h2 style="${h2}">Performance Analysis</h2>
-  <div class="perf-stats" style="background:#1f1800;border:1px solid #2e2000;border-radius:10px;padding:16px 20px;margin-bottom:18px;display:flex;gap:24px;flex-wrap:wrap;">
-    <div>
-      <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Net</div>
-      <div style="font-size:1.2rem;font-weight:800;color:#c9973a;">${totalNetStr}</div>
-    </div>
-    <div>
-      <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Total Gross</div>
-      <div style="font-size:1.2rem;font-weight:800;color:#7ec8e3;">${totalGrossStr}</div>
-    </div>
-    <div>
-      <div style="font-size:0.65rem;color:#666;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:4px;">Days Tracked</div>
-      <div style="font-size:1.2rem;font-weight:800;color:#fff;">${sortedDays.length}</div>
-    </div>
-  </div>
-  ${toParagraphs(sections.performanceAnalysis)}
-</section>
-
-<section style="${card}">
-  <h2 style="${h2}">Impact on the Ollywood Industry</h2>
-  ${toParagraphs(sections.industryImpact)}
-</section>
-
-<section style="${card}">
-  <h2 style="${h2}">Future Box Office Outlook</h2>
-  ${toParagraphs(sections.prediction)}
-  ${toParagraphs(sections.futureOutlook)}
-</section>
-
-<section style="${card}">
-  <h2 style="${h2}">Final Verdict</h2>
-  <div style="border-left:4px solid #c9973a;padding-left:16px;margin-bottom:16px;">
-    ${toParagraphs(sections.finalVerdict)}
-  </div>
-  <p style="color:#555;font-size:0.8rem;line-height:1.6;margin:0;">
-    <em>* All collection figures are industry estimates sourced by Ollypedia Box Office Tracking via Ollypedia Tracker. Figures may differ from official studio numbers.</em>
-  </p>
-</section>
+${editorialSectionsHtml}
 
 
 <!-- PREV / NEXT DAY NAVIGATION -->
@@ -6100,7 +6380,7 @@ ${sections.festivalImpact ? `
   // ─────────────────────────────────────────────────────────────────────────
 
   const seoTitle = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross | Ollypedia`;
-  const seoDesc = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection: The film has collected ${totalNetStr} net and ${totalGrossStr} gross in ${actualDay} day${actualDay !== 1 ? "s" : ""}. Check complete day-wise breakdown, audience response, and performance analysis on Ollypedia.`;
+  const seoDesc = seoDescDynamic;
   const excerpt = sections.introParagraph ||
     `${movieName} Day ${actualDay} box office collection: Net ${dayNet}, Gross ${dayGross}. Total ${totalNetStr} net in ${sortedDays.length} days.`;
 
@@ -7485,7 +7765,7 @@ async function maybeGenerateFirstWeekBlog(movie, sortedDays, totalNet, movieId) 
     const ai = await generateFirstWeekAI(movie, sortedDays, totalNet);
     const slug = buildFirstWeekSlug(movie);
     const totalNetStr = formatINR(totalNet);
-    const seed = String(movieId).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const seed = (String(movieId) + eventType).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
     const title = getFirstWeekTitle(movie.title, totalNetStr, seed);
 
     const relatedMovies = await fetchRelatedMovies(movie);
@@ -7562,7 +7842,7 @@ async function maybeGenerateWeekendBlog(movie, sortedDays, actualDay, totalNet, 
     const ai = await generateWeekendAI(movie, sortedDays, weekendNum, totalNet);
     const slug = buildWeekendSlug(movie, weekendNum);
     const totalNetStr = formatINR(totalNet);
-    const seed = String(movieId).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const seed = (String(movieId) + eventType + weekendNum).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
     const title = getWeekendTitle(movie.title, weekendLabel, totalNetStr, seed);
 
     const relatedMovies = await fetchRelatedMovies(movie);
@@ -7634,7 +7914,7 @@ async function maybeGenerateMilestoneBlog(movie, sortedDays, totalNet, prevTotal
 
         const ai = await generateMilestoneAI(movie, milestone.key, totalNet);
         const slug = buildMilestoneSlug(movie, milestone.key);
-        const seed = String(movieId).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+        const seed = (String(movieId) + eventType + milestone.key).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
         const title = getMilestoneTitle(movie.title, milestone.clean, seed);
 
         const relatedMovies = await fetchRelatedMovies(movie);
@@ -7713,7 +7993,7 @@ async function maybeGenerateComparisonBlog(movie, sortedDays, totalNet, movieId)
 
     const ai = await generateComparisonAI(movie, comparators, totalNet);
     const slug = buildComparisonSlug(movie);
-    const seed = String(movieId).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const seed = (String(movieId) + eventType).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
     const title = getComparisonTitle(movie.title, seed);
 
     const relatedMovies = await fetchRelatedMovies(movie);
