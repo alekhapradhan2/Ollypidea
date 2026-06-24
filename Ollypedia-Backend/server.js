@@ -6380,44 +6380,33 @@ ${editorialSectionsHtml}
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Indexability decision ──────────────────────────────────────────────
-  // Controls which day-wise articles are published:true (indexed by Google)
-  // vs published:false (stored in DB for data integrity but not crawled).
-  // The /box-office/[slug] page remains the single canonical authority.
+  // `published` is ALWAYS true so every day's article shows in the blog UI.
+  // `indexed` controls SEO — only key/milestone days get indexed by Google.
+  // The /box-office/[slug] page is the single canonical authority for rankings.
   //
-  // Indexed when ANY of these conditions are true:
-  //  ① Day 1, 2, 3          — opening weekend (highest search volume)
-  //  ② Day 7, 14, 21        — weekly closing reports
-  //  ③ Opening Weekend days  — tag: "opening-weekend"
-  //  ④ All weekend days      — tag: "weekend" (Fri/Sat/Sun throughout run)
-  //  ⑤ Milestone days        — any tag starting with "milestone-"
-  //                            (₹10L, ₹25L, ₹50L, ₹75L, ₹1Cr, ₹2Cr …)
-  //  ⑥ Silver Jubilee        — tag: "silver-jubilee-run"  (day >= 25)
-  //  ⑦ Golden Jubilee        — tag: "golden-run"          (day >= 50)
-  //  ⑧ Comparison blogs      — tag: "second-weekend",
-  //                            "third-weekend", "fourth-weekend"
-  //                            (these carry natural comparison content)
-  //  All other weekday days  → published: false (stored, not indexed)
+  // indexed: true days:
+  //  • Day 1, 2, 3          — opening weekend (highest search volume)
+  //  • Day 7, 14, 21        — weekly closing reports
+  //  • Opening Weekend days  — tag: "opening-weekend"
+  //  • All weekend days      — tag: "weekend" (Fri/Sat/Sun throughout run)
+  //  • Milestone days        — any tag starting with "milestone-"
+  //  • Silver Jubilee        — tag: "silver-jubilee-run" (day >= 25)
+  //  • Golden Jubilee        — tag: "golden-run" (day >= 50)
+  //  • Comparison weekends   — tag: "second-weekend","third-weekend","fourth-weekend"
+  //  All other weekday days  → indexed: false (in UI, not in sitemap/Google)
   const tagSet14 = new Set(dayTags);
   const isIndexableDay = (
-    // ① Opening days
     actualDay === 1 ||
     actualDay === 2 ||
     actualDay === 3 ||
-    // ② Weekly closing days
     actualDay === 7 ||
     actualDay === 14 ||
     actualDay === 21 ||
-    // ③ Opening weekend tag (covers Day 1-3 on weekends automatically)
     tagSet14.has("opening-weekend") ||
-    // ④ Any weekend day throughout the run (Fri/Sat/Sun)
     tagSet14.has("weekend") ||
-    // ⑤ Milestone crossed today
     [...tagSet14].some(t => t.startsWith("milestone-")) ||
-    // ⑥ Silver Jubilee (day >= 25)
     tagSet14.has("silver-jubilee-run") ||
-    // ⑦ Golden Jubilee (day >= 50)
     tagSet14.has("golden-run") ||
-    // ⑧ Comparison weekend blogs (2nd/3rd/4th weekend)
     tagSet14.has("second-weekend") ||
     tagSet14.has("third-weekend") ||
     tagSet14.has("fourth-weekend")
@@ -6445,7 +6434,8 @@ ${editorialSectionsHtml}
     movieId: movie._id,
     movieTitle: movieName,
     author: "Ollypedia Team",
-    published: isIndexableDay,   // ← key days indexed; non-indexable weekdays stored only
+    published: true,          // always true — shows in blog UI listing
+    indexed: isIndexableDay,  // controls sitemap + robots meta
     featured: false,
     seoTitle,
     seoDesc,
@@ -6457,11 +6447,10 @@ ${editorialSectionsHtml}
 
   if (existingBlog) {
     // Update — preserve _id and createdAt.
-    // Re-apply isIndexableDay on every update so:
-    //  (a) a day promoted to a milestone on re-run gets published:true
-    //  (b) a previously published:true non-indexable day gets corrected
+    // Re-apply indexed on every update so milestone promotions take effect.
     Object.assign(existingBlog, blogPayload);
-    existingBlog.published = isIndexableDay;
+    existingBlog.published = true;
+    existingBlog.indexed = isIndexableDay;
     await existingBlog.save();
     finalSlug = existingBlog.slug;
   } else {
@@ -6473,7 +6462,8 @@ ${editorialSectionsHtml}
     if (dayPatternBlog) {
       Object.assign(dayPatternBlog, blogPayload);
       dayPatternBlog.slug = blogSlug; // normalise to stable slug
-      dayPatternBlog.published = isIndexableDay;
+      dayPatternBlog.published = true;
+      dayPatternBlog.indexed = isIndexableDay;
       await dayPatternBlog.save();
       finalSlug = dayPatternBlog.slug;
     } else {
