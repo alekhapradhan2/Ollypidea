@@ -5709,13 +5709,13 @@ Rules:
 </section>` : "";
 
   const _sectMap = {
-    analysis:      _mkSec(headings.boxOfficeAnalysis,  sections.boxOfficeAnalysis),
-    weekendWeekday:_mkSec(headings.weekendWeekday,     sections.weekendWeekdayComparison),
-    audience:      _mkSec(headings.audienceResponse,   sections.audienceResponse),
-    occupancy:     _mkSec(headings.occupancy,          sections.occupancyTrend),
-    perf:          _perfSec,
-    industry:      _mkSec(headings.industryImpact,     sections.industryImpact),
-    outlook:       _mkSec(headings.outlook,            (sections.prediction || "") + "\n\n" + (sections.futureOutlook || "")),
+    analysis: _mkSec(headings.boxOfficeAnalysis, sections.boxOfficeAnalysis),
+    weekendWeekday: _mkSec(headings.weekendWeekday, sections.weekendWeekdayComparison),
+    audience: _mkSec(headings.audienceResponse, sections.audienceResponse),
+    occupancy: _mkSec(headings.occupancy, sections.occupancyTrend),
+    perf: _perfSec,
+    industry: _mkSec(headings.industryImpact, sections.industryImpact),
+    outlook: _mkSec(headings.outlook, (sections.prediction || "") + "\n\n" + (sections.futureOutlook || "")),
   };
 
   const _editorialOrder = (() => {
@@ -6379,6 +6379,50 @@ ${editorialSectionsHtml}
   //  §14  CREATE OR UPDATE BLOG POST
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Indexability decision ──────────────────────────────────────────────
+  // Controls which day-wise articles are published:true (indexed by Google)
+  // vs published:false (stored in DB for data integrity but not crawled).
+  // The /box-office/[slug] page remains the single canonical authority.
+  //
+  // Indexed when ANY of these conditions are true:
+  //  ① Day 1, 2, 3          — opening weekend (highest search volume)
+  //  ② Day 7, 14, 21        — weekly closing reports
+  //  ③ Opening Weekend days  — tag: "opening-weekend"
+  //  ④ All weekend days      — tag: "weekend" (Fri/Sat/Sun throughout run)
+  //  ⑤ Milestone days        — any tag starting with "milestone-"
+  //                            (₹10L, ₹25L, ₹50L, ₹75L, ₹1Cr, ₹2Cr …)
+  //  ⑥ Silver Jubilee        — tag: "silver-jubilee-run"  (day >= 25)
+  //  ⑦ Golden Jubilee        — tag: "golden-run"          (day >= 50)
+  //  ⑧ Comparison blogs      — tag: "second-weekend",
+  //                            "third-weekend", "fourth-weekend"
+  //                            (these carry natural comparison content)
+  //  All other weekday days  → published: false (stored, not indexed)
+  const tagSet14 = new Set(dayTags);
+  const isIndexableDay = (
+    // ① Opening days
+    actualDay === 1 ||
+    actualDay === 2 ||
+    actualDay === 3 ||
+    // ② Weekly closing days
+    actualDay === 7 ||
+    actualDay === 14 ||
+    actualDay === 21 ||
+    // ③ Opening weekend tag (covers Day 1-3 on weekends automatically)
+    tagSet14.has("opening-weekend") ||
+    // ④ Any weekend day throughout the run (Fri/Sat/Sun)
+    tagSet14.has("weekend") ||
+    // ⑤ Milestone crossed today
+    [...tagSet14].some(t => t.startsWith("milestone-")) ||
+    // ⑥ Silver Jubilee (day >= 25)
+    tagSet14.has("silver-jubilee-run") ||
+    // ⑦ Golden Jubilee (day >= 50)
+    tagSet14.has("golden-run") ||
+    // ⑧ Comparison weekend blogs (2nd/3rd/4th weekend)
+    tagSet14.has("second-weekend") ||
+    tagSet14.has("third-weekend") ||
+    tagSet14.has("fourth-weekend")
+  );
+
   const seoTitle = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross | Ollypedia`;
   const seoDesc = seoDescDynamic;
   const excerpt = sections.introParagraph ||
@@ -6401,7 +6445,7 @@ ${editorialSectionsHtml}
     movieId: movie._id,
     movieTitle: movieName,
     author: "Ollypedia Team",
-    published: true,
+    published: isIndexableDay,   // ← key days indexed; non-indexable weekdays stored only
     featured: false,
     seoTitle,
     seoDesc,
@@ -6412,9 +6456,12 @@ ${editorialSectionsHtml}
   const existingBlog = await Blog.findOne({ slug: blogSlug });
 
   if (existingBlog) {
-    // Update — preserve _id and createdAt
+    // Update — preserve _id and createdAt.
+    // Re-apply isIndexableDay on every update so:
+    //  (a) a day promoted to a milestone on re-run gets published:true
+    //  (b) a previously published:true non-indexable day gets corrected
     Object.assign(existingBlog, blogPayload);
-    existingBlog.published = true;
+    existingBlog.published = isIndexableDay;
     await existingBlog.save();
     finalSlug = existingBlog.slug;
   } else {
@@ -6426,7 +6473,7 @@ ${editorialSectionsHtml}
     if (dayPatternBlog) {
       Object.assign(dayPatternBlog, blogPayload);
       dayPatternBlog.slug = blogSlug; // normalise to stable slug
-      dayPatternBlog.published = true;
+      dayPatternBlog.published = isIndexableDay;
       await dayPatternBlog.save();
       finalSlug = dayPatternBlog.slug;
     } else {
