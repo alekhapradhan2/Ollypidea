@@ -382,6 +382,7 @@ const BlogSchema = new mongoose.Schema({
   author: { type: String, default: "Ollypedia Team" },
   published: { type: Boolean, default: false },
   featured: { type: Boolean, default: false },
+  indexed: { type: Boolean, default: true },  // ★ false = noindex meta + excluded from sitemap
   views: { type: Number, default: 0 },
   readTime: { type: Number, default: 5 },         // minutes
   seoTitle: { type: String, default: "" },
