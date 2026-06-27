@@ -349,6 +349,7 @@ const MovieSchema = new mongoose.Schema({
   streamingUrl: { type: String, default: "" },  // Direct link to stream the movie
   ottReleaseDate: { type: String, default: "" },  // OTT release date (ISO string or "TBA")
   detailBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "Movie Details" blog
+  songBlogIds: { type: Map, of: mongoose.Schema.Types.ObjectId, default: {} },       // song slug → Blog._id (auto-generated song First Drop blogs)
   ottBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "OTT Release" blog
   ottLiveBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "Now Streaming on OTT" blog
 }, { timestamps: true });
@@ -382,7 +383,7 @@ const BlogSchema = new mongoose.Schema({
   author: { type: String, default: "Ollypedia Team" },
   published: { type: Boolean, default: false },
   featured: { type: Boolean, default: false },
-  indexed: { type: Boolean, default: true },  // ★ false = noindex meta + excluded from sitemap
+  indexed: { type: Boolean, default: true },               // ★ false = noindex meta + excluded from sitemap
   views: { type: Number, default: 0 },
   readTime: { type: Number, default: 5 },         // minutes
   seoTitle: { type: String, default: "" },
@@ -1473,6 +1474,572 @@ async function autoGenerateMovieDetailsBlog(movie) {
     return null;
   }
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SONG FIRST DROP BLOG
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * cleanSongTitle — strips YouTube video title noise after the first " | "
+ * e.g. "Megha Kadamba | Full Video Song | Rakta Golapa | ..."  →  "Megha Kadamba"
+ * Safe for plain song titles that have no pipe — returns as-is.
+ */
+function cleanSongTitle(raw) {
+  return String(raw || "").split("|")[0].trim();
+}
+
+/**
+ * buildSongSlug — "[song-title]-[drop-name]-from-[movie-slug]-song-details"
+ * Max 100 chars, URL-safe.
+ */
+function buildSongSlug(songTitle, movie, dropSlug, hasLyrics) {
+  const clean = cleanSongTitle(songTitle);
+  // Allow all unicode letters and numbers
+  const st = trimSlugToLength(
+    clean.toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") // remove leading/trailing hyphens
+      .trim(),
+    40
+  );
+  const ms = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 30);
+  const drop = dropSlug || "first-drop";
+  const slugPrefix = st ? `${st}-` : "";
+
+  if (hasLyrics) {
+    return trimSlugToLength(`${slugPrefix}${drop}-lyrics-from-${ms}`, 100);
+  }
+  return trimSlugToLength(`${slugPrefix}${drop}-from-${ms}-song-details`, 100);
+}
+
+/**
+ * buildSongTitle — SEO title for the song blog. Capped at 130 chars (user requested longer, detailed titles).
+ * Uses cleanSongTitle() to strip YouTube video title noise.
+ */
+function buildSongTitle(songTitle, movie, dropLabel, hasLyrics, singer, md) {
+  const clean = cleanSongTitle(songTitle);
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const movieStr = `${movie.title}${year ? ` (${year})` : ""}`;
+  const dLabel = dropLabel || "First Drop";
+  const sng = singer ? `, ${singer}` : "";
+  const mus = md ? `, ${md}` : "";
+
+  let full;
+  if (hasLyrics) {
+    full = `${clean} ${dLabel} Lyrics from ${movieStr} – Full Lyrics${sng}${mus} & Song Details`;
+  } else {
+    full = `${clean} ${dLabel} from ${movieStr} – Release${sng}${mus} & Full Details`;
+  }
+
+  // Increased limit from 70 to 130 so the rich user-requested template doesn't fallback incorrectly
+  if (full.length <= 130) return full;
+
+  // Shorter fallback pattern
+  const short = hasLyrics
+    ? `${clean} ${dLabel} Lyrics | ${movieStr} | Ollypedia`
+    : `${clean} ${dLabel} | ${movieStr} | Ollypedia`;
+
+  if (short.length <= 130) return short;
+  return short.slice(0, 127) + "...";
+}
+
+/**
+ * buildSongSeoDesc — meta description for the song blog.
+ * Uses cleanSongTitle() to strip YouTube noise from song.title.
+ */
+function buildSongSeoDesc(song, movie) {
+  const clean = cleanSongTitle(song.title);
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const singer = song.singer || "";
+  const md = song.musicDirector || "";
+  return [
+    `Listen to "${clean}" — the latest song from ${movie.title}${year ? ` (${year})` : ""} Odia film.`,
+    singer ? `Sung by ${singer}.` : "",
+    md ? `Music by ${md}.` : "",
+    `Watch the official video, read lyrics, and get full song details on Ollypedia.`,
+  ].filter(Boolean).join(" ").slice(0, 160);
+}
+
+/**
+ * generateSongAiSections — Groq-powered editorial content for the song blog.
+ * Returns { intro, aboutSong, lyricsNote, verdict, metaDescription }
+ *
+ * When song.description is provided it is used as the PRIMARY source of truth —
+ * the AI must rewrite it into a rich, human-like multi-paragraph editorial.
+ * Raw description text must NEVER be copied verbatim into the output.
+ */
+async function generateSongAiSections(song, movie, cc) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const singer = song.singer || "the vocalist";
+  const md = song.musicDirector || cc.musicDirector || "the music director";
+  const lyricist = song.lyricist || "";
+  const genre = (movie.genre || []).join(", ") || "Odia";
+  const hasDesc = !!(song.description || "").trim();
+  const hasLyrics = !!(song.lyrics || "").trim();
+
+  const fallbacks = {
+    intro: `${song.title} is the latest song from the Odia film ${movie.title}${year ? ` (${year})` : ""}. Sung by ${singer} with music by ${md}, this track is poised to become a defining highlight of the film's soundtrack.`,
+    aboutSong: hasDesc
+      ? `${song.title} captures the emotional essence of ${movie.title} in a way that only a song crafted with this much care can. ${singer}'s voice carries the melody with effortless grace, while ${md}'s composition creates a sonic landscape that lingers long after the music ends. Every element — from the arrangement to the production — speaks to the ambition behind this release, making it one of the standout tracks of the Ollywood season.`
+      : `The song showcases the vocal brilliance of ${singer} and the musical craftsmanship of ${md}. It perfectly captures the emotional mood of the ${genre} film and is expected to resonate deeply with Ollywood audiences. The composition strikes a careful balance between melody and feeling, making it a track that will stay with listeners well beyond their first listen.`,
+    lyricsNote: hasLyrics
+      ? `The lyrics of ${song.title} are steeped in Odia cultural expression, giving voice to emotions that feel both personal and universal. Reading through the full lyrics below reveals the depth of craft behind the song's story, adding a new layer of appreciation beyond the melody itself.`
+      : `The lyrics of ${song.title} are poetic and deeply rooted in Odia cultural sensibility, weaving themes of emotion and lived experience that fans of ${movie.title} will immediately connect with.`,
+    verdict: `${song.title} is a soulful and memorable addition to the ${movie.title} soundtrack — the kind of song that earns repeat listens. With ${singer}'s heartfelt delivery and ${md}'s evocative composition, this is Ollywood music at its finest. Watch the full video on Ollypedia.`,
+    metaDescription: buildSongSeoDesc(song, movie),
+    audioCredits: [],
+    videoCredits: [],
+  };
+
+  // Build the description context block for the prompt
+  const descContext = hasDesc
+    ? `\n\nSong Description provided by creators (CRITICAL: Extract ALL audio & video credits if mentioned. Also use this to write the aboutSong editorial):\n"""\n${song.description}\n"""`
+    : "";
+
+  const aboutSongInstruction = hasDesc
+    ? `- aboutSong (5-6 long, highly detailed paragraphs): A deeply human, engaging editorial review of the song. You MUST incorporate every detail, fact, name, or context mentioned in the "Song Description" above. Discuss emotional tone, artists' performances, production nuances. Write in a warm, enthusiastic, and sophisticated journalistic voice (300-400 words).\n- audioCredits: Extract a JSON array of objects with keys "role" and "name" for all audio-related credits (Singer, Music Director, Lyricist, etc.) from the description.\n- videoCredits: Extract a JSON array of objects with keys "role" and "name" for all video-related credits (Director, Choreographer, Editor, etc.) from the description.`
+    : `- aboutSong (3-4 paragraphs, each 4-5 sentences): A human-like editorial about the song — musical style, emotional mood, the artist's delivery, and what makes this track special for ${genre} fans.\n- audioCredits: []\n- videoCredits: []`;
+
+  return callGroqStructured(
+    `You are a seasoned Odia film music journalist writing long-form, deeply expressive, and human-like editorial articles for Ollypedia.in.
+Write in fluent, highly engaging, and descriptive English. Be specific and enthusiastic. Avoid sounding robotic.
+Never copy source text verbatim — always rewrite into uniquely phrased, original editorial prose.
+Return ONLY a valid JSON object with exactly these keys: intro, aboutSong, lyricsNote, verdict, metaDescription, audioCredits, videoCredits.
+For credits, return a JSON array of objects with "role" and "name" keys. If none exist, return an empty array [].`,
+    `Write a full, rich song feature article for the Ollywood song:
+Song title: "${song.title}"
+Movie: "${movie.title}" (${year || "upcoming"})
+Genre: ${genre}
+Singer: ${singer}
+Music Director: ${md}${lyricist ? `\nLyricist: ${lyricist}` : ""}
+${hasLyrics ? "Lyrics: PROVIDED (full lyrics are displayed on this page — mention naturally in lyricsNote)" : "Lyrics: Not provided"}${descContext}
+
+Keys to fill:
+- intro (3–4 sentences): A compelling opening hook that introduces the song and its emotional significance within ${movie.title}. Set the stage like the opening line of a great music review.
+${aboutSongInstruction}
+- lyricsNote (3-4 sentences): About the lyrical theme, depth, and emotional connect. Dive into how the words elevate the music.${hasLyrics ? " Naturally mention that full lyrics are available below on this page." : ""}
+- verdict (2-3 sentences): A strong, memorable closing recommendation. End with exactly "Watch the full video on Ollypedia."
+- metaDescription (max 155 chars): SEO meta description.${hasLyrics ? ' Include the word "lyrics" naturally.' : ""}`,
+    ["intro", "aboutSong", "lyricsNote", "verdict", "metaDescription", "audioCredits", "videoCredits"],
+    fallbacks,
+    3000
+  );
+}
+
+/**
+ * buildSongBlogHTML — full article HTML for the song First Drop blog.
+ * Follows the same dark-theme design system as movie detail / OTT blogs.
+ */
+function buildSongBlogHTML(song, movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = [], dropLabel = "First Drop") {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const singer = song.singer || "";
+  const md = song.musicDirector || cc.musicDirector || "";
+  const lyricist = song.lyricist || "";
+  const genre = (movie.genre || []).join(", ") || "Odia";
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const ogImage = poster || `${SITE_URL}/logo.png`;
+  const movieUrl = `/movie/${movie.slug || movie._id}`;
+  const songUrl = `/songs/${movie.slug || movie._id}/${(movie.media?.songs || []).findIndex(s => s.title === song.title)}/${String(song.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").trim()}`;
+  const dp = datePublished || new Date().toISOString();
+  const dm = dateModified || dp;
+  const ytVideoId = song.ytId || "";
+  const thumbnail = song.thumbnailUrl || (ytVideoId ? `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg` : ogImage);
+
+  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
+  const h2 = `font-size:1.05rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
+  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
+  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+
+  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean);
+  const allSongs = (movie.media?.songs || []).filter(s => s.title && s.title !== song.title);
+
+  // ── Schema JSON-LD ─────────────────────────────────────────────────────────
+  const schemaObj = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": ["Article", "MusicRecording"],
+        "headline": seoTitle.replace(/ \| Ollypedia$/, ""),
+        "description": ai.metaDescription || buildSongSeoDesc(song, movie),
+        "datePublished": dp,
+        "dateModified": dm,
+        "image": thumbnail,
+        "inLanguage": "en-IN",
+        "articleSection": "Songs",
+        "author": { "@type": "Organization", "name": "Ollypedia", "url": SITE_URL },
+        "publisher": {
+          "@type": "Organization", "name": "Ollypedia", "url": SITE_URL,
+          "logo": { "@type": "ImageObject", "url": `${SITE_URL}/logo.png`, "width": 600, "height": 60 }
+        },
+        "mainEntityOfPage": { "@type": "WebPage", "@id": `${SITE_URL}/blog/${blogSlug}` },
+        "about": { "@type": "Movie", "name": movie.title, "url": `${SITE_URL}${movieUrl}` },
+        ...(singer ? { "byArtist": { "@type": "MusicGroup", "name": singer } } : {}),
+        ...(md ? { "producer": { "@type": "Person", "name": md } } : {}),
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Home", "item": `${SITE_URL}/` },
+          { "@type": "ListItem", "position": 2, "name": "Songs", "item": `${SITE_URL}/songs` },
+          { "@type": "ListItem", "position": 3, "name": movie.title, "item": `${SITE_URL}${movieUrl}` },
+          { "@type": "ListItem", "position": 4, "name": `${song.title} ${dropLabel}`, "item": `${SITE_URL}/blog/${blogSlug}` },
+        ],
+      },
+      ...(ytVideoId ? [{
+        "@type": "VideoObject",
+        "name": `${song.title} — Official Video | ${movie.title}`,
+        "description": ai.metaDescription || buildSongSeoDesc(song, movie),
+        "thumbnailUrl": thumbnail,
+        "uploadDate": dp,
+        "embedUrl": `https://www.youtube.com/embed/${ytVideoId}`,
+        "contentUrl": `https://www.youtube.com/watch?v=${ytVideoId}`,
+      }] : []),
+    ],
+  };
+
+  // ── Keywords ────────────────────────────────────────────────────────────────
+  const keywordsArr = [
+    song.title, `${song.title} lyrics`, `${song.title} video`,
+    `${song.title} ${movie.title}`, `${song.title} odia song`,
+    singer ? `${song.title} ${singer}` : "",
+    singer ? `${singer} songs` : "",
+    md ? `${md} music` : "",
+    movie.title, `${movie.title} songs`, `${movie.title} ${year || ""}`.trim(),
+    "Odia songs", "Odia film songs", "Ollywood songs",
+    ...leadNames.map(n => `${n} songs`),
+    genre ? `${genre} odia songs` : "",
+  ].filter(Boolean);
+  const keywordsStr = [...new Set(keywordsArr)].join(", ");
+
+  // ── Other songs from same movie ─────────────────────────────────────────────
+  const otherSongsHtml = allSongs.length > 0 ? `
+<section style="${card}">
+  <h2 style="${h2}">More Songs from ${movie.title}</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;">
+    ${allSongs.map(s => {
+    const sIdx = (movie.media?.songs || []).findIndex(x => x.title === s.title);
+    const dropSlug = ordinalDropName(sIdx > -1 ? sIdx : 0).slug;
+    const sBlogSlug = buildSongSlug(s.title, movie, dropSlug, Boolean(s.lyrics?.trim()));
+    const cTitle = cleanSongTitle(s.title);
+    return `
+    <a href="/blog/${sBlogSlug}" style="display:flex;flex-direction:column;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;text-decoration:none;transition:border-color 0.2s;">
+      <div style="position:relative;width:100%;padding-bottom:56.25%;background:#000;">
+        ${s.ytId ? `<img src="https://img.youtube.com/vi/${s.ytId}/hqdefault.jpg" alt="${cTitle}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" loading="lazy">` : `<div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;">🎵</div>`}
+      </div>
+      <div style="padding:12px 14px;">
+        <div style="font-size:0.85rem;font-weight:700;color:#ddd;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" title="${cTitle}">${cTitle}</div>
+        ${s.singer ? `<div style="font-size:0.72rem;color:#666;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.singer}">${s.singer}</div>` : ""}
+      </div>
+    </a>`;
+  }).join("")}
+  </div>
+</section>` : "";
+
+  // ── Related movies ──────────────────────────────────────────────────────────
+  const relatedHtml = relatedMovies.length > 0 ? buildRelatedMoviesHtml(relatedMovies, "#c9973a", "More Odia Films") : "";
+
+  // ── Also Read ───────────────────────────────────────────────────────────────
+  const alsoReadHtml = `
+<section class="faq-section" style="${card}margin-bottom:22px;">
+  <h2 style="${h2}">Also Read</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+    <a href="${movieUrl}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
+      <span style="font-size:1.3rem;flex-shrink:0;">🎬</span>
+      <div><div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">${movie.title} — Full Movie Details</div><div style="font-size:0.72rem;color:#666;margin-top:2px;">Cast, story & release info</div></div>
+    </a>
+    <a href="/songs" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
+      <span style="font-size:1.3rem;flex-shrink:0;">🎵</span>
+      <div><div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">All Odia Songs</div><div style="font-size:0.72rem;color:#666;margin-top:2px;">Latest Ollywood music</div></div>
+    </a>
+    <a href="/blog?category=Songs" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
+      <span style="font-size:1.3rem;flex-shrink:0;">📰</span>
+      <div><div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">More Song Features</div><div style="font-size:0.72rem;color:#666;margin-top:2px;">Odia music coverage on Ollypedia</div></div>
+    </a>
+  </div>
+</section>`;
+
+  // ── Tags ────────────────────────────────────────────────────────────────────
+  const tagChip = (t) => `<span style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">#${t.replace(/\s+/g, "")}</span>`;
+  const tagsList = [song.title, `${song.title}Song`, movie.title, "OdiaSong", "Ollywood", "OdiaMusic", singer ? singer.replace(/\s/g, "") : "", "OllywoodSongs"].filter(Boolean);
+
+  // ── Full HTML ───────────────────────────────────────────────────────────────
+  return `${BLOG_RESPONSIVE_STYLES}
+
+<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — Song ${dropLabel} Blog
+  title:       ${seoTitle}
+  description: ${ai.metaDescription || buildSongSeoDesc(song, movie)}
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+${JSON.stringify(schemaObj, null, 2)}
+</script>
+
+<!-- BREADCRUMB + TIMESTAMP -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/songs" style="color:#777;text-decoration:none;">Songs</a>
+    <span style="color:#333;">›</span>
+    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#c9973a;">${song.title} ${dropLabel}</span>
+  </nav>
+  <time datetime="${dp.split("T")[0]}" style="font-size:0.73rem;color:#444;white-space:nowrap;">
+    🕐 Published: ${formatHumanDate(dp)}
+  </time>
+</div>
+
+<!-- HERO BANNER -->
+<div class="hero-section" style="background:linear-gradient(135deg,#0e001a 0%,#121212 100%);border:1px solid #2e0050;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
+  <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span style="display:inline-block;background:#1a0030;color:#b388ff;font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #3a0060;">🎵 Song ${dropLabel}</span>
+    <span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${movie.title}${year ? ` (${year})` : ""}</span>
+  </div>
+
+  <h1 style="color:#fff;font-size:clamp(1.2rem,4.5vw,1.7rem);line-height:1.3;font-weight:800;margin:0 0 12px;word-break:break-word;">
+    ${song.title} — ${dropLabel} from ${movie.title}${year ? ` (${year})` : ""}
+  </h1>
+
+  <p style="color:#bbb;font-size:0.97rem;line-height:1.85;margin:0 0 20px;">${ai.intro}</p>
+
+  <div class="stat-chips" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;">
+    ${singer ? `<div style="background:rgba(0,0,0,0.5);border:1px solid #2e0050;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Singer</div><div style="font-size:0.92rem;font-weight:800;color:#b388ff;word-break:break-word;">${singer}</div></div>` : ""}
+    ${md ? `<div style="background:rgba(0,0,0,0.5);border:1px solid #1a2a3a;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Music</div><div style="font-size:0.92rem;font-weight:800;color:#7ec8e3;word-break:break-word;">${md}</div></div>` : ""}
+    ${lyricist ? `<div style="background:rgba(0,0,0,0.5);border:1px solid #222;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Lyricist</div><div style="font-size:0.92rem;font-weight:800;color:#fff;word-break:break-word;">${lyricist}</div></div>` : ""}
+    <div style="background:rgba(0,0,0,0.5);border:1px solid #2a2a2a;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Film</div><div style="font-size:0.92rem;font-weight:800;color:#c9973a;word-break:break-word;">${movie.title}</div></div>
+  </div>
+</div>
+
+<!-- YOUTUBE VIDEO EMBED -->
+${ytVideoId ? `
+<section style="${card}">
+  <h2 style="${h2}">🎬 Official Video — ${song.title}</h2>
+  <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000;">
+    <iframe
+      src="https://www.youtube.com/embed/${ytVideoId}?rel=0&modestbranding=1"
+      title="${song.title} — Official Video from ${movie.title}"
+      frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen
+      loading="lazy"
+      style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:10px;">
+    </iframe>
+  </div>
+  <p style="color:#555;font-size:0.75rem;margin:10px 0 0;">▶ Watch "${song.title}" official video from <strong style="color:#777;">${movie.title}</strong> on YouTube</p>
+</section>` : poster ? `
+<section style="${card}text-align:center;">
+  <h2 style="${h2}">🎵 ${song.title}</h2>
+  <img src="${poster}" alt="${song.title} — ${movie.title}" style="max-width:320px;width:100%;border-radius:12px;border:1px solid #2a2a2a;" loading="lazy">
+  <p style="color:#555;font-size:0.78rem;margin:12px 0 0;">Official video coming soon. Follow Ollypedia for updates.</p>
+</section>` : ""}
+
+<!-- SONG DETAILS TABLE -->
+<section style="${card}">
+  <h2 style="${h2}">Song Details — ${song.title}</h2>
+  <table style="width:100%;border-collapse:collapse;">
+    <tbody>
+      <tr><td style="${tdL}">Song Title</td><td style="${tdR}">${song.title}</td></tr>
+      <tr><td style="${tdL}">Film</td><td style="${tdR}"><a href="${movieUrl}" style="color:#c9973a;text-decoration:underline;text-underline-offset:2px;">${movie.title}${year ? ` (${year})` : ""}</a></td></tr>
+      ${singer ? `<tr><td style="${tdL}">Singer</td><td style="${tdR}">${singer}</td></tr>` : ""}
+      ${md ? `<tr><td style="${tdL}">Music Director</td><td style="${tdR}">${md}</td></tr>` : ""}
+      ${lyricist ? `<tr><td style="${tdL}">Lyricist</td><td style="${tdR}">${lyricist}</td></tr>` : ""}
+      ${cc.director ? `<tr><td style="${tdL}">Director</td><td style="${tdR}">${cc.director}</td></tr>` : ""}
+      <tr><td style="${tdL}">Language</td><td style="${tdR}">Odia</td></tr>
+      <tr><td style="${tdL}">Industry</td><td style="${tdR}">Ollywood</td></tr>
+    </tbody>
+  </table>
+  <div style="text-align:center;margin-top:20px;">
+    <a href="${movieUrl}" style="display:inline-block;background:#c9973a;color:#000;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:800;font-size:0.9rem;">
+      🎬 View Full Movie Details
+    </a>
+  </div>
+</section>
+
+<!-- ABOUT THE SONG -->
+<section style="${card}">
+  <h2 style="${h2}">About the Song — ${song.title}</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 14px;font-size:0.97rem;">${ai.aboutSong}</p>
+</section>
+
+<!-- LYRICS NOTE -->
+<section style="${card}">
+  <h2 style="${h2}">Lyrics & Theme</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 14px;font-size:0.97rem;">${ai.lyricsNote}</p>
+  ${song.lyrics ? `
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:10px;padding:20px 22px;margin-top:14px;">
+    <h3 style="font-size:0.8rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 14px;">Song Lyrics</h3>
+    <pre style="color:#aaa;font-size:0.9rem;line-height:1.9;white-space:pre-wrap;word-break:break-word;margin:0;font-family:inherit;">${song.lyrics}</pre>
+  </div>` : ""}
+</section>
+
+<!-- VERDICT -->
+<section style="${card}">
+  <h2 style="${h2}">Verdict</h2>
+  <div style="border-left:4px solid #c9973a;padding-left:16px;">
+    <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.verdict}</p>
+  </div>
+</section>
+
+${(() => {
+      const buildCreditsTable = (title, credits) => {
+        if (!Array.isArray(credits) || credits.length === 0) return "";
+        return `
+<section style="${card}">
+  <h3 style="${h2.replace('1.05rem', '0.95rem')}">${title}</h3>
+  <table style="width:100%;border-collapse:collapse;">
+    <tbody>
+      ${credits.map(c => `<tr><td style="${tdL}">${c.role || "Credit"}</td><td style="${tdR}">${c.name || "-"}</td></tr>`).join("")}
+    </tbody>
+  </table>
+</section>`;
+      };
+      return buildCreditsTable("Audio Credits", ai.audioCredits) + buildCreditsTable("Video Credits", ai.videoCredits);
+    })()}
+
+<!-- MORE SONGS FROM THIS MOVIE -->
+${otherSongsHtml}
+
+<!-- RELATED MOVIES -->
+${relatedHtml}
+
+<!-- ALSO READ -->
+${alsoReadHtml}
+
+<!-- TAGS -->
+<section style="background:#111;border-radius:14px;padding:18px 22px;margin-bottom:22px;">
+  <h2 style="font-size:0.7rem;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 10px;">Tags</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:5px;">${tagsList.map(t => tagChip(t)).join("")}</div>
+</section>
+
+<!-- FOOTER -->
+<div style="border-top:1px solid #1c1c1c;padding-top:14px;margin-top:4px;">
+  <p style="color:#444;font-size:0.8rem;line-height:1.8;margin:0;">
+    <strong style="color:#555;">Source:</strong> Ollypedia Song Database &nbsp;·&nbsp;
+    <strong style="color:#555;">Published:</strong> <time datetime="${dp.split("T")[0]}" style="color:#444;">${formatHumanDate(dp)}</time> &nbsp;·&nbsp;
+    <a href="${movieUrl}" style="color:#c9973a;text-decoration:none;">View ${movie.title} full details →</a>
+  </p>
+</div>`;
+}
+
+/**
+ * Helper to generate ordinal drop names (First Drop, Second Drop, etc.)
+ */
+function ordinalDropName(index) {
+  const words = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth"];
+  const label = words[index] ? `${words[index]} Drop` : `Drop ${index + 1}`;
+  const slug = words[index] ? `${words[index].toLowerCase()}-drop` : `drop-${index + 1}`;
+  return { label, slug };
+}
+
+/**
+ * autoGenerateSongBlog — creates a "Nth Drop" blog for a single song.
+ *
+ * songIndex: 0-based position of the song in movie.media.songs.
+ *   - Index 0 → First Drop, 1 → Second Drop, etc.
+ *   - Used in slug, title, meta description, hero badge, breadcrumb, and structured data.
+ *
+ * onlyIfNew: when true (default), the blog is SKIPPED if one already exists for this
+ *   song slug. This prevents re-generation when editing a movie that already has song
+ *   blogs — only truly new songs get a blog created.
+ *   Pass false when you explicitly want to regenerate/update an existing blog
+ *   (e.g. when the song's ytId or lyrics are updated via the dedicated song edit route).
+ */
+async function autoGenerateSongBlog(song, movie, songIndex = 0, onlyIfNew = true) {
+  if (!song?.title?.trim()) return null;
+  try {
+    const { label: dropLabel, slug: dropSlug } = ordinalDropName(songIndex);
+    const cc = extractMovieCastCrew(movie);
+    const hasLyrics = Boolean(song.lyrics?.trim());
+    const seoTitle = buildSongTitle(song.title, movie, dropLabel, hasLyrics, song.singer || "", song.musicDirector || cc.musicDirector || "");
+    const baseSlug = buildSongSlug(song.title, movie, dropSlug, hasLyrics);
+    const seoDesc = buildSongSeoDesc(song, movie, dropLabel);
+
+    // ── Existence check ───────────────────────────────────────────────────
+    // If onlyIfNew is true, skip silently when a blog already exists for this song.
+    // Instead of relying on baseSlug (which changes based on index and lyrics), 
+    // we query the DB directly using movieId and song title inside tags.
+    let blog = null;
+    if (onlyIfNew) {
+      blog = await Blog.findOne({ movieId: movie._id, category: { $in: ["Songs", "Song Updates"] }, tags: song.title });
+      if (blog) {
+        console.log(`⏭ Song blog already exists for "${song.title}" (${movie.title}) — skipping (onlyIfNew=true)`);
+        return blog;
+      }
+    } else {
+      // For updates, try finding by title first, otherwise fallback to existing baseSlug mapping.
+      blog = await Blog.findOne({ movieId: movie._id, category: { $in: ["Songs", "Song Updates"] }, tags: song.title });
+      if (!blog) {
+        const existingId = movie.songBlogIds instanceof Map
+          ? movie.songBlogIds.get(baseSlug)
+          : (movie.songBlogIds || {})[baseSlug];
+        if (existingId) blog = await Blog.findById(existingId);
+        if (!blog) blog = await Blog.findOne({ slug: baseSlug });
+      }
+    }
+
+    const relatedMovies = await fetchRelatedMovies(movie);
+    const ai = await generateSongAiSections(song, movie, cc);
+    const dp = new Date().toISOString();
+    const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : dp;
+    const dateModified = dp;
+    const html = buildSongBlogHTML(song, movie, cc, ai, blog?.slug || baseSlug, seoTitle, datePublished, dateModified, relatedMovies, dropLabel);
+
+    const fields = {
+      title: seoTitle,
+      excerpt: seoDesc,
+      content: html,
+      category: "Song Updates",
+      tags: [song.title, movie.title, "Odia Songs", "Ollywood", "Odia Music", song.singer || "", song.musicDirector || cc.musicDirector || ""].filter(Boolean),
+      coverImage: song.thumbnailUrl || (song.ytId ? `https://img.youtube.com/vi/${song.ytId}/hqdefault.jpg` : movie.posterUrl || movie.thumbnailUrl || ""),
+      movieId: movie._id,
+      movieTitle: movie.title,
+      author: "Ollypedia Team",
+      published: true,
+      indexed: true,   // song blogs are always indexable — each is a unique entity
+      readTime: Math.max(1, Math.ceil(html.split(/\s+/).length / 200)),
+      seoTitle: seoTitle,
+      seoDesc: seoDesc,
+      youtubeVideoId: song.ytId || "",
+    };
+
+    if (blog) {
+      Object.assign(blog, fields);
+      await blog.save();
+      console.log(`✅ Updated Song blog for "${song.title}" (${movie.title}) → /blog/${blog.slug}`);
+    } else {
+      blog = await Blog.create({ ...fields, slug: baseSlug });
+      // Store the blog ID in the movie's songBlogIds map
+      await Movie.findByIdAndUpdate(movie._id, {
+        $set: { [`songBlogIds.${baseSlug}`]: blog._id },
+      });
+      console.log(`✅ Created Song blog for "${song.title}" (${movie.title}) → /blog/${blog.slug} [${dropLabel}]`);
+    }
+    return blog;
+  } catch (e) {
+    console.error(`❌ autoGenerateSongBlog failed for "${song?.title}" (${movie?.title}):`, e.message);
+    return null;
+  }
+}
+
+/**
+ * autoGenerateAllSongBlogs — iterates all songs of a movie and generates a blog for each.
+ * Called when a movie is created with songs already attached.
+ * Always passes onlyIfNew=true so existing song blogs are never clobbered on re-runs.
+ */
+async function autoGenerateAllSongBlogs(movie) {
+  const songs = movie.media?.songs || [];
+  for (let i = 0; i < songs.length; i++) {
+    const song = songs[i];
+    if (song?.title?.trim()) {
+      await autoGenerateSongBlog(song, movie, i, true);
+    }
+  }
+}
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3054,8 +3621,10 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       .populate("productionId", "name logo")
       .populate("collaborators", "name logo").lean();
 
-    // ── Auto-blog: Movie Details (always) + OTT Release (if OTT info given) ──
+    // ── Auto-blog: Movie Details (always) + OTT Release (if OTT info given) + Song First Drops ──
     autoGenerateMovieDetailsBlog(movie).catch(() => { });
+    // ★ Generate a First Drop blog for each song if songs were included at creation time
+    autoGenerateAllSongBlogs(populated).catch(() => { });
     if (movie.streamingOn) {
       autoGenerateOttBlog(movie).catch(() => { });
       // Also trigger "Now Streaming" blog if OTT date has already arrived
@@ -3134,6 +3703,7 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     }
 
     // Media
+    const songsUpdatedViaMedia = b.media?.songs !== undefined; // track for song blog trigger
     if (b.media) {
       const rm = b.media;
       if (rm.trailer !== undefined) {
@@ -3148,6 +3718,27 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     const updated = await Movie.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: false })
       .populate("productionId", "name logo")
       .populate("collaborators", "name logo").lean();
+
+    // ── Auto-blog: generate song blogs only for NEWLY ADDED songs in movie edit ──
+    // Compare titles that existed BEFORE the edit with those AFTER.
+    // Only generate blogs for songs that are brand-new (not previously in the movie).
+    // This prevents clobbering existing song blogs when unrelated fields are edited.
+    if (songsUpdatedViaMedia) {
+      const prevTitles = new Set(
+        (movie.media?.songs || []).map(s => (s.title || "").trim().toLowerCase()).filter(Boolean)
+      );
+      const updatedSongs = updated.media?.songs || [];
+      for (let i = 0; i < updatedSongs.length; i++) {
+        const s = updatedSongs[i];
+        if (!s?.title?.trim()) continue;
+        const isNew = !prevTitles.has(s.title.trim().toLowerCase());
+        if (isNew) {
+          // New song — create blog; onlyIfNew=true as extra safety guard
+          autoGenerateSongBlog(s, updated, i, true).catch(() => { });
+        }
+        // Existing songs: skip entirely — their blogs are not touched
+      }
+    }
 
     // ── Auto-blog: regenerate/update the OTT Release blog if OTT info changed ──
     // Triggers whenever streamingOn is present, regardless of whether date is TBA or a real date
@@ -3226,6 +3817,10 @@ app.post("/api/admin/movies/:id/songs", adminAuth, async (req, res) => {
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { "media.songs": song } }, { new: true })
       .populate("productionId", "name logo").lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    // ★ Auto-generate a song blog for the newly added song.
+    // The new song is always pushed to the end, so its index is length - 1.
+    const newSongIndex = (updated.media?.songs?.length || 1) - 1;
+    autoGenerateSongBlog(song, updated, newSongIndex, false).catch(() => { });
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3258,6 +3853,10 @@ app.patch("/api/admin/movies/:id/songs/:songIndex", adminAuth, async (req, res) 
     const setKey = `media.songs.${idx}`;
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $set: { [setKey]: updatedSong } }, { new: true })
       .populate("productionId", "name logo").lean();
+    // ★ Regenerate the song blog when song data changes (singer, ytId, lyrics etc.)
+    // idx is the 0-based position of the edited song — determines its drop name.
+    // onlyIfNew=false so we always refresh when song data is explicitly edited.
+    autoGenerateSongBlog(updatedSong, updated, idx, false).catch(() => { });
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6380,97 +6979,82 @@ ${editorialSectionsHtml}
   //  §14  CREATE OR UPDATE BLOG POST
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Indexability decision ──────────────────────────────────────────────
-  // `published` is ALWAYS true so every day's article shows in the blog UI.
-  // `indexed` controls SEO — only key/milestone days get indexed by Google.
-  // The /box-office/[slug] page is the single canonical authority for rankings.
-  //
-  // indexed: true days:
-  //  • Day 1, 2, 3          — opening weekend (highest search volume)
-  //  • Day 7, 14, 21        — weekly closing reports
-  //  • Opening Weekend days  — tag: "opening-weekend"
-  //  • All weekend days      — tag: "weekend" (Fri/Sat/Sun throughout run)
-  //  • Milestone days        — any tag starting with "milestone-"
-  //  • Silver Jubilee        — tag: "silver-jubilee-run" (day >= 25)
-  //  • Golden Jubilee        — tag: "golden-run" (day >= 50)
-  //  • Comparison weekends   — tag: "second-weekend","third-weekend","fourth-weekend"
-  //  All other weekday days  → indexed: false (in UI, not in sitemap/Google)
-  const tagSet14 = new Set(dayTags);
-  const isIndexableDay = (
-    actualDay === 1 ||
-    actualDay === 2 ||
-    actualDay === 3 ||
-    actualDay === 7 ||
-    actualDay === 14 ||
-    actualDay === 21 ||
-    tagSet14.has("opening-weekend") ||
-    tagSet14.has("weekend") ||
-    [...tagSet14].some(t => t.startsWith("milestone-")) ||
-    tagSet14.has("silver-jubilee-run") ||
-    tagSet14.has("golden-run") ||
-    tagSet14.has("second-weekend") ||
-    tagSet14.has("third-weekend") ||
-    tagSet14.has("fourth-weekend")
-  );
+  // ── SELECTIVE BLOG PUBLISHING ─────────────────────────────────────────
+  // Only Days 1, 2, 3 get standalone daily blogs.
+  // Days 4+ skip blog creation; box-office data is still stored in
+  // boxOfficeDays[] and shown on the Box Office page as always.
+  // High-value summary blogs (First/Second/Third Week, Weekends, Milestones,
+  // Silver/Golden Jubilee) are generated by triggerEventBlogs() below.
+  const shouldPublishDailyBlog = (day) => day === 1 || day === 2 || day === 3;
 
   const seoTitle = `${movieName}${year ? ` (${year})` : ""} Day ${actualDay} box office collection and collected ${totalGrossStr} gross | Ollypedia`;
   const seoDesc = seoDescDynamic;
   const excerpt = sections.introParagraph ||
     `${movieName} Day ${actualDay} box office collection: Net ${dayNet}, Gross ${dayGross}. Total ${totalNetStr} net in ${sortedDays.length} days.`;
 
-  const blogPayload = {
-    title: blogTitle,
-    slug: blogSlug,
-    excerpt,
-    content: blogContent,
-    category: "Box Office",
-    tags: [
-      movieName, "Box Office", "Odia Cinema", "Ollywood",
-      `Day ${actualDay}`, year ? String(year) : null,
-      directorName, producerName, musicDirector,
-      ...leadActors, ...leadActresses,
-      ...dayTags.map(t => t.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())),
-    ].filter(Boolean),
-    coverImage: movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "",
-    movieId: movie._id,
-    movieTitle: movieName,
-    author: "Ollypedia Team",
-    published: true,          // always true — shows in blog UI listing
-    indexed: isIndexableDay,  // controls sitemap + robots meta
-    featured: false,
-    seoTitle,
-    seoDesc,
-  };
+  // Default: no blog slug for days that don't get a standalone blog
+  let finalSlug = "";
 
-  // Look for an existing blog with this exact stable slug
-  let finalSlug = blogSlug;
-  const existingBlog = await Blog.findOne({ slug: blogSlug });
-
-  if (existingBlog) {
-    // Update — preserve _id and createdAt.
-    // Re-apply indexed on every update so milestone promotions take effect.
-    Object.assign(existingBlog, blogPayload);
-    existingBlog.published = true;
-    existingBlog.indexed = isIndexableDay;
-    await existingBlog.save();
-    finalSlug = existingBlog.slug;
-  } else {
-    // New post — also try matching by movieId + day pattern (handles old timestamp slugs)
-    const dayPatternBlog = await Blog.findOne({
+  if (shouldPublishDailyBlog(actualDay)) {
+    const blogPayload = {
+      title: blogTitle,
+      slug: blogSlug,
+      excerpt,
+      content: blogContent,
+      category: "Box Office",
+      tags: [
+        movieName, "Box Office", "Odia Cinema", "Ollywood",
+        `Day ${actualDay}`, year ? String(year) : null,
+        directorName, producerName, musicDirector,
+        ...leadActors, ...leadActresses,
+        ...dayTags.map(t => t.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())),
+      ].filter(Boolean),
+      coverImage: movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "",
       movieId: movie._id,
-      slug: { $regex: `day-${actualDay}-box-office-collection` },
-    });
-    if (dayPatternBlog) {
-      Object.assign(dayPatternBlog, blogPayload);
-      dayPatternBlog.slug = blogSlug; // normalise to stable slug
-      dayPatternBlog.published = true;
-      dayPatternBlog.indexed = isIndexableDay;
-      await dayPatternBlog.save();
-      finalSlug = dayPatternBlog.slug;
+      movieTitle: movieName,
+      author: "Ollypedia Team",
+      published: true,  // always true — shows in blog UI listing
+      indexed: true,    // Days 1–3 are always high-value, always indexed
+      featured: false,
+      seoTitle,
+      seoDesc,
+    };
+
+    // Look for an existing blog with this exact stable slug
+    finalSlug = blogSlug;
+    const existingBlog = await Blog.findOne({ slug: blogSlug });
+
+    if (existingBlog) {
+      // Update — preserve _id and createdAt.
+      Object.assign(existingBlog, blogPayload);
+      existingBlog.published = true;
+      existingBlog.indexed = true;
+      await existingBlog.save();
+      finalSlug = existingBlog.slug;
     } else {
-      const created = await Blog.create(blogPayload);
-      finalSlug = created.slug;
+      // New post — also try matching by movieId + day pattern (handles old timestamp slugs)
+      const dayPatternBlog = await Blog.findOne({
+        movieId: movie._id,
+        slug: { $regex: `day-${actualDay}-box-office-collection` },
+      });
+      if (dayPatternBlog) {
+        Object.assign(dayPatternBlog, blogPayload);
+        dayPatternBlog.slug = blogSlug; // normalise to stable slug
+        dayPatternBlog.published = true;
+        dayPatternBlog.indexed = true;
+        await dayPatternBlog.save();
+        finalSlug = dayPatternBlog.slug;
+      } else {
+        const created = await Blog.create(blogPayload);
+        finalSlug = created.slug;
+      }
     }
+  } else {
+    // Day 4+ — no standalone blog created.
+    // Box office data already saved to movie.boxOfficeDays[] above.
+    // Event-based blogs (week summaries, weekends, milestones, jubilees)
+    // are handled by triggerEventBlogs() below — fire-and-forget.
+    console.log(`[Scraper] Day ${actualDay} — skipping standalone blog (only Days 1-3 get daily blogs). Data stored in boxOfficeDays.`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -8076,23 +8660,742 @@ async function maybeGenerateComparisonBlog(movie, sortedDays, totalNet, movieId)
   }
 }
 
+// ============================================================================
+//   ADDITIONAL EVENT BLOG GENERATORS — Week Summaries & Jubilees
+// ============================================================================
+
+// ── Slug & Title Helpers ─────────────────────────────────────────────────────
+function buildSecondWeekSlug(movie) {
+  return trimSlugToLength(`${movie.slug}-second-week-box-office-report`, 80);
+}
+function buildThirdWeekSlug(movie) {
+  return trimSlugToLength(`${movie.slug}-third-week-box-office-report`, 80);
+}
+function buildFourthWeekSlug(movie) {
+  return trimSlugToLength(`${movie.slug}-fourth-week-box-office-report`, 80);
+}
+function buildJubileeSlug(movie, type) {
+  const label = type === "silver" ? "silver-jubilee-25-days" : "golden-jubilee-50-days";
+  return trimSlugToLength(`${movie.slug}-${label}-box-office`, 80);
+}
+
+function getSecondWeekTitle(movieTitle, totalNetStr, week2NetStr, seed) {
+  const templates = [
+    `${movieTitle} Second Week Box Office: ${week2NetStr} in Week 2, ${totalNetStr} Total`,
+    `${movieTitle} Completes Second Week — ${totalNetStr} Cumulative Net Collection Report`,
+    `${movieTitle} 2nd Week Box Office Verdict: Strong Hold or Steep Drop? Full Analysis`,
+    `${movieTitle} Two Weeks at Ollywood Box Office: Complete Day-Wise Collection Report`,
+    `${movieTitle} Second Week: Audience Hold \u0026 Box Office Performance Analysis`
+  ];
+  return templates[seed % templates.length];
+}
+function getThirdWeekTitle(movieTitle, totalNetStr, seed) {
+  const templates = [
+    `${movieTitle} Third Week Box Office: ${totalNetStr} Total Net — Extended Run Analysis`,
+    `${movieTitle} Completes 3 Weeks in Theatres — ${totalNetStr} Net Cumulative Report`,
+    `${movieTitle} 21 Days at Odia Box Office: Third Week Collection \u0026 Audience Verdict`,
+    `${movieTitle} Three-Week Box Office Report: Sustained Run \u0026 Future Outlook`,
+    `${movieTitle} Third Week Collection — ${totalNetStr} Net and Still Running Strong`
+  ];
+  return templates[seed % templates.length];
+}
+function getFourthWeekTitle(movieTitle, totalNetStr, seed) {
+  const templates = [
+    `${movieTitle} Fourth Week Box Office: ${totalNetStr} Total — Remarkable Theatrical Run`,
+    `${movieTitle} Completes 4 Weeks: ${totalNetStr} Net in an Extraordinary Ollywood Run`,
+    `${movieTitle} 28 Days in Theatres — Fourth Week Box Office Report \u0026 Legacy Analysis`,
+    `${movieTitle} Fourth Week at Box Office: A Landmark Run in Odia Cinema History`,
+    `${movieTitle} Month-Long Theatrical Run: Fourth Week Collection \u0026 Final Verdict`
+  ];
+  return templates[seed % templates.length];
+}
+function getJubileeTitle(movieTitle, days, totalNetStr, seed) {
+  const jubileeLabel = days === 25 ? "Silver Jubilee" : "Golden Jubilee";
+  const dayLabel = days === 25 ? "25 Days" : "50 Days";
+  const templates = [
+    `${movieTitle} ${jubileeLabel}! ${dayLabel} at Box Office — ${totalNetStr} Net Collection`,
+    `${movieTitle} Celebrates ${jubileeLabel}: ${dayLabel} Theatrical Run in Ollywood History`,
+    `${movieTitle} ${jubileeLabel} Box Office Report: ${totalNetStr} Net After ${dayLabel}`,
+    `${movieTitle} Scripts ${jubileeLabel} — A Historic ${dayLabel} Run at Odia Box Office`,
+    `${movieTitle} ${dayLabel} \u0026 ${jubileeLabel}: Complete Box Office Report \u0026 Legacy Analysis`
+  ];
+  return templates[seed % templates.length];
+}
+
+// ── AI Content Generators ────────────────────────────────────────────────────
+async function generateSecondWeekAI(movie, days, totalNet) {
+  const movieName = movie.title;
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const totalNetStr = formatINR(totalNet);
+  const week1Days = days.filter(d => d.day >= 1 && d.day <= 7);
+  const week2Days = days.filter(d => d.day >= 8 && d.day <= 14);
+  const week1Total = week1Days.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+  const week2Total = week2Days.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+  const week1Str = formatINR(week1Total);
+  const week2Str = formatINR(week2Total);
+  const dropPct = week1Total > 0 ? (((week1Total - week2Total) / week1Total) * 100).toFixed(0) : "N/A";
+  const week2DataStr = week2Days.map(d => `Day ${d.day}: ${d.net || "N/A"}`).join("; ");
+  const day8 = week2Days.find(d => d.day === 8);
+  const day14 = week2Days.find(d => d.day === 14);
+  const mondayHold = day8 && week1Days.length > 0
+    ? `Day 8 (Monday): ${day8.net || "N/A"}`
+    : "";
+
+  const fallbacks = {
+    metaDescription: `${movieName} Second Week Box Office: ${week2Str} in Week 2, total ${totalNetStr} net. Week-on-week drop ${dropPct}%. Full analysis inside.`,
+    headline: `${movieName} Second Week: ${week2Str} and a Box Office Run That Commands Respect`,
+    introParagraph: `${movieName}${year ? ` (${year})` : ""} has completed its second week in Odia theatres, and the numbers paint a revealing picture of where this film stands in the hearts of Odia audiences. The second seven-day window added ${week2Str} to the cumulative total, pushing the film's overall net collection to ${totalNetStr}. After the initial burst of opening excitement, Week 2 is always the moment of truth — and ${movieName} has faced it with the kind of composure that distinguishes a genuinely content-driven release from an opening-weekend flash-in-the-pan.`,
+    weekOneTwoComparison: `The week-on-week comparison tells the most important story. ${movieName} collected ${week1Str} in its first seven days and followed that with ${week2Str} in Week 2 — a drop of approximately ${dropPct}%. In the Odia theatrical market, a Week 2 drop of under 50% is considered a strong hold; anything above 65% signals a front-loaded film that struggled to sustain word-of-mouth. A ${dropPct}% drop places ${movieName} in the category that distributors and exhibitors watch most closely: a film with genuine legs.`,
+    mondayHoldSection: `${mondayHold ? `The Monday (Day 8) figure of ${mondayHold.split(": ")[1] || "—"} was particularly significant, as Monday collections are considered the purest indicator of true word-of-mouth — they represent viewers who chose to visit the theatre not because of promotional buzz but because of what friends and family told them about the film. A strong Monday hold from any Odia release immediately signals to exhibitors that they should consider maintaining or even expanding screen availability for the rest of Week 2.` : `The early days of Week 2 were the critical test for ${movieName} — weekday audiences post-opening buzz are among the most discerning in the Odia cinema market, coming to theatres purely on the strength of personal recommendations rather than promotional noise.`}`,
+    weekendContribution: `The second weekend — Days 12 through 14 — provided an important secondary lift for ${movieName}. ${day14 ? `The film closed its second week with a Day 14 collection of ${day14.net || "N/A"}, ` : ""}signalling that weekend audiences are still choosing this film over competing releases. Second weekends in Ollywood are becoming increasingly vital, as the OTT announcement cycle means audiences are acutely aware of when a film will leave theatres — and those who genuinely want the theatrical experience are making a point of catching it before that window closes.`,
+    audienceProfileWeek2: `The demographic profile of ${movieName}'s Week 2 audience has shifted subtly from its first-week composition. The initial front-loaded audience — fans of the lead actors, genre enthusiasts, early-adopter cinephiles — has given way to a broader family demographic drawn by the positive word-of-mouth that spread through Odia social media and community networks during the first week. This demographic shift is healthy and sustainable — it suggests the film's appeal extends well beyond its core fanbase.`,
+    industryReadSection: `For Ollywood, ${movieName}'s Week 2 performance carries meaningful industry implications. The Odia theatrical ecosystem depends critically on films sustaining screen count into their second week — a Week 2 drop of over 70% typically triggers mass screen releases, compressing the film's lifetime theatrical window dramatically. The fact that ${movieName} is holding well enough to warrant continued exhibition is an encouraging signal for the entire industry.`,
+    week3OutlookSection: `As ${movieName} moves into its third week, the key variables to watch are screen count, competition from new Odia or Hindi releases, and whether the OTT announcement has been made. Films at this stage with ${totalNetStr} in total net typically add between 20-35% more in their remaining theatrical run, depending on these factors. Week 3 weekend numbers will be the final major test of the film's sustained audience appeal.`,
+    conclusionParagraph: `Two weeks in, ${movieName}'s total net of ${totalNetStr} is a testament to the film's content quality and the authenticity of its audience connection. The week-on-week performance data tells a story of a film that opened promisingly, held reasonably, and continues to draw Odia cinema lovers to the big screen. For the creative team, the cast, and the producers, this second-week report is something to be read with genuine satisfaction.`
+  };
+
+  const systemPrompt = "You are a senior Odia cinema (Ollywood) journalist with 15+ years of experience, writing long-form, deeply analytical, SEO-optimised editorial articles for Ollypedia. Write with genuine journalistic authority. Avoid AI clichés. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text with no HTML tags. Every paragraph must be at least 5-7 full sentences.";
+  const userPrompt = `Write a second week box office report for the Odia movie "${movieName}" (${year}).
+Week 1 total: ${week1Str}. Week 2 total: ${week2Str}. Week-on-week drop: ${dropPct}%.
+Week 2 day-wise data: ${week2DataStr}. Cumulative total after 2 weeks: ${totalNetStr}.
+
+Include JSON keys: metaDescription, headline, introParagraph, weekOneTwoComparison, mondayHoldSection, weekendContribution, audienceProfileWeek2, industryReadSection, week3OutlookSection, conclusionParagraph.`;
+
+  return callGroqStructured(
+    systemPrompt,
+    userPrompt,
+    ["metaDescription", "headline", "introParagraph", "weekOneTwoComparison", "mondayHoldSection", "weekendContribution", "audienceProfileWeek2", "industryReadSection", "week3OutlookSection", "conclusionParagraph"],
+    fallbacks,
+    3000
+  );
+}
+
+async function generateThirdWeekAI(movie, days, totalNet) {
+  const movieName = movie.title;
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const totalNetStr = formatINR(totalNet);
+  const week3Days = days.filter(d => d.day >= 15 && d.day <= 21);
+  const week3Total = week3Days.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+  const week3Str = formatINR(week3Total);
+  const week1Total = days.filter(d => d.day >= 1 && d.day <= 7).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+  const week2Total = days.filter(d => d.day >= 8 && d.day <= 14).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+  const week1Str = formatINR(week1Total);
+  const week2Str = formatINR(week2Total);
+  const week3DataStr = week3Days.map(d => `Day ${d.day}: ${d.net || "N/A"}`).join("; ");
+
+  const fallbacks = {
+    metaDescription: `${movieName} Third Week Box Office: ${week3Str} in Week 3, total ${totalNetStr} net after 21 days. Complete analysis of this extended Ollywood run.`,
+    headline: `${movieName} Third Week: ${week3Str} More at Box Office — 21 Days and Still Running`,
+    introParagraph: `${movieName}${year ? ` (${year})` : ""} has completed 21 days in Odia theatres — a milestone that most Odia releases never reach in today's compressed theatrical environment. The third week added ${week3Str} to the cumulative total, pushing the film's lifetime net to ${totalNetStr}. In an era where OTT platforms announce their streaming dates within weeks of a film's theatrical release, a film that sustains audience interest deep into its third week has achieved something genuinely exceptional.`,
+    sustainedRunAnalysis: `The theatrical journey of ${movieName} through three full weeks — Week 1 (${week1Str}), Week 2 (${week2Str}), Week 3 (${week3Str}) — tells a compelling story about a film that found its audience not through marketing alone but through the most reliable force in cinema: genuine word-of-mouth. ${week3DataStr ? `The Week 3 day-wise breakdown (${week3DataStr}) shows ` : "The Week 3 pattern shows "}the kind of steady, loyal trickle of audience that characterises an Odia film that has become part of community conversation — discussed at family gatherings, recommended by friends, and sought out by those who missed it in the first two weekends.`,
+    repeatViewerSection: `Films that sustain theatrical runs into their third week in Odisha are almost always driven significantly by repeat viewers — people who saw the film in its first or second week and returned because the experience merited a second, or even third, theatrical viewing. This repeat-viewing phenomenon is rare in contemporary Odia cinema and represents one of the highest possible compliments an audience can pay to a film. For ${movieName}, reaching Week 3 with meaningful occupancy is evidence of this deep, lasting connection.`,
+    screenCountContext: `The screen count story for ${movieName} by Week 3 will likely reflect a consolidation — fewer screens than Week 1 but those that remain are seeing higher occupancy rates than many newer releases. This is the natural ecology of a long-running film: it may lose breadth (number of screens) while gaining depth (occupancy percentage on available screens). Theatre owners in major Odisha centres — Bhubaneswar, Cuttack, Sambalpur — are among the most experienced readers of audience data in the Odia circuit, and their decision to continue programming ${movieName} into Week 3 is its own form of industry endorsement.`,
+    industryMilestoneSection: `In the contemporary Ollywood landscape, most commercially successful films complete their active theatrical run in 10-14 days. For ${movieName} to extend that window to 21 days places it in a select group of recent Odia releases that have demonstrated multi-week durability. This durability has ripple effects across the industry: it raises the ceiling of expectation for future productions, strengthens the case for larger theatrical windows before OTT releases, and gives producers and distributors a benchmark for what sustained quality content can achieve.`,
+    lifetimePrediction: `Based on Week 3 trajectory, ${movieName}'s lifetime theatrical collection is now taking clear shape. Films at this stage typically add their final 10-20% in Week 4 and beyond, driven by B-centre and C-centre audiences in smaller Odisha districts and towns who tend to come later in a film's run. The total net of ${totalNetStr} after 21 days positions ${movieName} for a lifetime collection that reflects genuine commercial success for an Odia language production.`,
+    conclusionParagraph: `The third week of ${movieName} at the Odia box office is not merely a collection report — it is a statement about the quality of Odia cinema and the sophistication of Odia audiences. A film that still draws paying viewers in Week 3 has earned its place in the recent history of Ollywood, and the ${totalNetStr} cumulative total after 21 days is a number that will be referenced as a benchmark for years to come.`
+  };
+
+  const systemPrompt = "You are a senior Odia cinema journalist writing a third-week box office analysis for Ollypedia. Emphasise the exceptional nature of a three-week Odia theatrical run. Write with genuine editorial authority. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML.";
+  const userPrompt = `Third week box office report for the Odia movie "${movieName}" (${year}).
+Week 1: ${week1Str}. Week 2: ${week2Str}. Week 3: ${week3Str}. Total after 21 days: ${totalNetStr}.
+Week 3 day-wise: ${week3DataStr}.
+
+JSON keys: metaDescription, headline, introParagraph, sustainedRunAnalysis, repeatViewerSection, screenCountContext, industryMilestoneSection, lifetimePrediction, conclusionParagraph.`;
+
+  return callGroqStructured(
+    systemPrompt,
+    userPrompt,
+    ["metaDescription", "headline", "introParagraph", "sustainedRunAnalysis", "repeatViewerSection", "screenCountContext", "industryMilestoneSection", "lifetimePrediction", "conclusionParagraph"],
+    fallbacks,
+    3000
+  );
+}
+
+async function generateFourthWeekAI(movie, days, totalNet) {
+  const movieName = movie.title;
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const totalNetStr = formatINR(totalNet);
+  const week4Days = days.filter(d => d.day >= 22 && d.day <= 28);
+  const week4Total = week4Days.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+  const week4Str = formatINR(week4Total);
+  const weeklyTotals = [
+    formatINR(days.filter(d => d.day >= 1 && d.day <= 7).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0)),
+    formatINR(days.filter(d => d.day >= 8 && d.day <= 14).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0)),
+    formatINR(days.filter(d => d.day >= 15 && d.day <= 21).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0)),
+    week4Str
+  ];
+
+  const fallbacks = {
+    metaDescription: `${movieName} Fourth Week Box Office: ${week4Str} in Week 4, total ${totalNetStr} after 28 days. Rare extended run analysis for this Odia cinema landmark.`,
+    headline: `${movieName} Completes Four Weeks: ${totalNetStr} Total — A Landmark Odia Theatrical Run`,
+    introParagraph: `${movieName}${year ? ` (${year})` : ""} has completed a full four weeks in Odia theatres — a feat that is extraordinarily rare in contemporary Ollywood. Adding ${week4Str} in its fourth week, the film's cumulative net has reached ${totalNetStr}, making this one of the most sustained theatrical runs in recent Odia cinema history. Week 1 delivered ${weeklyTotals[0]}, Week 2 added ${weeklyTotals[1]}, Week 3 contributed ${weeklyTotals[2]}, and now Week 4 rounds out this remarkable journey with ${week4Str} more.`,
+    historicalContextSection: `Four-week theatrical runs are not merely commercial achievements in Ollywood — they are cultural events. When an Odia film sustains audience attention for 28 consecutive days, it enters the conversation of films that have genuinely shaped the sensibility of their era. In the OTT age, where a film's digital release often follows within weeks of its theatrical premiere, a four-week run signals one thing above all else: this film was worth the theatre experience, again and again.`,
+    legacySection: `The legacy of ${movieName} at the Odia box office will be debated and discussed in trade circles and among cinema lovers for a long time. A four-week run produces a specific kind of cultural imprint — it means the film was discussed at workplaces and family dinners across Odisha for an entire month, that multiple generations within the same family went to watch it at different points during its run, and that it was good enough to be recommended by someone every single day for 28 days.`,
+    finalVerdict: `After four full weeks, ${movieName}'s total net of ${totalNetStr} represents not just a financial milestone but an audience verdict delivered through the most democratic medium available — the movie ticket. This number will stand as one of the notable Odia box office achievements in recent memory, and it reflects the hard work of every single member of the production — from the director to the junior technician.`,
+    conclusionParagraph: `As ${movieName}'s fourth week concludes, it does so with the quiet confidence of a film that never needed validation — it earned it. The ${totalNetStr} in cumulative net collection after 28 days is a number worth celebrating, and the fact that Odia audiences chose this film, repeatedly, over the course of a full month, is the most meaningful review that any film — and any filmmaker — could ever receive.`
+  };
+
+  const systemPrompt = "You are a senior Odia cinema journalist covering an extraordinary four-week box office run. Write with genuine editorial gravitas — this is a landmark moment for Ollywood. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML.";
+  const userPrompt = `Fourth week box office report for the Odia movie "${movieName}" (${year}).
+Weekly breakdown — Week 1: ${weeklyTotals[0]}, Week 2: ${weeklyTotals[1]}, Week 3: ${weeklyTotals[2]}, Week 4: ${week4Str}.
+Total after 28 days: ${totalNetStr}.
+
+JSON keys: metaDescription, headline, introParagraph, historicalContextSection, legacySection, finalVerdict, conclusionParagraph.`;
+
+  return callGroqStructured(
+    systemPrompt,
+    userPrompt,
+    ["metaDescription", "headline", "introParagraph", "historicalContextSection", "legacySection", "finalVerdict", "conclusionParagraph"],
+    fallbacks,
+    2500
+  );
+}
+
+async function generateJubileeAI(movie, days, totalNet, jubileeType) {
+  const movieName = movie.title;
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const totalNetStr = formatINR(totalNet);
+  const dayCount = jubileeType === "silver" ? 25 : 50;
+  const jubileeName = jubileeType === "silver" ? "Silver Jubilee" : "Golden Jubilee";
+  const openingDayNet = days.length > 0 ? formatINR(parseToRupeesGlobal(days[0]?.net || "0")) : "—";
+  const recentDays = days.slice(-3).map(d => `Day ${d.day}: ${d.net || "—"}`).join(", ");
+
+  const fallbacks = {
+    metaDescription: `${movieName} celebrates its ${jubileeName} — ${dayCount} days at the Odia box office with ${totalNetStr} total net collection. A historic milestone for Ollywood!`,
+    headline: `${movieName} ${jubileeType === "silver" ? "Silver Jubilee" : "Golden Jubilee"}: ${dayCount} Days of Pure Cinematic Triumph at the Odia Box Office`,
+    introParagraph: `${movieName}${year ? ` (${year})` : ""} has achieved the extraordinary milestone of completing ${dayCount} days in Odia theatres — officially crossing into ${jubileeName} territory. With a cumulative net collection of ${totalNetStr} and counting, this film has transcended the ordinary commercial lifecycle to become a genuine cultural event in Odia cinema. The ${jubileeName} is not just a box office milestone; it is an acknowledgement from Odia audiences that this film has something irreplaceable to offer — something worth returning to the cinema for, day after day, week after week.`,
+    jubileeSignificanceSection: `The ${jubileeName} milestone carries a meaning in cinema that goes far beyond simple arithmetic. A ${dayCount}-day theatrical run means that this film has been in active exhibition across Odisha through multiple weekends, multiple festive occasions, and multiple rounds of competition from newer releases — and has survived and thrived through all of them. In contemporary Ollywood, where the average theatrical window has compressed to fewer than 14 days for most releases, completing ${dayCount} days is a statement of exceptional durability and quality.`,
+    journeyNarrativeSection: `The journey of ${movieName} from its first day — when it opened with ${openingDayNet} — to this ${jubileeName} milestone is the kind of box office story that enriches the folklore of Odia cinema. Recent daily figures (${recentDays}) confirm that this film continues to attract paying audiences even at this advanced stage of its theatrical run — a phenomenon driven not by promotional push but by the organic, unstoppable force of genuine audience admiration.`,
+    industryMilestoneSection: `The ${jubileeName} of ${movieName} will be studied and referenced in Ollywood industry conversations for years. It establishes a new benchmark for what sustained theatrical success looks like in the Odia language market, and it signals to investors, producers, and OTT platforms alike that quality Odia content can generate the kind of long-term cultural engagement that no algorithm can manufacture. The film's ${totalNetStr} total collection is secondary to what it represents: proof that Odia audiences will sustain their cinema-going commitment for a film that truly connects with them.`,
+    filmmakerLegacySection: `For the director, the lead cast, and the entire production team of ${movieName}, the ${jubileeName} is an achievement that will define their professional legacy. In a film industry where box office verdicts are often delivered within 72 hours of release, reaching ${dayCount} days means this creative team's work has been embraced and celebrated by Odia audiences across generations, geographies, and demographics — a validation that extends far beyond any numerical milestone.`,
+    conclusionParagraph: `As ${movieName} marks its ${jubileeName} at the Odia box office, Ollywood has reason to celebrate — not just the success of one film, but what that success says about the state of Odia cinema and the appetite of Odia audiences for authentic, well-crafted storytelling. The ${totalNetStr} cumulative net collection after ${dayCount} days is a historic number, and this ${jubileeName} will be remembered as one of the defining box office moments in recent Odia film history.`
+  };
+
+  const systemPrompt = `You are a senior Odia cinema journalist covering a ${jubileeName} milestone — one of the rarest achievements in Ollywood. Write with the full weight and celebration this deserves. Return ONLY a valid JSON object — no markdown, no code fences. All values must be plain text, no HTML.`;
+  const userPrompt = `Write a ${jubileeName} box office report for the Odia movie "${movieName}" (${year}).
+Days in theatres: ${dayCount}. Total net collection: ${totalNetStr}.
+Opening day collection: ${openingDayNet}. Recent daily figures: ${recentDays || "N/A"}.
+
+JSON keys: metaDescription, headline, introParagraph, jubileeSignificanceSection, journeyNarrativeSection, industryMilestoneSection, filmmakerLegacySection, conclusionParagraph.`;
+
+  return callGroqStructured(
+    systemPrompt,
+    userPrompt,
+    ["metaDescription", "headline", "introParagraph", "jubileeSignificanceSection", "journeyNarrativeSection", "industryMilestoneSection", "filmmakerLegacySection", "conclusionParagraph"],
+    fallbacks,
+    3000
+  );
+}
+
+// ── HTML Builders for Week Blogs ─────────────────────────────────────────────
+function buildWeekSummaryBlogHTML(movie, days, totalNet, weekNum, weekLabel, ai, slug, title, relatedMovies) {
+  const movieName = movie.title;
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const totalNetStr = formatINR(totalNet);
+  const dp = new Date().toISOString();
+  const movieUrl = `/movie/${movie.slug}`;
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const ogImage = poster || `${SITE_URL}/logo.png`;
+  const css = EVENT_BLOG_CSS_VARIABLES;
+
+  // Filter days for this week
+  const weekStart = (weekNum - 1) * 7 + 1;
+  const weekEnd = weekNum * 7;
+  const thisWeekDays = days.filter(d => d.day >= weekStart && d.day <= weekEnd);
+
+  let cumulative = 0;
+  const allDaysRows = days.map((d, i) => {
+    const netNum = parseToRupeesGlobal(d.net || "0");
+    cumulative += netNum;
+    const isWeek = d.day >= weekStart && d.day <= weekEnd;
+    const dateStr = d.date ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—";
+    return `
+    <tr style="background:${isWeek ? "rgba(201,151,58,0.05)" : (i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)")};">
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isWeek ? "#c9973a" : "#aaa"};font-weight:700;">${isWeek ? `<strong>Day ${d.day}</strong>` : `Day ${d.day}`}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.82rem;">${dateStr}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isWeek ? "#c9973a" : "#ddd"};font-weight:700;">${d.net ? formatINR(parseToRupeesGlobal(d.net)) : "—"}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#c9973a;font-weight:700;">${formatINR(cumulative)}</td>
+    </tr>`;
+  }).join("");
+
+  // Week summary rows
+  const weeklyTotals = [1, 2, 3, 4].map(wk => {
+    const wDays = days.filter(d => d.day >= (wk - 1) * 7 + 1 && d.day <= wk * 7);
+    const wTotal = wDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+    return wTotal > 0 ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #1e1e1e;color:#888;font-weight:600;">Week ${wk}</td><td style="padding:10px 14px;border-bottom:1px solid #1e1e1e;color:${wk === weekNum ? "#c9973a" : "#ddd"};font-weight:700;">${formatINR(wTotal)}</td></tr>` : "";
+  }).join("");
+
+  const keywords = [
+    movieName, `${movieName} ${weekLabel}`, `${movieName} box office`,
+    `${movieName} week ${weekNum} collection`, "Odia box office", "Ollywood"
+  ].join(", ");
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — READ BY CMS
+  title:          ${title}
+  description:    ${ai.metaDescription}
+  keywords:       ${keywords}
+  canonical:      ${SITE_URL}/blog/${slug}
+  robots:         index, follow
+  og:site_name:   Ollypedia
+  og:title:       ${title}
+  og:description: ${ai.metaDescription}
+  og:url:         ${SITE_URL}/blog/${slug}
+  og:image:       ${ogImage}
+  og:type:        article
+  og:locale:      en_IN
+  article:published_time: ${dp}
+  article:modified_time:  ${dp}
+  article:author: Ollypedia Team
+  article:section: Box Office
+  twitter:card:   summary_large_image
+  twitter:site:   @OllypediaIn
+  twitter:title:  ${title}
+  twitter:description: ${ai.metaDescription}
+  twitter:image:  ${ogImage}
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": ${JSON.stringify(title)},
+      "description": ${JSON.stringify(ai.metaDescription)},
+      "image": ${JSON.stringify(ogImage)},
+      "datePublished": "${dp}",
+      "dateModified": "${dp}",
+      "inLanguage": "en",
+      "keywords": ${JSON.stringify(keywords)},
+      "author": [
+        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
+        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+      ],
+      "publisher": {
+        "@type": "Organization",
+        "name": "Ollypedia",
+        "url": "${SITE_URL}",
+        "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" }
+      },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${slug}" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
+        { "@type": "ListItem", "position": 2, "name": "Box Office", "item": "${SITE_URL}/box-office" },
+        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movieName)}, "item": "${SITE_URL}${movieUrl}" },
+        { "@type": "ListItem", "position": 4, "name": ${JSON.stringify(weekLabel + " Report")}, "item": "${SITE_URL}/blog/${slug}" }
+      ]
+    }
+  ]
+}
+</script>
+
+<style>
+${EVENT_BLOG_RESPONSIVE_STYLES}
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+    <a href="/" style="color:#777;text-decoration:none;">Home</a>
+    <span style="color:#333;">›</span>
+    <a href="/box-office" style="color:#777;text-decoration:none;">Box Office</a>
+    <span style="color:#333;">›</span>
+    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movieName}</a>
+    <span style="color:#333;">›</span>
+    <span style="color:#555;">${weekLabel} Report</span>
+  </nav>
+</div>
+
+<h1 style="font-size:1.45rem;font-weight:900;color:#fff;line-height:1.25;margin:0 0 18px;">${title}</h1>
+
+<section id="intro" style="${css.card}">
+  <h2 style="${css.h2}">${ai.headline || weekLabel + " Overview"}</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.introParagraph || ""}</p>
+</section>
+
+<section id="week-summary" style="${css.card}">
+  <h2 style="${css.h2}">Week-by-Week Collection Summary</h2>
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="${css.th}">Period</th>
+        <th style="${css.th}">Net Collection</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${weeklyTotals}
+      <tr><td style="padding:10px 14px;border-bottom:1px solid #2a2a2a;color:#c9973a;font-weight:800;">Total</td><td style="padding:10px 14px;border-bottom:1px solid #2a2a2a;color:#c9973a;font-weight:800;">${totalNetStr}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="day-wise" style="${css.card}">
+  <h2 style="${css.h2}">Complete Day-Wise Collection Table</h2>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;min-width:420px;">
+      <thead>
+        <tr>
+          <th style="${css.th}">Day</th>
+          <th style="${css.th}">Date</th>
+          <th style="${css.th}">Net</th>
+          <th style="${css.th}">Cumulative</th>
+        </tr>
+      </thead>
+      <tbody>${allDaysRows}</tbody>
+    </table>
+  </div>
+  <p style="font-size:0.72rem;color:#444;margin-top:10px;">* Highlighted rows = ${weekLabel} days. All figures are industry estimates. Source: Sacnilk via Ollypedia.</p>
+</section>
+
+<section id="analysis" style="${css.card}">
+  <h2 style="${css.h2}">${weekLabel} Performance Analysis</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.weekOneTwoComparison || ai.sustainedRunAnalysis || ai.historicalContextSection || ""}</p>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.mondayHoldSection || ai.repeatViewerSection || ""}</p>
+  <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.weekendContribution || ai.screenCountContext || ""}</p>
+</section>
+
+<section id="audience" style="${css.card}">
+  <h2 style="${css.h2}">Audience & Industry Read</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.audienceProfileWeek2 || ai.legacySection || ""}</p>
+  <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.industryReadSection || ai.industryMilestoneSection || ""}</p>
+</section>
+
+<section id="outlook" style="${css.card}">
+  <h2 style="${css.h2}">Outlook \u0026 Conclusion</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.week3OutlookSection || ai.lifetimePrediction || ai.finalVerdict || ""}</p>
+  <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.conclusionParagraph || ""}</p>
+  <p style="font-size:0.72rem;color:#444;margin-top:15px;">
+    * All figures are industry estimates sourced from Sacnilk via Ollypedia. Back to
+    <a href="${movieUrl}" style="color:#c9973a;text-decoration:underline;">${movieName} Main Page</a> ·
+    <a href="/box-office/${movie.slug}" style="color:#c9973a;text-decoration:underline;">Full Box Office Report</a>
+  </p>
+</section>
+
+${relatedMovies.length ? `
+<section id="related-movies">
+  ${buildRelatedMoviesHtml(relatedMovies, "#c9973a")}
+</section>` : ""}
+`;
+}
+
+function buildJubileblogHTML(movie, days, totalNet, jubileeType, ai, slug, title, relatedMovies) {
+  const movieName = movie.title;
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const totalNetStr = formatINR(totalNet);
+  const dayCount = jubileeType === "silver" ? 25 : 50;
+  const jubileeName = jubileeType === "silver" ? "Silver Jubilee" : "Golden Jubilee";
+  const dp = new Date().toISOString();
+  const movieUrl = `/movie/${movie.slug}`;
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const ogImage = poster || `${SITE_URL}/logo.png`;
+  const css = EVENT_BLOG_CSS_VARIABLES;
+
+  // Weekly breakdown table
+  const weeklyRows = [1, 2, 3, 4, 5, 6, 7].map(wk => {
+    const wDays = days.filter(d => d.day >= (wk - 1) * 7 + 1 && d.day <= wk * 7);
+    const wTotal = wDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+    return wTotal > 0 ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #1e1e1e;color:#888;font-weight:600;">Week ${wk}</td><td style="padding:10px 14px;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:700;">${formatINR(wTotal)}</td></tr>` : "";
+  }).join("");
+
+  const keywords = [movieName, `${movieName} ${jubileeName}`, `${movieName} ${dayCount} days`,
+    `${movieName} box office`, "Odia box office", "Ollywood", jubileeName].join(", ");
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA SEO META — READ BY CMS
+  title:          ${title}
+  description:    ${ai.metaDescription}
+  keywords:       ${keywords}
+  canonical:      ${SITE_URL}/blog/${slug}
+  robots:         index, follow
+  og:site_name:   Ollypedia
+  og:title:       ${title}
+  og:description: ${ai.metaDescription}
+  og:url:         ${SITE_URL}/blog/${slug}
+  og:image:       ${ogImage}
+  og:type:        article
+  og:locale:      en_IN
+  article:published_time: ${dp}
+  article:modified_time:  ${dp}
+  article:author: Ollypedia Team
+  article:section: Box Office
+  twitter:card:   summary_large_image
+  twitter:site:   @OllypediaIn
+  twitter:title:  ${title}
+  twitter:description: ${ai.metaDescription}
+  twitter:image:  ${ogImage}
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": ${JSON.stringify(title)},
+      "description": ${JSON.stringify(ai.metaDescription)},
+      "image": ${JSON.stringify(ogImage)},
+      "datePublished": "${dp}",
+      "dateModified": "${dp}",
+      "inLanguage": "en",
+      "keywords": ${JSON.stringify(keywords)},
+      "author": [
+        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
+        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+      ],
+      "publisher": {
+        "@type": "Organization",
+        "name": "Ollypedia",
+        "url": "${SITE_URL}",
+        "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" }
+      },
+      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${slug}" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
+        { "@type": "ListItem", "position": 2, "name": "Box Office", "item": "${SITE_URL}/box-office" },
+        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movieName)}, "item": "${SITE_URL}${movieUrl}" },
+        { "@type": "ListItem", "position": 4, "name": ${JSON.stringify(jubileeName)}, "item": "${SITE_URL}/blog/${slug}" }
+      ]
+    }
+  ]
+}
+</script>
+
+<style>
+${EVENT_BLOG_RESPONSIVE_STYLES}
+</style>
+
+<div style="text-align:center;padding:24px 0;margin-bottom:20px;">
+  <div style="display:inline-block;background:linear-gradient(135deg,rgba(201,151,58,0.2),rgba(201,151,58,0.05));border:2px solid rgba(201,151,58,0.4);border-radius:16px;padding:18px 32px;">
+    <div style="font-size:2rem;margin-bottom:8px;">${jubileeType === "silver" ? "🥈" : "🏆"}</div>
+    <div style="font-size:1.1rem;font-weight:900;color:#c9973a;letter-spacing:0.05em;">${jubileeName.toUpperCase()}</div>
+    <div style="font-size:0.85rem;color:#888;margin-top:4px;">${dayCount} Days in Theatres</div>
+  </div>
+</div>
+
+<h1 style="font-size:1.45rem;font-weight:900;color:#fff;line-height:1.25;margin:0 0 18px;">${title}</h1>
+
+<section id="intro" style="${css.card}">
+  <h2 style="${css.h2}">${ai.headline || jubileeName + " Achievement"}</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.introParagraph || ""}</p>
+</section>
+
+<section id="jubilee-significance" style="${css.card}">
+  <h2 style="${css.h2}">What the ${jubileeName} Means</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.jubileeSignificanceSection || ""}</p>
+  <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.journeyNarrativeSection || ""}</p>
+</section>
+
+<section id="week-summary" style="${css.card}">
+  <h2 style="${css.h2}">Week-by-Week Collection Summary</h2>
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="${css.th}">Period</th>
+        <th style="${css.th}">Net Collection</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${weeklyRows}
+      <tr><td style="padding:10px 14px;color:#c9973a;font-weight:800;">${dayCount}-Day Total</td><td style="padding:10px 14px;color:#c9973a;font-weight:800;">${totalNetStr}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="industry" style="${css.card}">
+  <h2 style="${css.h2}">Industry Impact \u0026 Legacy</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.industryMilestoneSection || ""}</p>
+  <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.filmmakerLegacySection || ""}</p>
+</section>
+
+<section id="conclusion" style="${css.card}">
+  <h2 style="${css.h2}">Conclusion</h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">${ai.conclusionParagraph || ""}</p>
+  <p style="font-size:0.72rem;color:#444;margin-top:15px;">
+    * All figures are industry estimates sourced from Sacnilk via Ollypedia. Back to
+    <a href="${movieUrl}" style="color:#c9973a;text-decoration:underline;">${movieName} Main Page</a> ·
+    <a href="/box-office/${movie.slug}" style="color:#c9973a;text-decoration:underline;">Full Box Office Report</a>
+  </p>
+</section>
+
+${relatedMovies.length ? `
+<section id="related-movies">
+  ${buildRelatedMoviesHtml(relatedMovies, "#c9973a")}
+</section>` : ""}
+`;
+}
+
+// ── Orchestrators ────────────────────────────────────────────────────────────
+async function maybeGenerateWeekSummaryBlog(movie, sortedDays, totalNet, movieId, weekNum) {
+  const weekLabels = { 2: "Second Week", 3: "Third Week", 4: "Fourth Week" };
+  const weekLabel = weekLabels[weekNum] || `Week ${weekNum}`;
+  const eventType = `week-${weekNum}`;
+
+  try {
+    const exists = await EventBlog.findOne({ movieId, eventType });
+    if (exists) return;
+
+    // Only generate if we have data for that week
+    const weekStart = (weekNum - 1) * 7 + 1;
+    const weekDays = sortedDays.filter(d => d.day >= weekStart && d.day <= weekNum * 7);
+    if (weekDays.length === 0) return;
+
+    let ai;
+    if (weekNum === 2) ai = await generateSecondWeekAI(movie, sortedDays, totalNet);
+    else if (weekNum === 3) ai = await generateThirdWeekAI(movie, sortedDays, totalNet);
+    else ai = await generateFourthWeekAI(movie, sortedDays, totalNet);
+
+    const totalNetStr = formatINR(totalNet);
+    const week2Total = weekNum === 2 ? formatINR(sortedDays.filter(d => d.day >= 8 && d.day <= 14).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0)) : "";
+    const seed = (String(movieId) + eventType).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+
+    let title;
+    if (weekNum === 2) title = getSecondWeekTitle(movie.title, totalNetStr, week2Total, seed);
+    else if (weekNum === 3) title = getThirdWeekTitle(movie.title, totalNetStr, seed);
+    else title = getFourthWeekTitle(movie.title, totalNetStr, seed);
+
+    let slug;
+    if (weekNum === 2) slug = buildSecondWeekSlug(movie);
+    else if (weekNum === 3) slug = buildThirdWeekSlug(movie);
+    else slug = buildFourthWeekSlug(movie);
+
+    const relatedMovies = await fetchRelatedMovies(movie);
+    const html = buildWeekSummaryBlogHTML(movie, sortedDays, totalNet, weekNum, weekLabel, ai, slug, title, relatedMovies);
+
+    const blogPayload = {
+      title,
+      slug,
+      excerpt: ai.metaDescription,
+      content: html,
+      category: "Box Office",
+      tags: [movie.title, "Box Office", weekLabel, "Odia Cinema", "Ollywood", `${weekNum * 7} Days`].filter(Boolean),
+      coverImage: movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "",
+      movieId,
+      movieTitle: movie.title,
+      author: "Ollypedia Team",
+      published: true,
+      indexed: true,
+      featured: false,
+      seoTitle: title,
+      seoDesc: ai.metaDescription
+    };
+
+    const existingBlog = await Blog.findOne({ slug });
+    let blogDoc;
+    if (existingBlog) {
+      Object.assign(existingBlog, blogPayload);
+      blogDoc = await existingBlog.save();
+    } else {
+      blogDoc = await Blog.create(blogPayload);
+    }
+
+    await EventBlog.create({ movieId, eventType, blogId: blogDoc._id, blogSlug: slug });
+    console.log(`[EventBlog] Generated ${weekLabel} Blog for ${movie.title} (Slug: ${slug})`);
+  } catch (e) {
+    console.error(`[EventBlog] maybeGenerateWeekSummaryBlog (Week ${weekNum}) failed: ${e.message}`);
+  }
+}
+
+async function maybeGenerateJubileblog(movie, sortedDays, totalNet, actualDay, movieId) {
+  const jubileeType = actualDay >= 50 ? "golden" : "silver";
+  const eventType = jubileeType === "silver" ? "silver-jubilee" : "golden-jubilee";
+  const dayCount = jubileeType === "silver" ? 25 : 50;
+
+  try {
+    const exists = await EventBlog.findOne({ movieId, eventType });
+    if (exists) return;
+
+    const ai = await generateJubileeAI(movie, sortedDays, totalNet, jubileeType);
+    const slug = buildJubileeSlug(movie, jubileeType);
+    const totalNetStr = formatINR(totalNet);
+    const seed = (String(movieId) + eventType).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+    const title = getJubileeTitle(movie.title, dayCount, totalNetStr, seed);
+
+    const relatedMovies = await fetchRelatedMovies(movie);
+    const html = buildJubileblogHTML(movie, sortedDays, totalNet, jubileeType, ai, slug, title, relatedMovies);
+
+    const jubileeName = jubileeType === "silver" ? "Silver Jubilee" : "Golden Jubilee";
+    const blogPayload = {
+      title,
+      slug,
+      excerpt: ai.metaDescription,
+      content: html,
+      category: "Box Office",
+      tags: [movie.title, "Box Office", jubileeName, `${dayCount} Days`, "Odia Cinema", "Ollywood"].filter(Boolean),
+      coverImage: movie.bannerUrl || movie.posterUrl || movie.thumbnailUrl || "",
+      movieId,
+      movieTitle: movie.title,
+      author: "Ollypedia Team",
+      published: true,
+      indexed: true,
+      featured: false,
+      seoTitle: title,
+      seoDesc: ai.metaDescription
+    };
+
+    const existingBlog = await Blog.findOne({ slug });
+    let blogDoc;
+    if (existingBlog) {
+      Object.assign(existingBlog, blogPayload);
+      blogDoc = await existingBlog.save();
+    } else {
+      blogDoc = await Blog.create(blogPayload);
+    }
+
+    await EventBlog.create({ movieId, eventType, blogId: blogDoc._id, blogSlug: slug });
+    console.log(`[EventBlog] Generated ${jubileeName} Blog for ${movie.title} after ${dayCount} days (Slug: ${slug})`);
+  } catch (e) {
+    console.error(`[EventBlog] maybeGenerateJubileblog (${jubileeType}) failed: ${e.message}`);
+  }
+}
+
 // ── Entry Orchestrator ───────────────────────────────────────────────────────
 async function triggerEventBlogs(movie, actualDay, totalNet, prevTotalNet, yesterdayStr, sortedDays, movieId) {
   try {
     const promises = [];
 
-    // 1. Day 7 -> First Week Blog
+    // 1. Day 7 → First Week Blog
     if (actualDay === 7) {
       promises.push(maybeGenerateFirstWeekBlog(movie, sortedDays, totalNet, movieId));
     }
 
-    // 2. Weekend Completed Days -> Weekend Blog
+    // 2. Day 14 → Second Week Blog
+    if (actualDay === 14) {
+      promises.push(maybeGenerateWeekSummaryBlog(movie, sortedDays, totalNet, movieId, 2));
+    }
+
+    // 3. Day 21 → Third Week Blog
+    if (actualDay === 21) {
+      promises.push(maybeGenerateWeekSummaryBlog(movie, sortedDays, totalNet, movieId, 3));
+    }
+
+    // 4. Day 28 → Fourth Week Blog (only if meaningful collection exists)
+    if (actualDay === 28 && totalNet > 0) {
+      promises.push(maybeGenerateWeekSummaryBlog(movie, sortedDays, totalNet, movieId, 4));
+    }
+
+    // 5. Day 25 → Silver Jubilee Blog
+    if (actualDay === 25) {
+      promises.push(maybeGenerateJubileblog(movie, sortedDays, totalNet, 25, movieId));
+    }
+
+    // 6. Day 50 → Golden Jubilee Blog
+    if (actualDay === 50) {
+      promises.push(maybeGenerateJubileblog(movie, sortedDays, totalNet, 50, movieId));
+    }
+
+    // 7. Weekend Completed Days → Weekend Blog (Opening Weekend / 2nd / 3rd / Later)
     promises.push(maybeGenerateWeekendBlog(movie, sortedDays, actualDay, totalNet, movieId));
 
-    // 3. Milestone crossed -> Milestone Blog
+    // 8. Milestone crossed → Milestone Blog
     promises.push(maybeGenerateMilestoneBlog(movie, sortedDays, totalNet, prevTotalNet, movieId));
 
-    // 4. Day 7 and Total Net >= 1 Crore -> Comparison Blog
+    // 9. Day 7 and Total Net >= 1 Crore → Comparison Blog
     if (actualDay === 7) {
       promises.push(maybeGenerateComparisonBlog(movie, sortedDays, totalNet, movieId));
     }
@@ -8102,6 +9405,7 @@ async function triggerEventBlogs(movie, actualDay, totalNet, prevTotalNet, yeste
     console.error(`[EventBlog] triggerEventBlogs main wrapper failed: ${e.message}`);
   }
 }
+
 
 // ── Event Blog Admin API Routes ──────────────────────────────────────────────
 app.get("/api/admin/event-blogs", adminAuth, async (req, res) => {
