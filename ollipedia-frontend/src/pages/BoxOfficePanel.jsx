@@ -1,4 +1,4 @@
-﻿// src/components/admin/BoxOfficePanel.jsx
+// src/components/admin/BoxOfficePanel.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 //  Complete rewrite — User-friendly Box Office Panel
 //
@@ -449,7 +449,130 @@ const toParagraphs = (text) =>
 //    toParagraphs · parseAiSections
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw, blogSlug) => {
+const buildReReleaseBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw, blogSlug) => {
+  const year          = getYear(movie.releaseDate);
+  const sorted        = [...daysUpToN].sort((a, b) => a.day - b.day);
+  const sections      = (sectionsOrRaw && typeof sectionsOrRaw === "object" && "seoHeadline" in sectionsOrRaw)
+    ? sectionsOrRaw
+    : parseAiSections(sectionsOrRaw, movie, targetDay, totalNet, totalGross, daysUpToN);
+
+  const movieName = `${movie.title || "Unknown Movie"} (Re-Release)`;
+  const boxOfficeUrl = `/box-office/${slugify(`${movie.title}${year ? ` (${year})` : ""}`)}`;
+
+  const totalNetStr   = fmtINR(totalNet);
+  const totalGrossStr = fmtINR(totalGross);
+
+  const pWrap = (text) =>
+    toParagraphs(text)
+      .replace(/<p>/g, `<p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">`);
+
+  let cumulativeNet = 0;
+  let cumulativeGross = 0;
+
+  const dataTableRows = sorted.map((d, i) => {
+    cumulativeNet += parseNum(d.net);
+    cumulativeGross += parseNum(d.gross);
+    const isToday = d.day === targetDay;
+    const dateStr = d.date ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—";
+    return `
+    <tr style="background:${isToday ? "rgba(201,151,58,0.05)" : (i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)")};">
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isToday ? "#c9973a" : "#aaa"};font-weight:700;white-space:nowrap;">
+        Day ${d.day}
+      </td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.82rem;">${dateStr}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isToday ? "#c9973a" : "#ddd"};font-weight:700;">${d.net ? fmtINR(d.net) : "—"}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid #1e1e1e;color:${isToday ? "#7ec8e3" : "#7ec8e3"};font-weight:700;">${d.gross ? fmtINR(d.gross) : "—"}</td>
+    </tr>`;
+  }).join("");
+
+  return `
+<!-- RE-RELEASE EXCLUSIVE TEMPLATE -->
+<section style="background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.15rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    ${movieName} Box Office - Day ${targetDay}
+  </h2>
+  <p style="color:#ccc;line-height:1.9;margin:0 0 16px;font-size:0.97rem;">
+    The much-awaited re-release of <strong>${movie.title}</strong> is seeing renewed interest at the box office. 
+    By Day ${targetDay}, the re-release has grossed a total of <strong>${totalGrossStr}</strong> and netted <strong>${totalNetStr}</strong>, proving that true cinematic classics never fade.
+  </p>
+  ${pWrap(sections.boxOfficeAnalysis)}
+  ${pWrap(sections.performanceAnalysis)}
+</section>
+
+<section style="background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.15rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    Re-Release Day-wise Breakdown
+  </h2>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:0.88rem;min-width:400px;">
+      <thead>
+        <tr>
+          <th style="padding:12px 14px;background:#1a1a1a;color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;text-align:left;border-bottom:2px solid #242424;">Day</th>
+          <th style="padding:12px 14px;background:#1a1a1a;color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;text-align:left;border-bottom:2px solid #242424;">Date</th>
+          <th style="padding:12px 14px;background:#1a1a1a;color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;text-align:left;border-bottom:2px solid #242424;">Net</th>
+          <th style="padding:12px 14px;background:#1a1a1a;color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.07em;text-align:left;border-bottom:2px solid #242424;">Gross</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataTableRows}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2" style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#c9973a;font-weight:800;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;">
+            TOTAL RE-RELEASE (${sorted.length} days)
+          </td>
+          <td style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#c9973a;font-weight:800;font-size:1rem;">${totalNetStr}</td>
+          <td style="padding:12px 14px;background:#1f1800;border-top:2px solid #2e2000;color:#7ec8e3;font-weight:800;font-size:1rem;">${totalGrossStr}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+
+<section style="background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.15rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    Nostalgia & Audience Response
+  </h2>
+  ${pWrap(sections.audienceResponse)}
+</section>
+
+<section style="background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.15rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    Occupancy Trends & Weekend Growth
+  </h2>
+  ${pWrap(sections.occupancyTrend)}
+  ${pWrap(sections.weekendWeekdayComparison)}
+</section>
+
+<section style="background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.15rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    Re-Release Impact & Legacy
+  </h2>
+  ${pWrap(sections.industryImpact)}
+</section>
+
+<section style="background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:26px 28px;margin-bottom:22px;">
+  <h2 style="font-size:1.15rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    Future Outlook & Verdict
+  </h2>
+  ${pWrap(sections.prediction)}
+  ${pWrap(sections.futureOutlook)}
+  <div style="border-left:4px solid #c9973a;padding-left:16px;margin-top:16px;">
+    ${pWrap(sections.finalVerdict)}
+  </div>
+  <div style="text-align:center;margin-top:22px;">
+    <a href="${boxOfficeUrl}" class="cta-btn" style="display:inline-block;background:#ff6b00;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-weight:800;font-size:0.93rem;">
+      🎬 View Latest Re-Release Box Office Updates
+    </a>
+  </div>
+</section>
+  `;
+};
+
+const buildBlogContent = (movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw, blogSlug, trackType = "original") => {
+  if (trackType === "re-release") {
+    return buildReReleaseBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, sectionsOrRaw, blogSlug);
+  }
 
   // ── Core data ───────────────────────────────────────────────────────────────
   const year          = getYear(movie.releaseDate);
@@ -1443,7 +1566,7 @@ const lbl = {
 
 // ─── DayModal ─────────────────────────────────────────────────────────────────
 
-function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }) {
+function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast, trackType = "normal" }) {
   const year    = getYear(movie.releaseDate);
   const nextDay = allDays.length ? Math.max(...allDays.map((d) => d.day)) + 1 : 1;
 
@@ -1551,9 +1674,9 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
     try {
       // 1. Save day to DB
       if (isEdit) {
-        await API.adminUpdateBoxOfficeDay(movie._id, payload.day, payload);
+        await API.adminUpdateBoxOfficeDay(movie._id, payload.day, payload, trackType);
       } else {
-        await API.adminAddBoxOfficeDay(movie._id, payload);
+        await API.adminAddBoxOfficeDay(movie._id, payload, trackType);
       }
       onToast(`Day ${payload.day} ${isEdit ? "updated" : "added"}!`, "success");
 
@@ -1563,15 +1686,18 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast }
         const totalNet   = daysUpToN.reduce((s, d) => s + parseNum(d.net),   0);
         const totalGross = daysUpToN.reduce((s, d) => s + parseNum(d.gross), 0);
         const targetDay  = payload.day;
-        const blogTitle  = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross`;
-        const blogSlugBase = `${movie.title}${year ? ` (${year})` : ""} day ${targetDay} box office collection`;
+        const isReRelease = trackType === "re-release";
+        const titleSuffix = isReRelease ? " (Re-Release)" : "";
+        const slugSuffix = isReRelease ? "-re-release" : "";
+        const blogTitle  = `${movie.title}${year ? ` (${year})` : ""}${titleSuffix} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross`;
+        const blogSlugBase = `${movie.title}${year ? ` (${year})` : ""}${slugSuffix} day ${targetDay} box office collection`;
         const blogSlug   = slugify(blogSlugBase);
         const parsedSecs = aiSections || parseAiSections(aiText, movie, targetDay, totalNet, totalGross, daysUpToN);
-        const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs, blogSlug);
+        const content    = buildBlogContent(movie, daysUpToN, totalNet, totalGross, targetDay, parsedSecs, blogSlug, trackType);
         const excerpt    = parsedSecs.introParagraph ||
           `${blogTitle}: Net ${fmtINR(payload.net || 0)}, Gross ${fmtINR(payload.gross || 0)}. Total ${fmtINR(totalNet)} net in ${daysUpToN.length} days.`;
-        const seoTitle   = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross | Ollypedia`;
-        const seoDesc    = `${movie.title}${year ? ` (${year})` : ""} Day ${targetDay} box office collection: The film has collected ${fmtINR(totalNet)} net and ${fmtINR(totalGross)} gross in ${targetDay} day${targetDay !== 1 ? "s" : ""}. Check complete day-wise breakdown, audience response, and performance analysis on Ollypedia.`;
+        const seoTitle   = `${movie.title}${year ? ` (${year})` : ""}${titleSuffix} Day ${targetDay} box office collection and collected ${fmtINR(totalGross)} gross | Ollypedia`;
+        const seoDesc    = `${movie.title}${year ? ` (${year})` : ""}${titleSuffix} Day ${targetDay} box office collection: The film has collected ${fmtINR(totalNet)} net and ${fmtINR(totalGross)} gross in ${targetDay} day${targetDay !== 1 ? "s" : ""}. Check complete day-wise breakdown, audience response, and performance analysis on Ollypedia.`;
 
         const blogPayload = {
           title: blogTitle, slug: blogSlug, excerpt, content,
@@ -2073,10 +2199,11 @@ export default function BoxOfficePanel({ movies, onToast }) {
   const [dropResults, setDropResults] = useState([]);
   const [showDrop,    setShowDrop]    = useState(false);
   const [selMovie,    setSelMovie]    = useState(null);
-  const [days,        setDays]        = useState([]);
-  const [loadingDays, setLoadingDays] = useState(false);
-  const [modal,       setModal]       = useState(null); // { isEdit, dayData } | null
-  const [bulkModal,   setBulkModal]   = useState(false);
+  const [days,           setDays]           = useState([]);
+  const [reReleaseDays,  setReReleaseDays]  = useState([]);
+  const [loadingDays,    setLoadingDays]    = useState(false);
+  const [modal,          setModal]          = useState(null); // { isEdit, dayData, trackType } | null
+  const [bulkModal,      setBulkModal]      = useState(false);
   const dropRef = useRef(null);
 
   // Close dropdown on outside click
@@ -2103,11 +2230,22 @@ export default function BoxOfficePanel({ movies, onToast }) {
   const loadDays = useCallback(async (movie) => {
     if (!movie?._id) return;
     setDays([]);
+    setReReleaseDays([]);
     setLoadingDays(true);
     try {
-      const data   = await API.getMovieBoxOfficeDays(movie._id);
+      const data   = await API.getMovieBoxOfficeDays(movie._id, "original");
       const sorted = Array.isArray(data) ? [...data].sort((a, b) => a.day - b.day) : [];
       setDays(sorted);
+      // Also load re-release days if movie has re-release
+      if (movie.isReRelease) {
+        try {
+          const rrData   = await API.getMovieBoxOfficeDays(movie._id, "re-release");
+          const rrSorted = Array.isArray(rrData) ? [...rrData].sort((a, b) => a.day - b.day) : [];
+          setReReleaseDays(rrSorted);
+        } catch (_) {
+          setReReleaseDays([]);
+        }
+      }
     } catch (e) {
       onToast?.("Failed to load data: " + e.message, "error");
       setDays([]);
@@ -2123,13 +2261,19 @@ export default function BoxOfficePanel({ movies, onToast }) {
     loadDays(m);
   };
 
-  const clearMovie = () => { setSelMovie(null); setQuery(""); setDays([]); };
+  const clearMovie = () => { setSelMovie(null); setQuery(""); setDays([]); setReReleaseDays([]); };
 
   // Derived
-  const totalNet   = days.reduce((s, d) => s + parseNum(d.net),   0);
-  const totalGross = days.reduce((s, d) => s + parseNum(d.gross), 0);
-  const nextDay    = days.length ? Math.max(...days.map((d) => d.day)) + 1 : 1;
-  const year       = selMovie ? getYear(selMovie.releaseDate) : "";
+  const totalNet    = days.reduce((s, d) => s + parseNum(d.net),   0);
+  const totalGross  = days.reduce((s, d) => s + parseNum(d.gross), 0);
+  const nextDay     = days.length ? Math.max(...days.map((d) => d.day)) + 1 : 1;
+  const year        = selMovie ? getYear(selMovie.releaseDate) : "";
+  const hasReRelease = !!(selMovie?.isReRelease && selMovie?.reReleaseDate);
+  const origTotalNet   = days.reduce((s, d) => s + parseNum(d.net),   0);
+  const origTotalGross = days.reduce((s, d) => s + parseNum(d.gross), 0);
+  const rrTotalNet     = reReleaseDays.reduce((s, d) => s + parseNum(d.net),   0);
+  const rrTotalGross   = reReleaseDays.reduce((s, d) => s + parseNum(d.gross), 0);
+  const rrNextDay      = reReleaseDays.length ? Math.max(...reReleaseDays.map((d) => d.day)) + 1 : 1;
 
   return (
     <div style={{ padding: "0 28px 60px" }}>
@@ -2243,18 +2387,22 @@ export default function BoxOfficePanel({ movies, onToast }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 800, fontSize: "1.25rem", lineHeight: 1.2, marginBottom: 4 }}>
                   {selMovie.title}{year ? ` (${year})` : ""}
+                  {hasReRelease && <span style={{ marginLeft: 8, fontSize: "0.65rem", background: "rgba(201,151,58,0.18)", color: "#c9973a", padding: "2px 8px", borderRadius: 10, fontWeight: 700, verticalAlign: "middle" }}>🔄 Re-Release</span>}
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "var(--muted)", marginBottom: 16 }}>
                   {selMovie.releaseDate ? new Date(selMovie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Release TBA"}
+                  {hasReRelease && ` · Re-Release: ${new Date(selMovie.reReleaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
                   {selMovie.language ? ` · ${selMovie.language}` : ""}
                   {selMovie.budget ? ` · Budget: ${selMovie.budget}` : ""}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                   {[
-                    { label: "Total Net",   value: fmtINR(totalNet),   color: "var(--gold)" },
-                    { label: "Total Gross", value: fmtINR(totalGross), color: "#7ec8e3"      },
-                    { label: "Days",        value: loadingDays ? "…" : (days.length || "—"), color: "var(--text)" },
-                  ].map(({ label: l, value, color }) => (
+                    { label: "Original Net",    value: fmtINR(origTotalNet),   color: "var(--gold)" },
+                    { label: "Original Gross",  value: fmtINR(origTotalGross), color: "#7ec8e3" },
+                    hasReRelease ? { label: "Re-Release Net",   value: fmtINR(rrTotalNet),    color: "#e89b3a" } : null,
+                    hasReRelease ? { label: "Re-Release Gross", value: fmtINR(rrTotalGross),  color: "#a8d8ea" } : null,
+                    { label: "Days", value: loadingDays ? "…" : (days.length || "—"), color: "var(--text)" },
+                  ].filter(Boolean).map(({ label: l, value, color }) => (
                     <div key={l} style={{ background: "rgba(0,0,0,0.4)", borderRadius: 10, padding: "9px 16px", border: "1px solid rgba(255,255,255,0.06)", minWidth: 110 }}>
                       <div style={{ fontSize: "0.6rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{l}</div>
                       <div style={{ fontSize: "1.05rem", fontWeight: 800, color }}>{value}</div>
@@ -2265,6 +2413,7 @@ export default function BoxOfficePanel({ movies, onToast }) {
             </div>
           </div>
 
+
           {/* Loading */}
           {loadingDays && (
             <div style={{ textAlign: "center", padding: 52, color: "var(--muted)" }}>
@@ -2273,99 +2422,202 @@ export default function BoxOfficePanel({ movies, onToast }) {
             </div>
           )}
 
-          {/* Empty days */}
-          {!loadingDays && days.length === 0 && (
-            <div style={{ textAlign: "center", padding: "52px 0", color: "var(--muted)" }}>
-              <div style={{ fontSize: "2.8rem", marginBottom: 10 }}>📭</div>
-              <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--text)", fontSize: "1rem" }}>No collection data yet</div>
-              <div style={{ fontSize: "0.8rem", marginBottom: 20 }}>Click the button below to record the opening day collection.</div>
-              <button className="btn btn-gold btn-sm" style={{ fontWeight: 800 }}
-                onClick={() => setModal({ isEdit: false, dayData: null })}>
-                + Add Day 1 Collection
-              </button>
-              <div style={{ marginTop: 12 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setBulkModal(true)}>
-                  📤 Bulk Upload Multiple Days Instead
+          {/* ── ORIGINAL BOX OFFICE ── */}
+          {!loadingDays && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ fontWeight: 800, fontSize: "1rem", color: "var(--text)" }}>🎬 Original Box Office</div>
+                <button className="btn btn-gold btn-sm" style={{ fontWeight: 800 }}
+                  onClick={() => setModal({ isEdit: false, dayData: null, trackType: "original" })}>
+                  + Add Day {nextDay}
                 </button>
               </div>
-            </div>
-          )}
 
-          {/* Collection table */}
-          {!loadingDays && days.length > 0 && (
-            <>
-              <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid var(--border)" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
-                  <thead>
-                    <tr style={{ background: "var(--bg2)" }}>
-                      {["Day", "Date", "Net Collection", "Gross Collection", "Notes", ""].map((h, i) => (
-                        <th key={i} style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.64rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, whiteSpace: "nowrap", borderBottom: "2px solid var(--border)" }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {days.map((d, i) => (
-                      <tr key={d.day}
-                        style={{ borderBottom: "1px solid var(--border)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)", transition: "background 0.1s" }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = "rgba(201,151,58,0.05)"}
-                        onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)"}
-                      >
-                        <td style={{ padding: "12px 16px", fontWeight: 800, color: "var(--gold)", whiteSpace: "nowrap" }}>
-                          Day {d.day}
-                          {d.day === 1 && <span style={{ marginLeft: 6, fontSize: "0.6rem", background: "rgba(201,151,58,0.14)", color: "var(--gold)", padding: "1px 6px", borderRadius: 8 }}>Opening</span>}
-                        </td>
-                        <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: "0.8rem" }}>
-                          {d.date ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
-                        </td>
-                        <td style={{ padding: "12px 16px", fontWeight: 700 }}>{fmtINR(d.net)}</td>
-                        <td style={{ padding: "12px 16px", fontWeight: 600, color: "#7ec8e3" }}>{fmtINR(d.gross)}</td>
-                        <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: "0.78rem", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {d.note || "—"}
-                        </td>
-                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap", display: "flex", gap: 6 }}>
-                          <button className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem", padding: "4px 12px" }}
-                            onClick={() => setModal({ isEdit: true, dayData: d })}>
-                            ✏️ Edit
-                          </button>
-                          <button className="btn btn-ghost btn-sm"
-                            style={{ fontSize: "0.72rem", padding: "4px 12px", color: "#e87a6a", border: "1px solid rgba(220,50,50,0.35)" }}
-                            onClick={async () => {
-                              if (!window.confirm(`Delete Day ${d.day} collection data? This cannot be undone.`)) return;
-                              try {
-                                await API.adminDeleteBoxOfficeDay(selMovie._id, d.day);
-                                onToast(`Day ${d.day} deleted.`, "success");
-                                loadDays(selMovie);
-                              } catch (e) {
-                                onToast("❌ Delete failed: " + e.message, "error");
-                              }
-                            }}>
-                            🗑️ Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ background: "rgba(201,151,58,0.07)", borderTop: "2px solid var(--border)" }}>
-                      <td colSpan={2} style={{ padding: "12px 16px", fontWeight: 800, fontSize: "0.78rem", color: "var(--gold)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-                        TOTAL ({days.length} day{days.length !== 1 ? "s" : ""})
-                      </td>
-                      <td style={{ padding: "12px 16px", fontWeight: 800, color: "var(--gold)", fontSize: "1rem" }}>{fmtINR(totalNet)}</td>
-                      <td style={{ padding: "12px 16px", fontWeight: 800, color: "#7ec8e3", fontSize: "1rem" }}>{fmtINR(totalGross)}</td>
-                      <td colSpan={2} />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              {days.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "var(--muted)", border: "1px dashed var(--border)", borderRadius: 12, marginBottom: 28 }}>
+                  <div style={{ fontSize: "2rem", marginBottom: 8 }}>📭</div>
+                  <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--text)", fontSize: "0.95rem" }}>No original box office data yet</div>
+                  <button className="btn btn-gold btn-sm" style={{ fontWeight: 800, marginTop: 8 }}
+                    onClick={() => setModal({ isEdit: false, dayData: null, trackType: "original" })}>
+                    + Add Day 1 Collection
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid var(--border)", marginBottom: 8 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+                      <thead>
+                        <tr style={{ background: "var(--bg2)" }}>
+                          {["Day", "Date", "Net Collection", "Gross Collection", "Notes", ""].map((h, i) => (
+                            <th key={i} style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.64rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, whiteSpace: "nowrap", borderBottom: "2px solid var(--border)" }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {days.map((d, i) => (
+                          <tr key={d.day}
+                            style={{ borderBottom: "1px solid var(--border)", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)", transition: "background 0.1s" }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(201,151,58,0.05)"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.012)"}
+                          >
+                            <td style={{ padding: "12px 16px", fontWeight: 800, color: "var(--gold)", whiteSpace: "nowrap" }}>
+                              Day {d.day}
+                              {d.day === 1 && <span style={{ marginLeft: 6, fontSize: "0.6rem", background: "rgba(201,151,58,0.14)", color: "var(--gold)", padding: "1px 6px", borderRadius: 8 }}>Opening</span>}
+                            </td>
+                            <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: "0.8rem" }}>
+                              {d.date ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                            </td>
+                            <td style={{ padding: "12px 16px", fontWeight: 700 }}>{fmtINR(d.net)}</td>
+                            <td style={{ padding: "12px 16px", fontWeight: 600, color: "#7ec8e3" }}>{fmtINR(d.gross)}</td>
+                            <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: "0.78rem", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {d.note || "—"}
+                            </td>
+                            <td style={{ padding: "12px 16px", whiteSpace: "nowrap", display: "flex", gap: 6 }}>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem", padding: "4px 12px" }}
+                                onClick={() => setModal({ isEdit: true, dayData: d, trackType: "original" })}>
+                                ✏️ Edit
+                              </button>
+                              <button className="btn btn-ghost btn-sm"
+                                style={{ fontSize: "0.72rem", padding: "4px 12px", color: "#e87a6a", border: "1px solid rgba(220,50,50,0.35)" }}
+                                onClick={async () => {
+                                  if (!window.confirm(`Delete Day ${d.day} collection data? This cannot be undone.`)) return;
+                                  try {
+                                    await API.adminDeleteBoxOfficeDay(selMovie._id, d.day, "original");
+                                    onToast(`Day ${d.day} deleted.`, "success");
+                                    loadDays(selMovie);
+                                  } catch (e) {
+                                    onToast("❌ Delete failed: " + e.message, "error");
+                                  }
+                                }}>
+                                🗑️ Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: "rgba(201,151,58,0.07)", borderTop: "2px solid var(--border)" }}>
+                          <td colSpan={2} style={{ padding: "12px 16px", fontWeight: 800, fontSize: "0.78rem", color: "var(--gold)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                            TOTAL ({days.length} day{days.length !== 1 ? "s" : ""})
+                          </td>
+                          <td style={{ padding: "12px 16px", fontWeight: 800, color: "var(--gold)", fontSize: "1rem" }}>{fmtINR(origTotalNet)}</td>
+                          <td style={{ padding: "12px 16px", fontWeight: 800, color: "#7ec8e3", fontSize: "1rem" }}>{fmtINR(origTotalGross)}</td>
+                          <td colSpan={2} />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                  <div style={{ marginBottom: 32, padding: "10px 16px", background: "rgba(201,151,58,0.04)", border: "1px solid rgba(201,151,58,0.14)", borderRadius: 10, fontSize: "0.77rem", color: "var(--muted)", lineHeight: 1.7 }}>
+                    💡 <strong style={{ color: "var(--text)" }}>Tip:</strong> Use <strong style={{ color: "var(--gold)" }}>+ Add Day {nextDay}</strong> to record new data.
+                    Toggle <strong style={{ color: "var(--gold)" }}>🤖 AI Blog</strong> to also publish an SEO article.
+                  </div>
+                </>
+              )}
 
-              {/* Tip bar */}
-              <div style={{ marginTop: 14, padding: "11px 16px", background: "rgba(201,151,58,0.04)", border: "1px solid rgba(201,151,58,0.14)", borderRadius: 10, fontSize: "0.77rem", color: "var(--muted)", lineHeight: 1.7 }}>
-                💡 <strong style={{ color: "var(--text)" }}>Tip:</strong> Use <strong style={{ color: "var(--gold)" }}>+ Add Day {nextDay}</strong> to record new data.
-                Toggle <strong style={{ color: "var(--gold)" }}>🤖 AI Blog</strong> inside the form to publish a Day {nextDay} article
-                (with all days 1–{nextDay} in the table) as a separate blog post.
-              </div>
+              {/* ── RE-RELEASE BOX OFFICE SECTION ── */}
+              {hasReRelease && (
+                <>
+                  <div style={{ borderTop: "2px solid rgba(201,151,58,0.3)", margin: "8px 0 22px" }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: "1rem", color: "#c9973a" }}>🔄 Re-Release Box Office</div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 2 }}>
+                        Re-Released: {new Date(selMovie.reReleaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                      </div>
+                    </div>
+                    <button className="btn btn-gold btn-sm" style={{ fontWeight: 800, background: "rgba(201,151,58,0.2)", border: "1px solid rgba(201,151,58,0.5)" }}
+                      onClick={() => setModal({ isEdit: false, dayData: null, trackType: "re-release" })}>
+                      + Add Re-Release Day {rrNextDay}
+                    </button>
+                  </div>
+
+                  {reReleaseDays.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--muted)", border: "1px dashed rgba(201,151,58,0.35)", borderRadius: 12, marginBottom: 28 }}>
+                      <div style={{ fontSize: "2rem", marginBottom: 8 }}>🔄</div>
+                      <div style={{ fontWeight: 700, marginBottom: 6, color: "var(--text)", fontSize: "0.95rem" }}>No re-release box office data yet</div>
+                      <div style={{ fontSize: "0.8rem", marginBottom: 12 }}>Add re-release day-wise collection data to track the re-release run separately.</div>
+                      <button className="btn btn-gold btn-sm" style={{ fontWeight: 800 }}
+                        onClick={() => setModal({ isEdit: false, dayData: null, trackType: "re-release" })}>
+                        + Add Re-Release Day 1
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid rgba(201,151,58,0.3)", marginBottom: 8 }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+                          <thead>
+                            <tr style={{ background: "rgba(201,151,58,0.06)" }}>
+                              {["Day", "Date", "Net Collection", "Gross Collection", "Notes", ""].map((h, i) => (
+                                <th key={i} style={{ padding: "12px 16px", textAlign: "left", fontSize: "0.64rem", color: "#c9973a", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, whiteSpace: "nowrap", borderBottom: "2px solid rgba(201,151,58,0.25)" }}>
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reReleaseDays.map((d, i) => (
+                              <tr key={d.day}
+                                style={{ borderBottom: "1px solid var(--border)", background: i % 2 === 0 ? "transparent" : "rgba(201,151,58,0.02)", transition: "background 0.1s" }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(201,151,58,0.07)"}
+                                onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(201,151,58,0.02)"}
+                              >
+                                <td style={{ padding: "12px 16px", fontWeight: 800, color: "#c9973a", whiteSpace: "nowrap" }}>
+                                  Day {d.day}
+                                  {d.day === 1 && <span style={{ marginLeft: 6, fontSize: "0.6rem", background: "rgba(201,151,58,0.18)", color: "#c9973a", padding: "1px 6px", borderRadius: 8 }}>Re-Opening</span>}
+                                </td>
+                                <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: "0.8rem" }}>
+                                  {d.date ? new Date(d.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                                </td>
+                                <td style={{ padding: "12px 16px", fontWeight: 700 }}>{fmtINR(d.net)}</td>
+                                <td style={{ padding: "12px 16px", fontWeight: 600, color: "#7ec8e3" }}>{fmtINR(d.gross)}</td>
+                                <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: "0.78rem", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {d.note || "—"}
+                                </td>
+                                <td style={{ padding: "12px 16px", whiteSpace: "nowrap", display: "flex", gap: 6 }}>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem", padding: "4px 12px" }}
+                                    onClick={() => setModal({ isEdit: true, dayData: d, trackType: "re-release" })}>
+                                    ✏️ Edit
+                                  </button>
+                                  <button className="btn btn-ghost btn-sm"
+                                    style={{ fontSize: "0.72rem", padding: "4px 12px", color: "#e87a6a", border: "1px solid rgba(220,50,50,0.35)" }}
+                                    onClick={async () => {
+                                      if (!window.confirm(`Delete Re-Release Day ${d.day}? This cannot be undone.`)) return;
+                                      try {
+                                        await API.adminDeleteBoxOfficeDay(selMovie._id, d.day, "re-release");
+                                        onToast(`Re-Release Day ${d.day} deleted.`, "success");
+                                        loadDays(selMovie);
+                                      } catch (e) {
+                                        onToast("❌ Delete failed: " + e.message, "error");
+                                      }
+                                    }}>
+                                    🗑️ Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ background: "rgba(201,151,58,0.1)", borderTop: "2px solid rgba(201,151,58,0.3)" }}>
+                              <td colSpan={2} style={{ padding: "12px 16px", fontWeight: 800, fontSize: "0.78rem", color: "#c9973a", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                                RE-RELEASE TOTAL ({reReleaseDays.length} day{reReleaseDays.length !== 1 ? "s" : ""})
+                              </td>
+                              <td style={{ padding: "12px 16px", fontWeight: 800, color: "#c9973a", fontSize: "1rem" }}>{fmtINR(rrTotalNet)}</td>
+                              <td style={{ padding: "12px 16px", fontWeight: 800, color: "#7ec8e3", fontSize: "1rem" }}>{fmtINR(rrTotalGross)}</td>
+                              <td colSpan={2} />
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                      <div style={{ marginBottom: 16, padding: "10px 16px", background: "rgba(201,151,58,0.04)", border: "1px solid rgba(201,151,58,0.2)", borderRadius: 10, fontSize: "0.77rem", color: "var(--muted)", lineHeight: 1.7 }}>
+                        💡 <strong style={{ color: "var(--text)" }}>Tip:</strong> Use <strong style={{ color: "#c9973a" }}>+ Add Re-Release Day {rrNextDay}</strong> to record more data.
+                        Toggle <strong style={{ color: "#c9973a" }}>🤖 AI Blog</strong> to publish a re-release specific blog article.
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </>
           )}
         </>
@@ -2377,10 +2629,11 @@ export default function BoxOfficePanel({ movies, onToast }) {
           movie={selMovie}
           isEdit={modal.isEdit}
           dayData={modal.isEdit ? modal.dayData : null}
-          allDays={days}
+          allDays={modal.trackType === "re-release" ? reReleaseDays : days}
           onClose={() => setModal(null)}
           onSaved={() => loadDays(selMovie)}
           onToast={onToast}
+          trackType={modal.trackType || "original"}
         />
       )}
 

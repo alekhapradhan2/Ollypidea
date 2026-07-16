@@ -182,16 +182,16 @@ export const API = {
   adminDeleteEnquiry: (id) => del(`/admin/enquiries/${id}`, _adminToken),
 
   // ── Box Office (public) — existing
-  getMovieBoxOfficeDays: (id) => get(`/movies/${id}/boxoffice-days`),
+  getMovieBoxOfficeDays: (id, trackType = "original") => get(`/movies/${id}/boxoffice-days?trackType=${trackType}`),
 
   // ── Admin — Box Office (existing)
   adminGetBoxOfficeMovies: () => get("/admin/boxoffice/all-movies", _adminToken),
 
   // ── Admin — Box Office (NEW additions)
-  adminAddBoxOfficeDay: (id, body) => post(`/admin/movies/${id}/boxoffice-days`, body, _adminToken),
-  adminUpdateBoxOfficeDay: (id, day, body) => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}`, body, _adminToken),
-  adminDeleteBoxOfficeDay: (id, day) => del(`/admin/movies/${id}/boxoffice-days/${day}`, _adminToken),
-  adminBulkBoxOfficeDays: (id, body) => post(`/admin/movies/${id}/boxoffice-days/bulk`, body, _adminToken),
+  adminAddBoxOfficeDay: (id, body, trackType = "original") => post(`/admin/movies/${id}/boxoffice-days?trackType=${trackType}`, body, _adminToken),
+  adminUpdateBoxOfficeDay: (id, day, body, trackType = "original") => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}?trackType=${trackType}`, body, _adminToken),
+  adminDeleteBoxOfficeDay: (id, day, trackType = "original") => del(`/admin/movies/${id}/boxoffice-days/${day}?trackType=${trackType}`, _adminToken),
+  adminBulkBoxOfficeDays: (id, body, trackType = "original") => post(`/admin/movies/${id}/boxoffice-days/bulk?trackType=${trackType}`, body, _adminToken),
 
   // ── Admin — BMS Tracker
   trackerGetSessions: (movieId) => get(`/admin/tracker/sessions/${movieId}`, _adminToken),
