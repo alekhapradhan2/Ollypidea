@@ -343,6 +343,16 @@ const MovieSchema = new mongoose.Schema({
     date: { type: String, default: "" },
     note: { type: String, default: "" },
   }],
+  reReleaseBoxOffice: {
+    total: { type: String, default: "TBA" },
+  },
+  reReleaseBoxOfficeDays: [{
+    day: { type: Number, required: true },
+    net: { type: String, default: "" },
+    gross: { type: String, default: "" },
+    date: { type: String, default: "" },
+    note: { type: String, default: "" },
+  }],
   verdict: { type: String, default: "Upcoming" },
   status: { type: String, default: "Upcoming" },
   reviews: [ReviewSchema],
@@ -4600,9 +4610,10 @@ app.post("/api/admin/generate-article", adminAuth, async (req, res) => {
 app.get("/api/movies/:id/boxoffice-days", async (req, res) => {
   try {
     if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
-    const movie = await Movie.findById(req.params.id, "boxOfficeDays title slug verdict").lean();
+    const movie = await Movie.findById(req.params.id, "boxOfficeDays reReleaseBoxOfficeDays title slug verdict").lean();
     if (!movie) return res.status(404).json({ error: "Movie not found" });
-    const days = (movie.boxOfficeDays || []).slice().sort((a, b) => a.day - b.day);
+    const targetArray = req.query.trackType === "re-release" ? (movie.reReleaseBoxOfficeDays || []) : (movie.boxOfficeDays || []);
+    const days = targetArray.slice().sort((a, b) => a.day - b.day);
     res.json(days);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4622,8 +4633,12 @@ app.post("/api/admin/movies/:id/boxoffice-days", adminAuth, async (req, res) => 
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
 
+    const isReReleaseTrack = req.query.trackType === "re-release";
+    const daysArrayName = isReReleaseTrack ? "reReleaseBoxOfficeDays" : "boxOfficeDays";
+    const boxOfficeObjName = isReReleaseTrack ? "reReleaseBoxOffice" : "boxOffice";
+
     // Prevent duplicate
-    const exists = (movie.boxOfficeDays || []).some((d) => d.day === dayNum);
+    const exists = (movie[daysArrayName] || []).some((d) => d.day === dayNum);
     if (exists) return res.status(409).json({ error: `Day ${dayNum} already exists. Use PATCH to update.` });
 
     // Normalize net/gross — parse whatever the frontend sends ("7", "7L", "₹7.00 L", "700000")
@@ -4633,18 +4648,18 @@ app.post("/api/admin/movies/:id/boxoffice-days", adminAuth, async (req, res) => 
     const netStored = netNum > 0 ? formatINRGlobal(netNum) : (net || "");
     const grossStored = grossNum > 0 ? formatINRGlobal(grossNum) : (gross || "");
 
-    movie.boxOfficeDays.push({ day: dayNum, net: netStored, gross: grossStored, date: date || "", note: note || "" });
-    movie.boxOfficeDays.sort((a, b) => a.day - b.day);
+    movie[daysArrayName].push({ day: dayNum, net: netStored, gross: grossStored, date: date || "", note: note || "" });
+    movie[daysArrayName].sort((a, b) => a.day - b.day);
 
     // Auto-update boxOffice summary totals
-    const totalNet = movie.boxOfficeDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+    const totalNet = movie[daysArrayName].reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
     if (totalNet > 0) {
-      movie.boxOffice = movie.boxOffice || {};
-      movie.boxOffice.total = formatINRGlobal(totalNet);
+      movie[boxOfficeObjName] = movie[boxOfficeObjName] || {};
+      movie[boxOfficeObjName].total = formatINRGlobal(totalNet);
     }
 
     await movie.save({ validateBeforeSave: false });
-    res.status(201).json({ success: true, days: movie.boxOfficeDays });
+    res.status(201).json({ success: true, days: movie[daysArrayName] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4661,30 +4676,34 @@ app.patch("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, re
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
 
-    const idx = (movie.boxOfficeDays || []).findIndex((d) => d.day === dayNum);
+    const isReReleaseTrack = req.query.trackType === "re-release";
+    const daysArrayName = isReReleaseTrack ? "reReleaseBoxOfficeDays" : "boxOfficeDays";
+    const boxOfficeObjName = isReReleaseTrack ? "reReleaseBoxOffice" : "boxOffice";
+
+    const idx = (movie[daysArrayName] || []).findIndex((d) => d.day === dayNum);
     if (idx === -1) return res.status(404).json({ error: `Day ${dayNum} not found` });
 
     const { net, gross, date, note } = req.body;
     if (net !== undefined) {
       const n = parseToRupeesGlobal(net);
-      movie.boxOfficeDays[idx].net = n > 0 ? formatINRGlobal(n) : net;
+      movie[daysArrayName][idx].net = n > 0 ? formatINRGlobal(n) : net;
     }
     if (gross !== undefined) {
       const g = parseToRupeesGlobal(gross);
-      movie.boxOfficeDays[idx].gross = g > 0 ? formatINRGlobal(g) : gross;
+      movie[daysArrayName][idx].gross = g > 0 ? formatINRGlobal(g) : gross;
     }
-    if (date !== undefined) movie.boxOfficeDays[idx].date = date;
-    if (note !== undefined) movie.boxOfficeDays[idx].note = note;
+    if (date !== undefined) movie[daysArrayName][idx].date = date;
+    if (note !== undefined) movie[daysArrayName][idx].note = note;
 
     // Re-sync total
-    const totalNetPatch = movie.boxOfficeDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+    const totalNetPatch = movie[daysArrayName].reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
     if (totalNetPatch > 0) {
-      movie.boxOffice = movie.boxOffice || {};
-      movie.boxOffice.total = formatINRGlobal(totalNetPatch);
+      movie[boxOfficeObjName] = movie[boxOfficeObjName] || {};
+      movie[boxOfficeObjName].total = formatINRGlobal(totalNetPatch);
     }
 
     await movie.save({ validateBeforeSave: false });
-    res.json({ success: true, days: movie.boxOfficeDays });
+    res.json({ success: true, days: movie[daysArrayName] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4701,14 +4720,17 @@ app.delete("/api/admin/movies/:id/boxoffice-days/:day", adminAuth, async (req, r
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
 
-    const before = (movie.boxOfficeDays || []).length;
-    movie.boxOfficeDays = (movie.boxOfficeDays || []).filter((d) => d.day !== dayNum);
-    if (movie.boxOfficeDays.length === before) {
+    const isReReleaseTrack = req.query.trackType === "re-release";
+    const daysArrayName = isReReleaseTrack ? "reReleaseBoxOfficeDays" : "boxOfficeDays";
+
+    const before = (movie[daysArrayName] || []).length;
+    movie[daysArrayName] = (movie[daysArrayName] || []).filter((d) => d.day !== dayNum);
+    if (movie[daysArrayName].length === before) {
       return res.status(404).json({ error: `Day ${dayNum} not found` });
     }
 
     await movie.save({ validateBeforeSave: false });
-    res.json({ success: true, days: movie.boxOfficeDays });
+    res.json({ success: true, days: movie[daysArrayName] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4740,7 +4762,11 @@ app.post("/api/admin/movies/:id/boxoffice-days/bulk", adminAuth, async (req, res
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Movie not found" });
 
-    movie.boxOfficeDays = movie.boxOfficeDays || [];
+    const isReReleaseTrack = req.query.trackType === "re-release";
+    const daysArrayName = isReReleaseTrack ? "reReleaseBoxOfficeDays" : "boxOfficeDays";
+    const boxOfficeObjName = isReReleaseTrack ? "reReleaseBoxOffice" : "boxOffice";
+
+    movie[daysArrayName] = movie[daysArrayName] || [];
 
     let added = 0, updated = 0;
     const skipped = [];
@@ -4757,33 +4783,33 @@ app.post("/api/admin/movies/:id/boxoffice-days/bulk", adminAuth, async (req, res
       const grossStored = formatINRGlobal(grossNum);
       const dateStored = addDaysToISO(movie.releaseDate, dayNum); // always derived from releaseDate
 
-      const idx = movie.boxOfficeDays.findIndex((d) => d.day === dayNum);
+      const idx = movie[daysArrayName].findIndex((d) => d.day === dayNum);
       if (idx === -1) {
-        movie.boxOfficeDays.push({
+        movie[daysArrayName].push({
           day: dayNum, net: netStored, gross: grossStored,
           date: dateStored, note: entry?.note || "",
         });
         added++;
       } else {
-        movie.boxOfficeDays[idx].net = netStored;
-        movie.boxOfficeDays[idx].gross = grossStored;
-        movie.boxOfficeDays[idx].date = dateStored;
-        if (entry?.note !== undefined) movie.boxOfficeDays[idx].note = entry.note;
+        movie[daysArrayName][idx].net = netStored;
+        movie[daysArrayName][idx].gross = grossStored;
+        movie[daysArrayName][idx].date = dateStored;
+        if (entry?.note !== undefined) movie[daysArrayName][idx].note = entry.note;
         updated++;
       }
     }
 
-    movie.boxOfficeDays.sort((a, b) => a.day - b.day);
+    movie[daysArrayName].sort((a, b) => a.day - b.day);
 
     // Re-sync the boxOffice.total summary from the full day-wise net figures
-    const totalNet = movie.boxOfficeDays.reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
+    const totalNet = movie[daysArrayName].reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0);
     if (totalNet > 0) {
-      movie.boxOffice = movie.boxOffice || {};
-      movie.boxOffice.total = formatINRGlobal(totalNet);
+      movie[boxOfficeObjName] = movie[boxOfficeObjName] || {};
+      movie[boxOfficeObjName].total = formatINRGlobal(totalNet);
     }
 
     await movie.save({ validateBeforeSave: false });
-    res.json({ success: true, added, updated, skipped, days: movie.boxOfficeDays });
+    res.json({ success: true, added, updated, skipped, days: movie[daysArrayName] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
