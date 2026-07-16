@@ -159,7 +159,7 @@ function TrailerCard({ trailer }) {
         <div className="home-trailer-thumb">
           <img src={`https://img.youtube.com/vi/${trailer.ytId}/mqdefault.jpg`} loading="lazy" decoding="async" alt={trailer.movieTitle} />
           <div className="home-trailer-play">▶</div>
-          <div className="home-trailer-duration">Trailer</div>
+          <div className="home-trailer-duration">{trailer.type || "Trailer"}</div>
         </div>
       )}
       <div className="home-trailer-info">
@@ -276,7 +276,7 @@ export default function CastProfile({ portalMode }) {
   // trailers
   const trailers = movies
     .filter(m => m.media?.trailer?.ytId)
-    .map(m => ({ ...m.media.trailer, movieTitle: m.title, movieId: m._id }));
+    .map(m => ({ ...m.media.videos?.[0], movieTitle: m.title, movieId: m._id }));
 
   // news
   const movieIds   = new Set(movies.map(m => String(m._id)));

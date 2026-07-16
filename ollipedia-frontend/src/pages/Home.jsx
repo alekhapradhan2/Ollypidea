@@ -131,7 +131,7 @@ const cardCss = `
 const MovieCard = React.memo(function MovieCard({ movie, onClick }) {
   const v = movie.verdict || "Upcoming";
   const c = VS[v] || "#7aaae8";
-  const img = movie.posterUrl || movie.thumbnailUrl || ytThumb(movie.media?.trailer?.ytId);
+  const img = movie.posterUrl || movie.thumbnailUrl || ytThumb(movie.media?.videos?.[0]?.ytId);
   return (
     <div className="hcard" onClick={onClick}>
       <div className="hcard-img">
@@ -159,7 +159,7 @@ const MovieCard = React.memo(function MovieCard({ movie, onClick }) {
 
 // ─── Trailer Card ─────────────────────────────────────────────────
 const TrailerCard = React.memo(function TrailerCard({ movie, onClick }) {
-  const thumb = ytThumb(movie.media?.trailer?.ytId);
+  const thumb = ytThumb(movie.media?.videos?.[0]?.ytId);
   return (
     <div className="tcard" onClick={onClick}>
       <div className="tcard-img">
@@ -167,7 +167,7 @@ const TrailerCard = React.memo(function TrailerCard({ movie, onClick }) {
         <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div className="tcard-play">▶</div>
         </div>
-        <div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,.75)",color:"#fff",fontSize:".58rem",fontWeight:700,padding:"2px 6px",borderRadius:3}}>TRAILER</div>
+        <div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,.75)",color:"#fff",fontSize:".58rem",fontWeight:700,padding:"2px 6px",borderRadius:3}}>{(movie.media?.videos?.[0]?.type || "TRAILER").toUpperCase()}</div>
       </div>
       <div style={{padding:"9px 2px 0"}}>
         <p className="tcard-title">{movie.title}</p>
@@ -528,10 +528,10 @@ function HeroSlide({ movie, active, dots, strip }) {
 
           {/* Buttons */}
           <div className="hh-btns">
-            {movie.media?.trailer?.ytId && (
+            {movie.media?.videos?.[0]?.ytId && (
               <button className="hh-btn-play"
                 onClick={() => navigate(`/movie/${movie._id}`, { state:{ scrollTo:"trailer" } })}>
-                ▶ Watch Trailer
+                ▶ Watch {movie.media?.videos?.[0]?.type || "Trailer"}
               </button>
             )}
             <button className="hh-btn-info"

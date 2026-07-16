@@ -100,7 +100,7 @@ export default function AddMovie({ production, onToast }) {
   // ── Step 0: Basic ──
   const [form, setForm] = useState({
     title:"", category:"Feature Film", genre:[], releaseDate:"",
-    releaseTBA:false, language:"Odia", budget:"", synopsis:"", posterUrl:"", thumbnailUrl:"",
+    releaseTBA:false, isReRelease:false, reReleaseDate:"", language:"Odia", budget:"", synopsis:"", posterUrl:"", thumbnailUrl:"",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x=>x!==g) : [...form.genre, g]);
@@ -121,7 +121,8 @@ export default function AddMovie({ production, onToast }) {
   const collabTimer = useRef(null);
 
   // ── Step 3: Media ──
-  const [trailerUrl, setTrailerUrl] = useState("");
+  const [videos, setVideos] = useState([]);
+  const [vf, setVf] = useState({ url: "", type: "Trailer" });
   const [songs,      setSongs]      = useState([]);
   const [sf, setSf] = useState({ url:"", title:"", singer:"", thumb:"" });
 
@@ -242,7 +243,7 @@ export default function AddMovie({ production, onToast }) {
         bio:    String(c.bio   || ""),
       }));
 
-      const trailerYtId = extractYtId(trailerUrl);
+
 
       const body = {
         title:        String(form.title).trim(),
@@ -250,6 +251,8 @@ export default function AddMovie({ production, onToast }) {
         genre:        [...(form.genre         || [])],
         releaseDate:  form.releaseTBA ? "" : String(form.releaseDate || ""),
         releaseTBA:   !!form.releaseTBA,
+        isReRelease:  !!form.isReRelease,
+        reReleaseDate:form.isReRelease ? String(form.reReleaseDate || "") : "",
         language:     String(form.language    || "Odia"),
         budget:       String(form.budget      || ""),
         synopsis:     String(form.synopsis    || ""),
@@ -257,7 +260,12 @@ export default function AddMovie({ production, onToast }) {
         thumbnailUrl: String(form.thumbnailUrl || ""),
         cast: castPayload,
         media: {
-          trailer: trailerYtId ? { ytId: trailerYtId } : {},
+          videos: videos.map(v => ({
+            ytId: v.ytId,
+            url: v.url,
+            thumbnailUrl: v.thumbnailUrl,
+            type: v.type,
+          })),
           songs: songs.map(s => ({
             title:        String(s.title        || ""),
             singer:       String(s.singer       || ""),
@@ -328,6 +336,12 @@ export default function AddMovie({ production, onToast }) {
                 <label style={{ marginTop:6, display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", color:"var(--muted)", cursor:"pointer" }}>
                   <input type="checkbox" checked={form.releaseTBA} onChange={e=>set("releaseTBA",e.target.checked)} /> TBA
                 </label>
+                <label style={{ marginTop:12, display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", color:"var(--muted)", cursor:"pointer" }}>
+                  <input type="checkbox" checked={form.isReRelease} onChange={e=>set("isReRelease",e.target.checked)} /> Mark as Re-Release
+                </label>
+                {form.isReRelease && (
+                  <input className="form-input" type="date" style={{ marginTop:6 }} value={form.reReleaseDate} onChange={e=>set("reReleaseDate",e.target.value)} />
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Budget</label>
@@ -513,16 +527,48 @@ export default function AddMovie({ production, onToast }) {
         {/* ════ STEP 3 — Media ════ */}
         {step === 3 && (
           <>
-            <div className="form-group">
-              <label className="form-label">Trailer (YouTube URL or ID)</label>
-              <input className="form-input" value={trailerUrl} onChange={e=>setTrailerUrl(e.target.value)} placeholder="e.g. https://youtube.com/watch?v=dQw4w9WgXcQ" />
-              {trailerYtIdPreview && (
-                <div style={{ marginTop:10, maxWidth:420, position:"relative", paddingBottom:"56.25%", height:0, overflow:"hidden", borderRadius:6 }}>
-                  <iframe src={`https://www.youtube.com/embed/${trailerYtIdPreview}`} allowFullScreen title="Trailer preview"
-                    style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%" }} />
-                </div>
-              )}
+            <label className="form-label">Promotional Videos</label>
+            <div style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, padding:"14px 16px", marginBottom:16 }}>
+              <div className="form-group" style={{ marginBottom:10 }}>
+                <label className="form-label">Video Type</label>
+                <select className="form-select" value={vf.type} onChange={e=>setVf({...vf, type: e.target.value})} style={{ marginBottom: 12, width: '100%' }}>
+                  <option value="Trailer">Trailer</option>
+                  <option value="Teaser">Teaser</option>
+                  <option value="Glimpse">Glimpse</option>
+                  <option value="First Look">First Look</option>
+                  <option value="Motion Poster">Motion Poster</option>
+                </select>
+                <label className="form-label">Video URL (YouTube URL or ID)</label>
+                <input className="form-input" value={vf.url} onChange={e=>setVf({...vf, url: e.target.value})} placeholder="e.g. https://youtube.com/watch?v=dQw4w9WgXcQ" />
+                {extractYtId(vf.url) && (
+                  <div style={{ marginTop:10, maxWidth:420, position:"relative", paddingBottom:"56.25%", height:0, overflow:"hidden", borderRadius:6 }}>
+                    <iframe src={`https://www.youtube.com/embed/${extractYtId(vf.url)}`} allowFullScreen title="Preview"
+                      style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%" }} />
+                  </div>
+                )}
+              </div>
+              <button type="button" className="btn btn-gold btn-sm" onClick={() => {
+                if (!vf.url.trim()) return;
+                const vid = extractYtId(vf.url);
+                setVideos(p => [...p, { ytId: vid, url: vf.url, thumbnailUrl: vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : "", type: vf.type }]);
+                setVf({ url: "", type: "Trailer" });
+              }} disabled={!vf.url.trim()}>+ Add Video</button>
             </div>
+            {videos.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+                {videos.map((v, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg3)", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}>
+                    {v.thumbnailUrl
+                      ? <img src={v.thumbnailUrl} alt={v.type} style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} onError={e => e.target.style.opacity = "0.2"} />
+                      : <div style={{ width: 64, height: 36, background: "var(--bg2)", borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>▶</div>}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.84rem" }}>{v.type}</div>
+                    </div>
+                    <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--red)", fontSize: "0.7rem", padding: "4px 8px" }} onClick={() => setVideos(p => p.filter((_, idx) => idx !== i))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <hr className="divider" />
             <label className="form-label">Songs</label>
             <div style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, padding:"14px 16px", marginBottom:16 }}>
@@ -600,7 +646,7 @@ export default function AddMovie({ production, onToast }) {
                 ["  Linked",      String(cast.filter(c=>!c.isNew).length)],
                 ["Collaborators", collabs.length===0?"None":collabs.map(c=>c.name).join(", ")],
                 ["Songs",         String(songs.length)],
-                ["Trailer",       trailerUrl?"✓ Added":"—"],
+                ["Videos",       String(videos.length)],
               ].map(([label, value]) => (
                 <div key={label} style={{ display:"flex", gap:16, padding:"9px 0", borderBottom:"1px solid var(--border)" }}>
                   <span style={{ color:"var(--muted)", fontSize:"0.76rem", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", width:160, flexShrink:0 }}>{label}</span>

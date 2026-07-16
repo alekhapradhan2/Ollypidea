@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
+import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { API, getAdminToken } from "../api/api";
 
@@ -10,6 +10,7 @@ const MergePanel = lazy(() => import("./MergePanel"));
 const AutoIndexPanel = lazy(() => import("./AutoIndexPanel"));
 const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
 const PosterGeneratorPanel = lazy(() => import("./PosterGeneratorPanel"));
+const ModelBlogPanel = lazy(() => import("./ModelBlogPanel"));
 
 
 
@@ -488,6 +489,8 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     genre: initial?.genre || [],
     releaseDate: initial?.releaseDate || "",
     releaseTBA: initial?.releaseTBA || false,
+    isReRelease: initial?.isReRelease || false,
+    reReleaseDate: initial?.reReleaseDate || "",
     language: initial?.language || "Odia",
     budget: initial?.budget || "",
     synopsis: initial?.synopsis || "",
@@ -502,9 +505,14 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     bannerUrl: initial?.bannerUrl || "",
     boxOffice: initial?.boxOffice || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
     trivia: initial?.trivia || [],
-    streamingOn: initial?.streamingOn || "",
-    streamingUrl: initial?.streamingUrl || "",
-    ottReleaseDate: initial?.ottReleaseDate || "",
+    trivia: initial?.trivia || [],
+    streamingOn: initial?.streamingOn || initial?.ott?.platform || "",
+    streamingUrl: initial?.streamingUrl || initial?.ott?.watchUrl || "",
+    ottReleaseDate: initial?.ottReleaseDate || initial?.ott?.releaseDate || "",
+    ott: initial?.ott || {
+      platform: "", releaseDate: "", status: "Upcoming", watchUrl: "", posterUrl: "",
+      languages: [], subtitles: [], runtime: "", quality: "", countries: []
+    },
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x => x !== g) : [...form.genre, g]);
@@ -555,13 +563,13 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     })
   );
 
-  const [trailerUrl, setTrailerUrl] = useState(
-    initial?.media?.trailer?.url || (initial?.media?.trailer?.ytId ? `https://youtube.com/watch?v=${initial.media.trailer.ytId}` : "")
-  );
+  const [videos, setVideos] = useState(initial?.media?.videos || []);
+  const EMPTY_VF = { url: "", type: "Trailer" };
+  const [vf, setVf] = useState(EMPTY_VF);
   const [songs, setSongs] = useState(initial?.media?.songs || []);
   const EMPTY_SF = { url: "", title: "", singer: "", singerRef: [], musicDirector: "", musicDirectorRef: [], lyricist: "", lyricistRef: [], description: "", lyrics: "" };
   const [sf, setSf] = useState(EMPTY_SF);
-  const trailerPreview = extractYtId(trailerUrl);
+
 
   const handleSongAdd = () => {
     if (!sf.title.trim()) return;
@@ -576,6 +584,17 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     setSf(EMPTY_SF);
   };
 
+  const handleVideoAdd = () => {
+    if (!vf.url.trim()) return;
+    const vid = extractYtId(vf.url);
+    setVideos(p => [...p, {
+      ytId: vid, url: vf.url.trim(),
+      thumbnailUrl: vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : "",
+      type: vf.type
+    }]);
+    setVf(EMPTY_VF);
+  };
+
   const handleSubmit = () => {
     const castPayload = cast
       .filter(c => c.name.trim())
@@ -585,13 +604,15 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
         }
         return { isNew: true, name: c.name, type: c.type || "Actor", role: c.role || "", photo: c.photo || "", bio: c.bio || "" };
       });
-    const trailerYtId = extractYtId(trailerUrl);
+
     onSave({
       title: form.title,
       category: form.category,
       genre: form.genre,
-      releaseDate: form.releaseDate,
+      releaseDate: form.releaseTBA ? "" : form.releaseDate,
       releaseTBA: form.releaseTBA,
+      isReRelease: form.isReRelease,
+      reReleaseDate: form.isReRelease ? form.reReleaseDate : "",
       language: form.language,
       budget: form.budget,
       synopsis: form.synopsis,
@@ -609,9 +630,21 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       streamingOn: form.streamingOn,
       streamingUrl: form.streamingUrl,
       ottReleaseDate: form.ottReleaseDate,
+      ott: {
+        platform: form.streamingOn,
+        releaseDate: form.ottReleaseDate,
+        status: (form.ottReleaseDate && form.ottReleaseDate !== "TBA" && new Date(form.ottReleaseDate) <= new Date()) ? "Streaming" : "Upcoming",
+        watchUrl: form.streamingUrl,
+        posterUrl: form.ott?.posterUrl || "",
+        languages: typeof form.ott?.languages === "string" ? form.ott.languages.split(",").map(x=>x.trim()).filter(Boolean) : form.ott?.languages || [],
+        subtitles: typeof form.ott?.subtitles === "string" ? form.ott.subtitles.split(",").map(x=>x.trim()).filter(Boolean) : form.ott?.subtitles || [],
+        runtime: form.ott?.runtime || "",
+        quality: form.ott?.quality || "",
+        countries: typeof form.ott?.countries === "string" ? form.ott.countries.split(",").map(x=>x.trim()).filter(Boolean) : form.ott?.countries || []
+      },
       productions: productions.map(p => String(p._id)).filter(isOid),
       cast: castPayload,
-      media: { trailer: trailerYtId ? { ytId: trailerYtId, url: trailerUrl } : (initial?.media?.trailer || {}), songs },
+      media: { videos, songs },
     });
   };
 
@@ -675,6 +708,12 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
               <label style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }}>
                 <input type="checkbox" checked={form.releaseTBA} onChange={e => set("releaseTBA", e.target.checked)} /> TBA
               </label>
+              <label style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }}>
+                <input type="checkbox" checked={form.isReRelease} onChange={e => set("isReRelease", e.target.checked)} /> Mark as Re-Release
+              </label>
+              {form.isReRelease && (
+                <input className="form-input" type="date" style={{ marginTop: 6 }} value={form.reReleaseDate} onChange={e => set("reReleaseDate", e.target.value)} />
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Budget</label>
@@ -826,41 +865,49 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
                     — when it streams; leave blank if unknown
                   </span>
                 </label>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <input
-                    className="form-input"
-                    type="date"
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <input type="date" className="form-input"
+                    style={{ flex: 1 }}
                     value={form.ottReleaseDate === "TBA" ? "" : form.ottReleaseDate}
                     onChange={e => set("ottReleaseDate", e.target.value)}
                     disabled={form.ottReleaseDate === "TBA"}
-                    style={{ flex: 1, minWidth: 140 }}
                   />
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", color: "var(--muted)", cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <input
-                      type="checkbox"
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }}>
+                    <input type="checkbox"
                       checked={form.ottReleaseDate === "TBA"}
                       onChange={e => set("ottReleaseDate", e.target.checked ? "TBA" : "")}
                     />
-                    TBA (announced, date unknown)
+                    TBA
                   </label>
                 </div>
-                {/* Smart status preview */}
                 {form.ottReleaseDate && (
-                  <div style={{
-                    marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.75rem", padding: "4px 12px", borderRadius: 20, fontWeight: 700,
-                    ...(form.ottReleaseDate === "TBA"
-                      ? { background: "rgba(201,151,58,0.12)", color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)" }
-                      : new Date(form.ottReleaseDate) <= new Date()
-                        ? { background: "rgba(76,175,130,0.12)", color: "#4caf82", border: "1px solid rgba(76,175,130,0.3)" }
-                        : { background: "rgba(99,179,237,0.12)", color: "#63b3ed", border: "1px solid rgba(99,179,237,0.3)" })
-                  }}>
+                  <div style={{ fontSize: "0.75rem", color: "var(--gold)", marginTop: 6 }}>
                     {form.ottReleaseDate === "TBA"
-                      ? "🕐 Will show: Coming Soon (TBA)"
+                      ? "📅 Will show: Coming Soon"
                       : new Date(form.ottReleaseDate) <= new Date()
-                        ? "✅ Will show: Available Now"
+                        ? `✅ Streaming since: ${new Date(form.ottReleaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`
                         : `📅 Will show: Coming ${new Date(form.ottReleaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
                   </div>
                 )}
+              </div>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="form-group">
+                  <label className="form-label">Streaming Languages <span style={{ color: "var(--muted)", fontWeight: 400 }}>(comma separated)</span></label>
+                  <input className="form-input" value={typeof form.ott?.languages === "string" ? form.ott.languages : (form.ott?.languages||[]).join(", ")} onChange={e => set("ott", { ...form.ott, languages: e.target.value })} placeholder="Odia, Hindi" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Subtitles <span style={{ color: "var(--muted)", fontWeight: 400 }}>(comma separated)</span></label>
+                  <input className="form-input" value={typeof form.ott?.subtitles === "string" ? form.ott.subtitles : (form.ott?.subtitles||[]).join(", ")} onChange={e => set("ott", { ...form.ott, subtitles: e.target.value })} placeholder="English, Odia" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">OTT Runtime</label>
+                  <input className="form-input" value={form.ott?.runtime || ""} onChange={e => set("ott", { ...form.ott, runtime: e.target.value })} placeholder="142 min" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Video Quality</label>
+                  <input className="form-input" value={form.ott?.quality || ""} onChange={e => set("ott", { ...form.ott, quality: e.target.value })} placeholder="4K HDR, 1080p" />
+                </div>
               </div>
             </>
           )}
@@ -874,16 +921,43 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       {/* STEP 2 — Media */}
       {step === 2 && (
         <>
-          <div className="form-group">
-            <label className="form-label">Trailer (YouTube URL or ID)</label>
-            <input className="form-input" value={trailerUrl} onChange={e => setTrailerUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" />
-            {trailerPreview && (
-              <div style={{ marginTop: 10, maxWidth: 380, position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: 6 }}>
-                <iframe src={`https://www.youtube.com/embed/${trailerPreview}`} allowFullScreen title="Trailer"
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} />
-              </div>
-            )}
+          <label className="form-label">Promotional Videos</label>
+          <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
+            <div className="form-group" style={{ marginBottom: 8 }}>
+              <label className="form-label">Video Type</label>
+              <select className="form-select" value={vf.type} onChange={e => setVf(f => ({ ...f, type: e.target.value }))} style={{ marginBottom: 12, width: '100%' }}>
+                <option value="Trailer">Trailer</option>
+                <option value="Teaser">Teaser</option>
+                <option value="Glimpse">Glimpse</option>
+                <option value="First Look">First Look</option>
+                <option value="Motion Poster">Motion Poster</option>
+              </select>
+              <label className="form-label">Video URL (YouTube URL or ID)</label>
+              <input className="form-input" value={vf.url} onChange={e => setVf(f => ({ ...f, url: e.target.value }))} placeholder="https://youtube.com/watch?v=…" />
+              {extractYtId(vf.url) && (
+                <div style={{ marginTop: 10, maxWidth: 380, position: "relative", paddingBottom: "56.25%", height: 0, overflow: "hidden", borderRadius: 6 }}>
+                  <iframe src={`https://www.youtube.com/embed/${extractYtId(vf.url)}`} allowFullScreen title="Preview"
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} />
+                </div>
+              )}
+            </div>
+            <button type="button" className="btn btn-gold btn-sm" onClick={handleVideoAdd} disabled={!vf.url.trim()}>+ Add Video</button>
           </div>
+          {videos.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+              {videos.map((v, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg3)", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}>
+                  {v.thumbnailUrl
+                    ? <img src={v.thumbnailUrl} alt={v.type} style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} onError={e => e.target.style.opacity = "0.2"} />
+                    : <div style={{ width: 64, height: 36, background: "var(--bg2)", borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>▶</div>}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.84rem" }}>{v.type}</div>
+                  </div>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ color: "var(--red)", fontSize: "0.7rem", padding: "4px 8px" }} onClick={() => setVideos(p => p.filter((_, idx) => idx !== i))}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
           <hr className="divider" />
           <label className="form-label">Songs</label>
           <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "14px 16px", marginBottom: 14 }}>
@@ -945,12 +1019,14 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           {form.posterUrl && <img src={form.posterUrl} alt="poster" style={{ height: 90, borderRadius: 5, border: "1px solid var(--border)", marginBottom: 16, objectFit: "cover" }} onError={e => e.target.style.display = "none"} />}
           {[
             ["Title", form.title || "—"], ["Category", form.category], ["Language", form.language],
-            ["Release", form.releaseTBA ? "TBA" : form.releaseDate || "—"], ["Budget", form.budget || "—"],
+            ["Release", form.releaseTBA ? "TBA" : form.releaseDate || "—"],
+            ["Re-Release", form.isReRelease ? form.reReleaseDate || "—" : "—"],
+            ["Budget", form.budget || "—"],
             ["Verdict", form.verdict], ["Runtime", form.runtime || "—"],
             ["Genres", form.genre.join(", ") || "—"],
             ["Productions", productions.map(p => p.name).join(", ") || "None"],
             ["Cast count", String(cast.length)], ["Songs", String(songs.length)],
-            ["Trailer", extractYtId(trailerUrl) ? "✓ Added" : "—"],
+            ["Videos", String(videos.length)],
             ["OTT Platform", form.streamingOn || "—"],
             ["OTT Release", form.ottReleaseDate || "—"],
           ].map(([label, value]) => (
@@ -2663,6 +2739,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
             ["productions", "🎥", "Productions"],
             ["news", "📰", "News"],
             ["blog", "✍️", "Blog"],
+            ["modelblog", "🤖", "Model Blog"],
             ["boxoffice", "📊", "Box Office"],
             ["tracker", "🎟", "BMS Tracker"],
             ["sacnilk", "🕷️ Sacnilk"],
@@ -3244,6 +3321,12 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {tab === "blog" && (
                 <Suspense fallback={<Spinner />}>
                   <BlogGenerator movies={movies} cast={cast} onToast={onToast} />
+                </Suspense>
+              )}
+              {/* ── MODEL BLOG ── */}
+              {tab === "modelblog" && (
+                <Suspense fallback={<Spinner />}>
+                  <ModelBlogPanel movies={movies} onToast={onToast} />
                 </Suspense>
               )}
               {/* ── BOX OFFICE ── */}

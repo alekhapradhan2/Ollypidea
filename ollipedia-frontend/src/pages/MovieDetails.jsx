@@ -203,7 +203,7 @@ function HomeRow({ title, tag, children }) {
 
 // ── Mini movie card ───────────────────────────────────────
 function MiniMovieCard({ movie, onClick }) {
-  const img = movie.posterUrl || movie.thumbnailUrl || ytThumb(movie.media?.trailer?.ytId);
+  const img = movie.posterUrl || movie.thumbnailUrl || ytThumb(movie.media?.videos?.[0]?.ytId);
   const verdict = movie.verdict || "Upcoming";
   const color = VERDICT_COLOR[verdict] || "#7aaae8";
   return (
@@ -643,6 +643,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
   const [addSongModal, setAddSongModal] = useState(false);
   const [editTrailer,  setEditTrailer]  = useState(false);
   const [trailerInput, setTrailerInput] = useState("");
+  const [trailerTypeInput, setTrailerTypeInput] = useState("Trailer");
   const [savingTrailer, setSavingTrailer] = useState(false);
   const [rvUser,    setRvUser]    = useState("");
   const [rvRating,  setRvRating]  = useState(0);   // 0 = not chosen yet
@@ -670,6 +671,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         setEditForm({...m});
         setBoForm({...(m.boxOffice||{}), verdict: m.verdict});
         setTrailerInput(m.media?.trailer?.ytId||"");
+        setTrailerTypeInput(m.media?.trailer?.type||"Trailer");
         setLoading(false);
         // Defer allMovies via cache — instant if already loaded from another page
         const tid = typeof requestIdleCallback !== "undefined"
@@ -712,6 +714,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
       const up = await API.updateMovie(id,{
         title:editForm.title, category:editForm.category, genre:editForm.genre,
         releaseDate:editForm.releaseDate, releaseTBA:editForm.releaseTBA,
+        isReRelease:editForm.isReRelease, reReleaseDate:editForm.reReleaseDate,
         director:editForm.director, producer:editForm.producer,
         budget:editForm.budget, language:editForm.language,
         synopsis:editForm.synopsis, posterUrl:editForm.posterUrl,
@@ -734,7 +737,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
   const saveTrailer = async () => {
     setSavingTrailer(true);
-    try { const up = await API.updateTrailer(id,{ytId:trailerInput.trim()}); setMovie(m=>({...m,media:{...m.media,trailer:{ytId:trailerInput.trim()}}})); setEditTrailer(false); onToast&&onToast("Trailer updated!"); }
+    try { const up = await API.updateTrailer(id,{ytId:trailerInput.trim(), type:trailerTypeInput}); setMovie(m=>({...m,media:{...m.media,trailer:{ytId:trailerInput.trim(), type:trailerTypeInput}}})); setEditTrailer(false); onToast&&onToast("Video updated!"); }
     catch(e) { onToast&&onToast(typeof e==="string"?e:"Save failed","error"); }
     finally { setSavingTrailer(false); }
   };
@@ -848,7 +851,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
   const actors = (movie.cast||[]).filter(c=>!["Director","Producer","Music Director","Cinematographer","Choreographer","Lyricist"].includes(c.type));
 
   // Banner = thumbnailUrl > posterUrl > ytThumb
-  const bannerImg = movie.thumbnailUrl || ytThumb(movie.media?.trailer?.ytId) || movie.posterUrl;
+  const bannerImg = movie.thumbnailUrl || ytThumb(movie.media?.videos?.[0]?.ytId) || movie.posterUrl;
   const verdictColor = VERDICT_COLOR[movie.verdict] || "#7aaae8";
 
   // Related movies — same genre or same director, exclude self
@@ -877,7 +880,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
         {movie.posterUrl && <img src={movie.posterUrl} alt={movie.title} className="md-mini-poster" onError={e=>e.target.style.display="none"}/>}
         <span className="md-mini-title">{movie.title}</span>
         {movie.verdict && <span className="md-mini-verdict" style={{background:`${verdictColor}22`,border:`1px solid ${verdictColor}`,color:verdictColor}}>{movie.verdict}</span>}
-        {movie.media?.trailer?.ytId && (
+        {movie.media?.videos?.[0]?.ytId && (
           <button className="md-btn-play" style={{padding:"6px 14px",fontSize:".75rem"}} onClick={()=>{setTab("overview");setTimeout(()=>trailerRef.current?.scrollIntoView({behavior:"smooth",block:"center"}),200);}}>▶ Trailer</button>
         )}
         <button className={`md-wl-btn${watchlisted?" active":""}`} style={{padding:"6px 12px",fontSize:".75rem"}} onClick={toggleWatchlist}>{watchlisted?"✓ Saved":"+ Watchlist"}</button>
@@ -892,7 +895,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           "contentRating":movie.contentRating,"genre":movie.genre,
           "inLanguage":movie.language||"or",
           "aggregateRating":movie.reviews?.length?{"@type":"AggregateRating","ratingValue":(movie.reviews.reduce((s,r)=>s+(r.rating||0),0)/movie.reviews.length).toFixed(1),"reviewCount":movie.reviews.length,"bestRating":"5","worstRating":"1"}:undefined,
-          "trailer":movie.media?.trailer?.ytId?{"@type":"VideoObject","name":movie.title+" Trailer","embedUrl":"https://www.youtube.com/embed/"+movie.media.trailer.ytId}:undefined,
+          "trailer":movie.media?.videos?.[0]?.ytId?{"@type":"VideoObject","name":movie.title+" Trailer","embedUrl":"https://www.youtube.com/embed/"+movie.media.videos?.[0]?.ytId}:undefined,
         })}</script>}
       </Helmet>
 
@@ -1395,6 +1398,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             <div className="md-meta-row">
               {movie.director  && <span>🎬 {movie.director}</span>}
               {(movie.releaseDate||movie.releaseTBA) && <span>🗓 {movie.releaseTBA?"TBA":fmtDate(movie.releaseDate)}</span>}
+              {movie.isReRelease && movie.reReleaseDate && <span>🔄 Re-Release: {fmtDate(movie.reReleaseDate)}</span>}
               {movie.runtime   && <span>⏱ {movie.runtime}</span>}
               {movie.budget    && <span>💰 {movie.budget}</span>}
               {movie.imdbRating && <span><span style={{color:"#f5c518",fontWeight:700,fontSize:".7rem"}}>IMDb</span> {movie.imdbRating}</span>}
@@ -1405,9 +1409,9 @@ export default function MovieDetails({ production, onToast, portalMode }) {
 
             {/* CTA buttons */}
             <div className="md-actions">
-              {movie.media?.trailer?.ytId && (
+              {movie.media?.videos?.[0]?.ytId && (
                 <button className="md-btn-play" style={{...(isBlockbuster?{boxShadow:`0 0 0 0 ${verdictColor}`}:{})}} className={`md-btn-play${isBlockbuster?" verdict-blockbuster-pulse":""}`}
-                  onClick={() => { setTab("overview"); setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200); }}>▶ Watch Trailer</button>
+                  onClick={() => { setTab("overview"); setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200); }}>▶ Watch {movie.media?.videos?.[0]?.type || "Trailer"}</button>
               )}
               <button className="md-btn-outline" onClick={() => setTab("cast")}>👥 Cast</button>
               <button className="md-btn-outline" onClick={() => setTab("media")}>🎵 Songs</button>
@@ -1656,11 +1660,11 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             )}
 
             {/* Trailer */}
-            {movie.media?.trailer?.ytId && (
+            {movie.media?.videos?.[0]?.ytId && (
               <div style={{ marginBottom:28 }}>
-                <p className="md-sec-label">Official Trailer</p>
+                <p className="md-sec-label">{movie.media?.videos?.[0]?.type ? `Official ${movie.media.videos?.[0]?.type}` : "Official Trailer"}</p>
                 <div ref={trailerRef} className="md-trailer">
-                  <iframe src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`}
+                  <iframe src={`https://www.youtube.com/embed/${movie.media.videos?.[0]?.ytId}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen title="Trailer" />
                 </div>
@@ -1700,6 +1704,12 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 <label style={{marginTop:6,display:"flex",alignItems:"center",gap:6,fontSize:"0.8rem",color:"var(--muted)",cursor:"pointer"}}>
                   <input type="checkbox" checked={!!editForm.releaseTBA} onChange={e=>setE("releaseTBA",e.target.checked)} /> TBA
                 </label>
+                <label style={{marginTop:12,display:"flex",alignItems:"center",gap:6,fontSize:"0.8rem",color:"var(--muted)",cursor:"pointer"}}>
+                  <input type="checkbox" checked={!!editForm.isReRelease} onChange={e=>setE("isReRelease",e.target.checked)} /> Mark as Re-Release
+                </label>
+                {!!editForm.isReRelease && (
+                  <input className="form-input" type="date" style={{marginTop:6}} value={editForm.reReleaseDate||""} onChange={e=>setE("reReleaseDate",e.target.value)} />
+                )}
               </div>
             </div>
             <div className="form-grid">
@@ -1796,20 +1806,26 @@ export default function MovieDetails({ production, onToast, portalMode }) {
           <div>
             {isOwner && (
               <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:20, gap:10 }}>
-                <button className="btn btn-outline btn-sm" onClick={() => setEditTrailer(true)}>🎬 Edit Trailer</button>
+                <button className="btn btn-outline btn-sm" onClick={() => setEditTrailer(true)}>🎬 Edit Video</button>
                 <button className="btn btn-gold btn-sm" onClick={() => setAddSongModal(true)}>+ Add Song</button>
               </div>
             )}
-            {movie.media?.trailer?.ytId && (
+            {movie.media?.videos?.[0]?.ytId && (
               <div style={{ marginBottom:36 }}>
-                <p className="md-sec-label">Official Trailer</p>
+                <p className="md-sec-label">{movie.media?.videos?.[0]?.type ? `Official ${movie.media.videos?.[0]?.type}` : "Official Trailer"}</p>
                 <div ref={trailerRef} className="md-trailer">
-                  <iframe src={`https://www.youtube.com/embed/${movie.media.trailer.ytId}`}
+                  <iframe src={`https://www.youtube.com/embed/${movie.media.videos?.[0]?.ytId}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen title="Trailer" />
                 </div>
                 {editTrailer && (
                   <div style={{ display:"flex", gap:10, marginTop:12, flexWrap:"wrap" }}>
+                    <select className="form-select" value={trailerTypeInput} onChange={e=>setTrailerTypeInput(e.target.value)} style={{ minWidth:120 }}>
+                      <option value="Trailer">Trailer</option>
+                      <option value="Teaser">Teaser</option>
+                      <option value="Glimpse">Glimpse</option>
+                      <option value="First Look">First Look</option>
+                    </select>
                     <input className="form-input" value={trailerInput} onChange={e=>setTrailerInput(e.target.value)} placeholder="YouTube ID or URL" style={{ flex:1, minWidth:200 }} />
                     <button className="btn btn-gold btn-sm" onClick={saveTrailer} disabled={savingTrailer}>{savingTrailer?"Saving…":"Save"}</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => setEditTrailer(false)}>Cancel</button>
@@ -1842,7 +1858,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                 </div>
               </div>
             )}
-            {!movie.media?.trailer?.ytId && !movie.media?.songs?.length && (
+            {!movie.media?.videos?.[0]?.ytId && !movie.media?.songs?.length && (
               <div className="md-empty"><span style={{fontSize:"2.5rem"}}>🎵</span><p>No media added yet.</p></div>
             )}
           </div>

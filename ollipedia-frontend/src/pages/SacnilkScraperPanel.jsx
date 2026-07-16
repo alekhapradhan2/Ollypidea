@@ -116,7 +116,7 @@ const Divider = ({ label }) => (
 );
 
 // ── Confirm Dialog ────────────────────────────────────
-function ConfirmDialog({ title, message, onConfirm, onCancel, confirmLabel = "Confirm", confirmColor = "var(--red)", icon = "⚠️" }) {
+function ConfirmDialog({ title, message, onConfirm, onCancel, confirmLabel = "Confirm", confirmColor = "var(--red)", icon = "⚠️", cancelLabel = "Cancel", extraButton = null }) {
   return (
     <div
       onClick={onCancel}
@@ -137,12 +137,18 @@ function ConfirmDialog({ title, message, onConfirm, onCancel, confirmLabel = "Co
       >
         <div style={{ fontSize: "2rem", marginBottom: 10 }}>{icon}</div>
         <div style={{ fontWeight: 800, fontSize: "1rem", marginBottom: 8 }}>{title}</div>
-        <p style={{ color: "var(--muted)", fontSize: "0.84rem", lineHeight: 1.6, marginBottom: 22 }}>{message}</p>
+        <p style={{ color: "var(--muted)", fontSize: "0.84rem", lineHeight: 1.6, marginBottom: 22, whiteSpace: "pre-wrap" }}>{message}</p>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          {extraButton && (
+            <button
+              onClick={extraButton.onClick}
+              style={{ padding: "8px 20px", borderRadius: 9, background: extraButton.color || "var(--bg3)", border: "none", color: "#fff", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700 }}
+            >{extraButton.label}</button>
+          )}
           <button
             onClick={onCancel}
             style={{ padding: "8px 18px", borderRadius: 9, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text)", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600 }}
-          >Cancel</button>
+          >{cancelLabel}</button>
           <button
             onClick={onConfirm}
             style={{ padding: "8px 20px", borderRadius: 9, background: confirmColor, border: "none", color: "#fff", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700 }}
@@ -380,6 +386,8 @@ export default function SacnilkScraperPanel({ movies = [], onToast: parentToast 
   const [scrapingAll,  setScrapingAll]  = useState(false);
   const [logs,         setLogs]         = useState({});
   const [editUrl,      setEditUrl]      = useState({});
+  const [blogDraft,    setBlogDraft]    = useState(null);
+  const [generatingBlog, setGeneratingBlog] = useState({});
 
   // search & staging
   const [query,        setQuery]        = useState("");
@@ -540,15 +548,35 @@ export default function SacnilkScraperPanel({ movies = [], onToast: parentToast 
   // ── Stop tracking (pause, keep history) ─────────────
   const stopTracking = (movieId, title) => {
     setConfirm({
-      title: "Stop Tracking",
-      message: `Stop scheduled scraping for "${title}"? Existing box-office data and logs are kept. You can re-activate at any time.`,
+      title: "Stop Scraping?",
+      message: `Do you also want to generate the Final Box Office Analysis Blog for this movie?\n\nThis will create a comprehensive SEO-optimized article using the complete day-wise box office data stored in the database.`,
       icon: "⏸",
-      confirmLabel: "Stop Tracking",
-      confirmColor: "#888",
+      cancelLabel: "Cancel",
+      confirmLabel: "Yes, Generate Blog",
+      confirmColor: "#4caf82",
+      extraButton: {
+        label: "No, Just Stop",
+        color: "#888",
+        onClick: async () => {
+          setConfirm(null);
+          await saveConfig(movieId, { active: false });
+          addToast(`Tracking paused for "${title}"`, "warn");
+        }
+      },
       onConfirm: async () => {
         setConfirm(null);
         await saveConfig(movieId, { active: false });
         addToast(`Tracking paused for "${title}"`, "warn");
+        
+        setGeneratingBlog((p) => ({ ...p, [movieId]: true }));
+        try {
+          const draft = await API.sacnilkGenerateFinalBlogDraft(movieId);
+          setBlogDraft(draft);
+        } catch (e) {
+          addToast("Failed to generate blog: " + e.message, "error");
+        } finally {
+          setGeneratingBlog((p) => ({ ...p, [movieId]: false }));
+        }
       },
     });
   };
@@ -1168,6 +1196,80 @@ export default function SacnilkScraperPanel({ movies = [], onToast: parentToast 
           logs={logs[String(historyMovie._id)]}
           onClose={() => setHistoryMovie(null)}
         />
+      )}
+
+      {/* ══ BLOG PREVIEW MODAL ════════════════════════════ */}
+      {blogDraft && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: "var(--bg1)", border: "1px solid var(--border)",
+              borderRadius: 16, width: "100%", maxWidth: 800,
+              maxHeight: "85vh", display: "flex", flexDirection: "column",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 800, fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
+                📝 Final Box Office Analysis Draft
+              </div>
+              <button onClick={() => setBlogDraft(null)} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "1.2rem" }}>✕</button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 700, marginBottom: 4 }}>SEO TITLE</div>
+                <div style={{ background: "var(--bg2)", padding: "10px 14px", borderRadius: 8, fontSize: "0.95rem", fontWeight: 800 }}>{blogDraft.seoTitle}</div>
+              </div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 700, marginBottom: 4 }}>URL SLUG</div>
+                  <div style={{ background: "var(--bg2)", padding: "10px 14px", borderRadius: 8, fontSize: "0.85rem", color: "#4caf82", wordBreak: "break-all" }}>{blogDraft.slug}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 700, marginBottom: 4 }}>KEYWORDS</div>
+                  <div style={{ background: "var(--bg2)", padding: "10px 14px", borderRadius: 8, fontSize: "0.8rem", color: "var(--muted)" }}>{(blogDraft.keywords || []).join(", ")}</div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 700, marginBottom: 4 }}>META DESCRIPTION</div>
+                <div style={{ background: "var(--bg2)", padding: "10px 14px", borderRadius: 8, fontSize: "0.85rem", color: "var(--text)" }}>{blogDraft.metaDescription}</div>
+              </div>
+              
+              <div style={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 700, marginBottom: 8, marginTop: 24 }}>ARTICLE PREVIEW (HTML)</div>
+              <div 
+                style={{ background: "var(--bg2)", padding: "20px 24px", borderRadius: 12, border: "1px solid var(--border)", color: "#eee", fontSize: "0.95rem" }}
+                dangerouslySetInnerHTML={{ __html: blogDraft.htmlContent }}
+              />
+            </div>
+            
+            <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", gap: 12, justifyContent: "flex-end", background: "var(--bg2)", borderRadius: "0 0 16px 16px" }}>
+              <button
+                onClick={() => setBlogDraft(null)}
+                style={{ padding: "9px 20px", borderRadius: 9, background: "var(--bg3)", border: "1px solid var(--border)", color: "var(--text)", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+              >Discard</button>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await API.sacnilkPublishFinalBlog(blogDraft.movieId, blogDraft);
+                    addToast("Final Blog published successfully!", "success");
+                    setBlogDraft(null);
+                  } catch(e) {
+                    addToast("Failed to publish blog: " + e.message, "error");
+                  }
+                }}
+                style={{ padding: "9px 24px", borderRadius: 9, background: "#4caf82", border: "none", color: "#fff", cursor: "pointer", fontSize: "0.85rem", fontWeight: 700 }}
+              >Approve & Publish</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══ LOCAL TOASTS ════════════════════════════════ */}
