@@ -131,17 +131,45 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
         }
         if (director) movieData.director = director;
 
-        // Extract youtube trailer
+        // Extract youtube videos (Trailer, Teaser, Clip/Glimpse)
+        const tmdbVideos = [];
         if (detailData.videos && detailData.videos.results) {
-          const trailer = detailData.videos.results.find(v => v.site === "YouTube" && v.type === "Trailer");
-          if (trailer) {
-             movieData["media.videos"] = [{
-               ytId: trailer.key,
-               url: `https://www.youtube.com/watch?v=${trailer.key}`,
-               thumbnailUrl: `https://i.ytimg.com/vi/${trailer.key}/hqdefault.jpg`,
-               type: "Trailer"
-             }];
+          for (const v of detailData.videos.results) {
+            if (v.site === "YouTube") {
+              let mappedType = null;
+              if (v.type === "Trailer") mappedType = "Trailer";
+              else if (v.type === "Teaser") mappedType = "Teaser";
+              else if (v.type === "Clip" || v.type === "Featurette") mappedType = "Glimpse";
+
+              if (mappedType) {
+                tmdbVideos.push({
+                  ytId: v.key,
+                  url: `https://www.youtube.com/watch?v=${v.key}`,
+                  thumbnailUrl: `https://i.ytimg.com/vi/${v.key}/hqdefault.jpg`,
+                  type: mappedType
+                });
+              }
+            }
           }
+        }
+
+        // Merge with existing videos to prevent overwriting manual entries
+        let finalVideos = [];
+        if (existingMovie && existingMovie.media && Array.isArray(existingMovie.media.videos)) {
+          finalVideos = [...existingMovie.media.videos];
+        }
+
+        let videosAdded = false;
+        for (const tv of tmdbVideos) {
+          if (!finalVideos.some(fv => fv.ytId === tv.ytId)) {
+            finalVideos.push(tv);
+            videosAdded = true;
+          }
+        }
+
+        // Only update if we have new videos to add or it's a new movie
+        if (videosAdded || (!existingMovie && finalVideos.length > 0)) {
+          movieData["media.videos"] = finalVideos;
         }
 
         if (existingMovie) {
