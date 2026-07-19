@@ -10840,6 +10840,15 @@ Write at least 3-4 highly detailed paragraphs. Output ONLY HTML (starting with <
     res.sendFile(path.join(distPath, "index.html"));
   });
   // ════════════════════════════════════════════════════════════════════════════
+  
+  // ── TMDB Odia Movie Scraper Cron Job ──────────────────────────────────────────
+  const { runTmdbOdiaScraper } = require("./scrape_tmdb_odia");
+  
+  cron.schedule("0 3 * * *", async () => {
+    console.log("Cron: Starting daily TMDB Odia Movie Scraper...");
+    await runTmdbOdiaScraper(autoGenerateMovieDetailsBlog);
+  }, { timezone: "Asia/Kolkata" });
+  // ─────────────────────────────────────────────────────────────────────────────
 
   app.listen(process.env.PORT || 4000, () => {
     console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
