@@ -1116,7 +1116,7 @@ function buildMovieDetailsBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublis
   const toc = [
     ["Quick Facts", "quick-facts"], ["Story & Plot", "story"], ["Cast & Crew", "cast-crew"],
     ["Director's Vision", "director-vision"], hasSongs ? ["Music & Soundtrack", "music"] : null,
-    trailerId ? ["Official Trailer", "trailer"] : null,
+    sortedVideos.length > 0 ? ["Official Trailer", "video-0"] : null,
     hasBoxOffice ? ["Box Office Collection", "box-office"] : null,
     ["Where to Watch", "where-to-watch"],
     // SEO FIX: non-keyword-aligned heading replaced with a search-intent match
