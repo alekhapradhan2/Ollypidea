@@ -10859,26 +10859,7 @@ Write at least 3-4 highly detailed paragraphs. Output ONLY HTML (starting with <
   app.listen(process.env.PORT || 4000, () => {
     console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
 
-    // ── Self-ping every 13 minutes to prevent Render free-tier spin-down ──────
-    // Hits GET /api/ping — lightweight no-DB endpoint defined just above.
-    // Set SELF_URL in your Render environment variables:
-    //   SELF_URL = https://your-app-name.onrender.com
-    const SELF_URL = process.env.SELF_URL;
-    if (SELF_URL) {
-      const PING_INTERVAL_MS = 13 * 60 * 1000; // 13 minutes
-      setInterval(async () => {
-        try {
-          const res = await fetch(`${SELF_URL}/api/ping`);
-          console.log(`[Keep-Alive] Ping → ${res.status} at ${new Date().toISOString()}`);
-        } catch (e) {
-          console.warn(`[Keep-Alive] Ping failed: ${e.message}`);
-        }
-      }, PING_INTERVAL_MS);
-      console.log(`✅ Keep-alive self-ping active every 13 min → ${SELF_URL}/api/ping`);
-    } else {
-      console.log(`ℹ️  Keep-alive disabled — set SELF_URL env var to enable (e.g. https://your-app.onrender.com)`);
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+
   });
 // ── KEEP-ALIVE PATCH — replace the last app.listen() above with this ────────
 // (Already patched inline below — this comment is for reference only)
