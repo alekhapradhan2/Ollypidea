@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { API, getToken } from "../api/api";
 import { Cache } from "../api/cache";
+import { ImageUploadInput } from "../components/UI";
 
 // ── Helpers ───────────────────────────────────────────────
 function SafeImg({ src, alt, style }) {
@@ -1721,7 +1722,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               <div className="form-group"><label className="form-label">IMDb Rating</label><input className="form-input" value={editForm.imdbRating||""} onChange={e=>setE("imdbRating",e.target.value)} placeholder="7.5" /></div>
             </div>
             <div className="form-grid">
-              <div className="form-group"><label className="form-label">Poster URL</label><input className="form-input" value={editForm.posterUrl||""} onChange={e=>setE("posterUrl",e.target.value)} /></div>
+              <div className="form-group"><label className="form-label">Poster URL</label><ImageUploadInput value={editForm.posterUrl||""} onChange={v=>setE("posterUrl",v)} /></div>
               <div className="form-group"><label className="form-label">Verdict</label><select className="form-select" value={editForm.verdict||"Upcoming"} onChange={e=>setE("verdict",e.target.value)}>{VDICT.map(v=><option key={v}>{v}</option>)}</select></div>
             </div>
             <div className="form-group"><label className="form-label">Genres</label>
@@ -1732,7 +1733,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               </div>
             </div>
             <div className="form-group"><label className="form-label">Synopsis</label><textarea className="form-textarea" value={editForm.synopsis||""} onChange={e=>setE("synopsis",e.target.value)} style={{minHeight:100}} /></div>
-            <div className="form-group"><label className="form-label">Thumbnail URL</label><input className="form-input" value={editForm.thumbnailUrl||""} onChange={e=>setE("thumbnailUrl",e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Thumbnail URL</label><ImageUploadInput value={editForm.thumbnailUrl||""} onChange={v=>setE("thumbnailUrl",v)} /></div>
           </div>
         )}
 

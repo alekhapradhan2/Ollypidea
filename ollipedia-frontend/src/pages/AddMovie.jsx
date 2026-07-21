@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { API, getToken } from "../api/api";
+import { ImageUploadInput } from "../components/UI";
 
 const GENRES     = ["Action","Drama","Romance","Comedy","Thriller","Family","Historical","Devotional","Horror"];
 const CATEGORIES = ["Feature Film","Short Film","Web Series","Documentary"];
@@ -361,14 +362,14 @@ export default function AddMovie({ production, onToast }) {
             </div>
             <div className="form-group">
               <label className="form-label">Poster URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(portrait 2:3)</span></label>
-              <input className="form-input" value={form.posterUrl} onChange={e=>set("posterUrl",e.target.value)} placeholder="https://…" />
+              <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" />
               {form.posterUrl && (
                 <img src={form.posterUrl} alt="poster" style={{ marginTop:8, height:120, borderRadius:4, border:"1px solid var(--border)", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
               )}
             </div>
             <div className="form-group">
               <label className="form-label">Banner / Thumbnail URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(landscape 16:9 — homepage hero)</span></label>
-              <input className="form-input" value={form.thumbnailUrl} onChange={e=>set("thumbnailUrl",e.target.value)} placeholder="https://…" />
+              <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" />
               {form.thumbnailUrl && (
                 <img src={form.thumbnailUrl} alt="banner" style={{ marginTop:8, width:"100%", maxHeight:140, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />
               )}

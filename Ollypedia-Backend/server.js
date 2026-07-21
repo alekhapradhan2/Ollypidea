@@ -12,14 +12,10 @@ require("dotenv").config();
 const UPLOADS_DIR = path.join(__dirname, "public", "blog-uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const blogImageStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
-    const name = `blog-img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-    cb(null, name);
-  },
-});
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
+
+const blogImageStorage = multer.memoryStorage();
 const blogImageUpload = multer({
   storage: blogImageStorage,
   limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max
@@ -4529,9 +4525,19 @@ app.get("/sitemap-blogs.xml", async (req, res) => {
 // Returns { url } — a public URL the frontend inserts into the article HTML.
 app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("image"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No image file received" });
-  const SITE_URL_LOCAL = process.env.SITE_URL || `http://localhost:${process.env.PORT || 4000}`;
-  const url = `${SITE_URL_LOCAL}/blog-uploads/${req.file.filename}`;
-  res.json({ url, filename: req.file.filename });
+
+  const uploadStream = cloudinary.uploader.upload_stream(
+    { folder: "ollypedia_blog_images" },
+    (error, result) => {
+      if (error) {
+        console.error("Cloudinary Upload Error:", error);
+        return res.status(500).json({ error: "Cloudinary upload failed" });
+      }
+      res.json({ url: result.secure_url, filename: result.public_id });
+    }
+  );
+
+  streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
 });
 
 // ── AI Article Generator (uses server-side fetch → no CORS) ─────────────────

@@ -49,3 +49,43 @@ export function MovieCard({ movie, portalMode }) {
     </div>
   );
 }
+
+// ── Reusable Image Upload Input (Text + File Upload) ──
+import { getAdminToken } from "../api/api";
+export function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input" }) {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = React.useRef(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+      const res = await fetch(`${API_BASE}/admin/upload-blog-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getAdminToken()}` },
+        body: fd
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json();
+      onChange(url);
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    }
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <input type="text" className={className} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
+      <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={handleFile} />
+      <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{ padding: "8px 12px", border: "1px solid var(--border)", background: "var(--bg3)", color: "var(--text)", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+        {uploading ? "⏳ Uploading..." : "📤 Upload"}
+      </button>
+    </div>
+  );
+}

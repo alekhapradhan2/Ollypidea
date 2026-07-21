@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { API, getAdminToken } from "../api/api";
+import { ImageUploadInput } from "../components/UI";
 
 // Lazy-load heavy panel components — only fetched when the user opens that tab
 const BlogGenerator = lazy(() => import("./BlogGenerator"));
@@ -738,12 +739,12 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           </div>
           <div className="form-group">
             <label className="form-label">Poster URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(portrait 2:3)</span></label>
-            <input className="form-input" value={form.posterUrl} onChange={e => set("posterUrl", e.target.value)} placeholder="https://…" />
+            <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" />
             {form.posterUrl && <img src={form.posterUrl} alt="poster" style={{ marginTop: 8, height: 100, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }} onError={e => e.target.style.display = "none"} />}
           </div>
           <div className="form-group">
             <label className="form-label">Banner URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(16:9 landscape)</span></label>
-            <input className="form-input" value={form.thumbnailUrl} onChange={e => set("thumbnailUrl", e.target.value)} placeholder="https://…" />
+            <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" />
             {form.thumbnailUrl && <img src={form.thumbnailUrl} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
           </div>
           <div className="form-group">

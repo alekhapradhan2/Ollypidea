@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { getAdminToken } from "../api/api";
+import { ImageUploadInput } from "../components/UI";
 
 const _API_ROOT = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
 const API_BASE = _API_ROOT.endsWith("/api") ? _API_ROOT : _API_ROOT + "/api";
@@ -503,69 +504,180 @@ const CSS = `
 
 /* Uncategorized blogs list */
 .bg-uncat-list { display:flex; flex-direction:column; gap:6px; padding:14px 18px; }
+
+/* Blog Editor Inserted Image Layouts */
+.blog-image-row { display: flex; gap: 10px; margin: 15px 0; }
+.blog-image-row figure { flex: 1; min-width: 0; margin: 0; }
+.blog-image-row figure img { width: 100%; height: auto; border-radius: 6px; }
+.blog-image-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 15px 0; }
+.blog-image-grid figure { margin: 0; }
+.blog-image-grid figure img { width: 100%; height: auto; border-radius: 6px; }
+.article-inline-img { margin: 15px 0; text-align: center; }
+.article-inline-img img { max-width: 100%; height: auto; border-radius: 6px; }
 `;
 
 // ─── Spinner element ─────────────────────────────────────────────────────────
 const Spin = () => <span className="bg-spinner" />;
 
-// ─── Inline Image Uploader ───────────────────────────────────────────────────
-// Uploads a photo file → inserts a centered <figure> tag at the textarea cursor.
-function InlineImageUploader({ textareaRef, content, onChange, onToast }) {
-  const fileRef   = useRef(null);
+// ─── Drag-and-Drop Image Grid Builder ────────────────────────────────────────
+function DragDropImageGrid({ textareaRef, content, onChange, onToast }) {
+  const fileRef = useRef(null);
+  const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [layout, setLayout] = useState("auto");
+  const [imgSize, setImgSize] = useState("100%");
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
+  const handleFiles = async (files) => {
+    if (!files || files.length === 0) return;
     setUploading(true);
     try {
       const token = getAdminToken();
-      const fd    = new FormData();
-      fd.append("image", file);
-      const res = await fetch(`${API_BASE}/admin/upload-blog-image`, {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body:    fd,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Upload failed (${res.status})`);
+      const newImages = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith("image/")) continue;
+        const fd = new FormData();
+        fd.append("image", file);
+        const res = await fetch(`${API_BASE}/admin/upload-blog-image`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Upload failed (${res.status})`);
+        }
+        const { url } = await res.json();
+        const caption = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+        newImages.push({ url, caption });
       }
-      const { url } = await res.json();
-      const caption  = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
-      const imgHtml  = `\n<figure class="article-inline-img">\n  <img src="${url}" alt="${caption}" />\n  <figcaption>${caption}</figcaption>\n</figure>\n`;
-      const ta = textareaRef?.current;
-      let newContent;
-      if (ta) {
-        const start = ta.selectionStart ?? content.length;
-        const end   = ta.selectionEnd   ?? content.length;
-        newContent  = content.slice(0, start) + imgHtml + content.slice(end);
-      } else {
-        newContent = content + imgHtml;
+      setImages(prev => [...prev, ...newImages]);
+      if (newImages.length > 0) {
+        onToast(`📷 ${newImages.length} photo(s) uploaded! Choose a layout and insert.`, "success");
       }
-      onChange(newContent);
-      onToast("📷 Photo inserted into article!", "success");
     } catch (err) {
       onToast("❌ " + err.message, "error");
     }
     setUploading(false);
   };
 
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleFiles(e.dataTransfer.files);
+  };
+  
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const moveImage = (index, dir) => {
+    const newIdx = index + dir;
+    if (newIdx < 0 || newIdx >= images.length) return;
+    const newImages = [...images];
+    [newImages[index], newImages[newIdx]] = [newImages[newIdx], newImages[index]];
+    setImages(newImages);
+  };
+
+  const insertHtml = () => {
+    if (images.length === 0) return;
+    let html = "";
+    
+    // Determine layout automatically if 'auto'
+    let finalLayout = layout;
+    if (finalLayout === "auto") {
+      if (images.length === 1) finalLayout = "single";
+      else if (images.length === 2) finalLayout = "row";
+      else finalLayout = "grid";
+    }
+
+    if (finalLayout === "single") {
+      html = images.map(img => `\n<figure style="margin: 15px auto; text-align: center; max-width: ${imgSize};">\n  <img src="${img.url}" alt="${img.caption}" style="max-width: 100%; height: auto; border-radius: 6px;" />\n</figure>\n`).join("");
+    } else if (finalLayout === "row") {
+      html = `\n<div style="display: flex; gap: 10px; margin: 15px auto; max-width: ${imgSize};">\n` + images.map(img => `  <figure style="flex: 1; min-width: 0; margin: 0; text-align: center;">\n    <img src="${img.url}" alt="${img.caption}" style="width: 100%; height: auto; border-radius: 6px;" />\n  </figure>`).join("\n") + `\n</div>\n`;
+    } else {
+      html = `\n<div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 15px auto; max-width: ${imgSize};">\n` + images.map(img => `  <figure style="margin: 0; text-align: center;">\n    <img src="${img.url}" alt="${img.caption}" style="width: 100%; height: auto; border-radius: 6px;" />\n  </figure>`).join("\n") + `\n</div>\n`;
+    }
+    
+    const ta = textareaRef?.current;
+    let newContent;
+    if (ta) {
+      const start = ta.selectionStart ?? content.length;
+      const end = ta.selectionEnd ?? content.length;
+      newContent = content.slice(0, start) + html + content.slice(end);
+    } else {
+      newContent = content + html;
+    }
+    onChange(newContent);
+    onToast("✅ Image block inserted into article!", "success");
+    setImages([]);
+  };
+
   return (
-    <>
-      <input ref={fileRef} type="file" accept="image/*"
-        style={{ display:"none" }} onChange={handleFile} />
-      <button
-        className="bg-btn bg-btn-ghost"
-        style={{ fontSize:".72rem", padding:"4px 10px", borderColor:"rgba(144,202,249,.35)", color:"#90caf9" }}
-        disabled={uploading}
-        onClick={() => fileRef.current?.click()}
-        title="Upload a photo and insert it inline into the article"
+    <div style={{ marginTop: 8, marginBottom: 12, borderRadius: 8, background: "rgba(144,202,249,.06)", border: "1px dashed rgba(144,202,249,.35)" }}>
+      <div 
+        onDrop={handleDrop} 
+        onDragOver={handleDragOver}
+        onClick={() => images.length === 0 && fileRef.current?.click()}
+        style={{ padding: images.length > 0 ? "8px" : "15px", textAlign: "center", cursor: images.length === 0 ? "pointer" : "default", border: images.length === 0 ? "1px dashed transparent" : "none" }}
       >
-        {uploading ? <><Spin /> Uploading…</> : "📷 Insert Photo"}
-      </button>
-    </>
+        <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
+        
+        {images.length === 0 ? (
+          <div style={{ color: "#90caf9", fontSize: ".75rem", fontWeight: 600 }}>
+            {uploading ? <><Spin /> Uploading…</> : "📥 Drag & Drop Photos Here (or click to browse)"}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", marginBottom: 12 }}>
+              {images.map((img, i) => (
+                <div key={i} style={{ position: "relative", width: 65, height: 65 }}>
+                  <img src={img.url} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} />
+                  <div style={{ position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 2, background: "var(--bg3)", padding: 2, borderRadius: 10, border: "1px solid var(--border)", zIndex: 10 }}>
+                    <button onClick={() => moveImage(i, -1)} disabled={i === 0} style={{ background: "none", border: "none", color: i === 0 ? "var(--muted)" : "var(--text)", cursor: i === 0 ? "default" : "pointer", fontSize: 10, padding: "0 2px" }}>◀</button>
+                    <button onClick={() => moveImage(i, 1)} disabled={i === images.length - 1} style={{ background: "none", border: "none", color: i === images.length - 1 ? "var(--muted)" : "var(--text)", cursor: i === images.length - 1 ? "default" : "pointer", fontSize: 10, padding: "0 2px" }}>▶</button>
+                  </div>
+                  <button onClick={() => setImages(images.filter((_, idx) => idx !== i))} style={{ position: "absolute", top: -5, right: -5, background: "#f88", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>✕</button>
+                </div>
+              ))}
+              <div 
+                onClick={() => fileRef.current?.click()}
+                style={{ width: 65, height: 65, borderRadius: 4, border: "1px dashed #90caf9", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#90caf9", fontSize: 20 }}
+                title="Add more photos"
+              >+</div>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "8px 12px", background: "rgba(0,0,0,.2)", borderRadius: 6 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: ".7rem", color: "var(--muted)", fontWeight: 700 }}>LAYOUT:</span>
+                  <select className="bg-field-input" style={{ padding: "4px 8px", fontSize: ".75rem", width: "auto" }} value={layout} onChange={e => setLayout(e.target.value)}>
+                    <option value="auto">Auto (Depends on count)</option>
+                    <option value="single">Single (Stack)</option>
+                    <option value="row">Row (Side-by-side)</option>
+                    <option value="grid">Grid (Masonry)</option>
+                  </select>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: ".7rem", color: "var(--muted)", fontWeight: 700 }}>SIZE:</span>
+                  <select className="bg-field-input" style={{ padding: "4px 8px", fontSize: ".75rem", width: "auto" }} value={imgSize} onChange={e => setImgSize(e.target.value)}>
+                    <option value="100%">100% (Full Width)</option>
+                    <option value="75%">75% (Large)</option>
+                    <option value="50%">50% (Medium)</option>
+                    <option value="25%">25% (Small)</option>
+                  </select>
+                </div>
+              </div>
+              <button className="bg-btn bg-btn-blue" onClick={insertHtml} disabled={uploading} style={{ padding: "6px 12px", fontSize: ".75rem" }}>
+                {uploading ? <Spin /> : "⬇️ Insert HTML"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -624,6 +736,9 @@ function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
   const [title,          setTitle]          = useState(article.title          || "");
   const [content,        setContent]        = useState(article.content        || "");
   const [excerpt,        setExcerpt]        = useState(article.excerpt        || "");
+  const [blogCategory,   setBlogCategory]   = useState(article.category       || BLOG_CATEGORIES[0]);
+  const [blogTags,       setBlogTags]       = useState(Array.isArray(article.tags) ? article.tags.join(", ") : (article.tags || ""));
+  const [coverImage,     setCoverImage]     = useState(article.coverImage     || "");
   const [pub,            setPub]            = useState(article.published !== false);
   const [youtubeVideoId, setYoutubeVideoId] = useState(article.youtubeVideoId || "");
   const [saving,         setSaving]         = useState(false);
@@ -688,6 +803,9 @@ function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
         title:   title.trim(),
         content: content.trim(),
         excerpt: excerpt.trim() || content.slice(0, 200).trim() + "…",
+        category: blogCategory,
+        tags: typeof blogTags === "string" ? blogTags.split(",").map(t=>t.trim()).filter(Boolean) : blogTags,
+        coverImage: coverImage,
         published: pub,
         youtubeVideoId: cleanId,
         // Cast link
@@ -716,16 +834,38 @@ function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
             <input className="bg-field-input" value={title} onChange={e => setTitle(e.target.value)} /></div>
           <div><label className="bg-field-label">Excerpt</label>
             <input className="bg-field-input" value={excerpt} onChange={e => setExcerpt(e.target.value)} placeholder="Short teaser shown on blog cards…" /></div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
+            <div>
+              <label className="bg-field-label">Category / Type</label>
+              <select className="bg-field-input" value={blogCategory} onChange={e=>setBlogCategory(e.target.value)} style={{ appearance:"auto" }}>
+                {BLOG_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="bg-field-label">Tags <span style={{ fontWeight:400, textTransform:"none" }}>(comma-separated)</span></label>
+              <input className="bg-field-input" placeholder="Ollywood, Drama…"
+                value={blogTags} onChange={e=>setBlogTags(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ marginBottom:10 }}>
+            <label className="bg-field-label">Cover Image URL</label>
+            <ImageUploadInput value={coverImage} onChange={setCoverImage} placeholder="https://…" />
+            {coverImage && (
+              <img src={coverImage} alt="cover"
+                style={{ marginTop:6, maxHeight:80, borderRadius:5, border:"1px solid var(--border)", display:"block" }}
+                onError={e=>e.target.style.display="none"} />
+            )}
+          </div>
           <div>
             <label className="bg-field-label" style={{ marginBottom: 5 }}>
               Content
-              <InlineImageUploader
-                textareaRef={contentRef}
-                content={content}
-                onChange={setContent}
-                onToast={onToast}
-              />
             </label>
+            <DragDropImageGrid
+              textareaRef={contentRef}
+              content={content}
+              onChange={setContent}
+              onToast={onToast}
+            />
             <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall" value={content} onChange={e => setContent(e.target.value)} />
           </div>
           <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
@@ -1148,8 +1288,7 @@ function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
       </div>
       <div>
         <label className="bg-field-label">Cover Image URL <span style={{ fontWeight:400, textTransform:"none" }}>(optional)</span></label>
-        <input className="bg-field-input" placeholder="https://…"
-          value={coverImage} onChange={e=>setCoverImage(e.target.value)} />
+        <ImageUploadInput value={coverImage} onChange={setCoverImage} placeholder="https://…" />
         {coverImage && (
           <img src={coverImage} alt="cover"
             style={{ marginTop:6, maxHeight:80, borderRadius:5, border:"1px solid var(--border)", display:"block" }}
@@ -1332,7 +1471,7 @@ function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
                   Generated Content — review & edit before publishing
                   <span style={{ fontWeight:400, textTransform:"none", color:"var(--muted)", display:"flex", alignItems:"center", gap:8 }}>
                     <span>{wordCount(blogContent)} words · ~{readTime(blogContent)} min</span>
-                    <InlineImageUploader
+                    <DragDropImageGrid
                       textareaRef={contentRef}
                       content={blogContent}
                       onChange={setBlogContent}
@@ -1368,7 +1507,7 @@ function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
                   Content <span style={{ color:"#e57373" }}>*</span>
                   <span style={{ fontWeight:400, textTransform:"none", color:"var(--muted)", display:"flex", alignItems:"center", gap:8 }}>
                     <span>{wordCount(blogContent)} words · ~{readTime(blogContent)} min</span>
-                    <InlineImageUploader
+                    <DragDropImageGrid
                       textareaRef={contentRef}
                       content={blogContent}
                       onChange={setBlogContent}
