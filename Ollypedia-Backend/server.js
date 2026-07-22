@@ -404,7 +404,7 @@ const BlogSchema = new mongoose.Schema({
   movieTitle: { type: String, default: "" },
   castId: { type: mongoose.Schema.Types.ObjectId, ref: "Cast" },  // optional cast link
   castName: { type: String, default: "" },
-  author: { type: String, default: "Ollypedia Team" },
+  author: { type: String, default: "Alekh Pradhan" },
   published: { type: Boolean, default: false },
   featured: { type: Boolean, default: false },
   indexed: { type: Boolean, default: true },               // ★ false = noindex meta + excluded from sitemap

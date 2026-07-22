@@ -1,6 +1,47 @@
 const mongoose = require("mongoose");
-const fs = require("fs");
-const path = require("path");
+
+// Normalize a title for fuzzy comparison:
+// - lowercase
+// - strip punctuation except alphanumeric and spaces
+// - collapse multiple spaces
+function normalizeTitle(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0B00-\u0B7F\s]/g, " ") // keep Odia unicode chars too
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Check if two titles refer to the same movie using fuzzy matching:
+// - Exact match after normalization (lowercase, punctuation stripped, spaces collapsed)
+// - OR one normalized title starts with the other
+//   e.g. "Dahan" matches "Dahan: The Ultimate" and vice versa
+function titlesMatch(a, b) {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  if (na === nb) return true;
+  // Prefix match — handles subtitle variants like "Dahan" vs "Dahan The Ultimate"
+  if (na.startsWith(nb) || nb.startsWith(na)) return true;
+  return false;
+}
+
+// Map a TMDB crew job string → clean type label stored in Movie.cast[].type
+function crewTypeLabel(job) {
+  const map = {
+    "Director":                "Director",
+    "Producer":                "Producer",
+    "Executive Producer":      "Producer",
+    "Screenplay":              "Writer",
+    "Writer":                  "Writer",
+    "Story":                   "Writer",
+    "Music":                   "Music Director",
+    "Original Music Composer": "Music Director",
+    "Director of Photography": "Cinematographer",
+    "Cinematographer":         "Cinematographer",
+    "Editor":                  "Editor",
+  };
+  return map[job] || job;
+}
 
 async function runTmdbOdiaScraper(generateBlogCallback) {
   console.log("[TMDB] Starting TMDB Odia Movie Scraper...");
@@ -15,22 +56,9 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
     console.error("[TMDB] Error: Movie model not found!");
     return;
   }
-  const Production = mongoose.models.Production;
 
-  // Find or create auto-import production
-  let productionId = null;
-  if (Production) {
-    let prod = await Production.findOne({ name: "Ollipedia Auto-Import" });
-    if (!prod) {
-      prod = await Production.create({
-        name: "Ollipedia Auto-Import",
-        email: "auto@ollypedia.in",
-        password: "auto",
-        bio: "Auto-synced from TMDB."
-      });
-    }
-    productionId = prod._id;
-  }
+  // ── FIX 1: Do NOT create a dummy production house.
+  // productionId will remain null unless TMDB provides real production company data.
 
   const sixMonthsAgoDate = new Date();
   sixMonthsAgoDate.setMonth(sixMonthsAgoDate.getMonth() - 6);
@@ -50,16 +78,16 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
       const url = `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=or&primary_release_date.gte=${minDateStr}&sort_by=primary_release_date.desc&page=${page}`;
       const res = await fetch(url);
       const data = await res.json();
-      
+
       if (!data.results) break;
-      
+
       totalPages = data.total_pages;
 
       for (const tmdbMovie of data.results) {
         const title = tmdbMovie.title || tmdbMovie.original_title;
         if (!title) continue;
 
-        // Fetch detailed movie info to get IMDB ID, runtime, and cast
+        // Fetch detailed movie info including credits
         const detailUrl = `https://api.themoviedb.org/3/movie/${tmdbMovie.id}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos,external_ids`;
         const detailRes = await fetch(detailUrl);
         const detailData = await detailRes.json();
@@ -70,7 +98,7 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
         const isReleased = releaseDate !== "" && releaseDate <= todayStr;
         const status = isReleased ? "Released" : "Upcoming";
         const verdict = isReleased ? "Released" : "Upcoming";
-        
+
         let posterUrl = "";
         if (detailData.poster_path) {
           posterUrl = `https://image.tmdb.org/t/p/w500${detailData.poster_path}`;
@@ -79,29 +107,52 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
         if (detailData.backdrop_path) {
           bannerUrl = `https://image.tmdb.org/t/p/w1280${detailData.backdrop_path}`;
         }
-        
+
         const runtime = detailData.runtime ? `${detailData.runtime} min` : "";
         const synopsis = detailData.overview || "";
-        
-        // Extract genres
-        const genre = (detailData.genres || []).map(g => g.name);
 
-        // Find existing movie
+        // Extract genres
+        const genre = (detailData.genres || []).map((g) => g.name);
+
+        // ── FIX 3: Smarter movie deduplication ──────────────────────────────
+        // Step 1: exact IMDB ID match
         let existingMovie = null;
         if (imdbId) {
           existingMovie = await Movie.findOne({ imdbId });
         }
+
+        // Step 2: exact title + release date match
         if (!existingMovie && title && releaseDate) {
-          // Fallback title match
-          existingMovie = await Movie.findOne({ 
-            title: new RegExp(`^${title}$`, "i"),
-            releaseDate: releaseDate
+          existingMovie = await Movie.findOne({
+            title: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+            releaseDate: releaseDate,
           });
         }
+
+        // Step 3: fuzzy / normalized title match against all movies
+        // (catches "Dahan" vs "Dahan: The Ultimate", subtitle variants, etc.)
         if (!existingMovie) {
-          // Broad title match
-          existingMovie = await Movie.findOne({ title: new RegExp(`^${title}$`, "i") });
+          // Pull candidates whose title has at least partial text overlap
+          const normalizedIncoming = normalizeTitle(title);
+          // Use a loose regex to limit DB scan (first significant word)
+          const firstWord = normalizedIncoming.split(" ")[0];
+          const candidates = await Movie.find({
+            title: new RegExp(firstWord, "i"),
+          }).select("_id title releaseDate");
+
+          for (const candidate of candidates) {
+            if (titlesMatch(title, candidate.title)) {
+              existingMovie = await Movie.findById(candidate._id);
+              if (existingMovie) {
+                console.log(
+                  `[TMDB] Fuzzy match: "${title}" → existing "${candidate.title}"`
+                );
+                break;
+              }
+            }
+          }
         }
+        // ────────────────────────────────────────────────────────────────────
 
         const movieData = {
           title,
@@ -112,7 +163,7 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
           synopsis,
           runtime,
           imdbId,
-          genre: genre.length > 0 ? genre : ["Drama"], // default fallback
+          genre: genre.length > 0 ? genre : ["Drama"],
         };
 
         if (posterUrl) {
@@ -123,13 +174,61 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
           movieData.bannerUrl = bannerUrl;
         }
 
-        // Try extracting Director from TMDB credits
+        // ── Extract cast & crew from TMDB credits ─────────────────────────────
         let director = "";
-        if (detailData.credits && detailData.credits.crew) {
-          const dirObj = detailData.credits.crew.find(c => c.job === "Director");
-          if (dirObj) director = dirObj.name;
+        // Both actors AND crew go into the same cast[] array.
+        // Movie schema has no separate "crew" field — type distinguishes them.
+        const allCastEntries = [];
+
+        if (detailData.credits) {
+          // Crew first
+          if (detailData.credits.crew) {
+            for (const member of detailData.credits.crew) {
+              if (member.job === "Director") director = member.name;
+              const keyRoles = [
+                "Director", "Producer", "Executive Producer",
+                "Screenplay", "Writer", "Story",
+                "Music", "Original Music Composer",
+                "Director of Photography", "Cinematographer", "Editor",
+              ];
+              if (keyRoles.includes(member.job)) {
+                allCastEntries.push({
+                  name:  member.name,
+                  photo: member.profile_path
+                    ? `https://image.tmdb.org/t/p/w185${member.profile_path}` : "",
+                  type:  crewTypeLabel(member.job),
+                  role:  member.job,
+                });
+              }
+            }
+          }
+
+          // Cast actors (top 20 billed)
+          if (detailData.credits.cast) {
+            for (const member of detailData.credits.cast.slice(0, 20)) {
+              allCastEntries.push({
+                name:  member.name,
+                photo: member.profile_path
+                  ? `https://image.tmdb.org/t/p/w185${member.profile_path}` : "",
+                type:  "Actor",
+                role:  member.character || "Actor",
+              });
+            }
+          }
         }
+
         if (director) movieData.director = director;
+
+        // Deduplicate: same person + same role → keep first occurrence only.
+        // Different roles for same person (e.g. Actor + Director) → keep both.
+        const seen = new Set();
+        const dedupedCast = allCastEntries.filter(e => {
+          const key = `${(e.name || "").toLowerCase()}||${(e.type || "").toLowerCase()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        // ──────────────────────────────────────────────────────────────────────
 
         // Extract youtube videos (Trailer, Teaser, Clip/Glimpse)
         const tmdbVideos = [];
@@ -139,14 +238,15 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
               let mappedType = null;
               if (v.type === "Trailer") mappedType = "Trailer";
               else if (v.type === "Teaser") mappedType = "Teaser";
-              else if (v.type === "Clip" || v.type === "Featurette") mappedType = "Glimpse";
+              else if (v.type === "Clip" || v.type === "Featurette")
+                mappedType = "Glimpse";
 
               if (mappedType) {
                 tmdbVideos.push({
                   ytId: v.key,
                   url: `https://www.youtube.com/watch?v=${v.key}`,
                   thumbnailUrl: `https://i.ytimg.com/vi/${v.key}/hqdefault.jpg`,
-                  type: mappedType
+                  type: mappedType,
                 });
               }
             }
@@ -155,62 +255,86 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
 
         // Merge with existing videos to prevent overwriting manual entries
         let finalVideos = [];
-        if (existingMovie && existingMovie.media && Array.isArray(existingMovie.media.videos)) {
+        if (
+          existingMovie &&
+          existingMovie.media &&
+          Array.isArray(existingMovie.media.videos)
+        ) {
           finalVideos = [...existingMovie.media.videos];
         }
 
         let videosAdded = false;
         for (const tv of tmdbVideos) {
-          if (!finalVideos.some(fv => fv.ytId === tv.ytId)) {
+          if (!finalVideos.some((fv) => fv.ytId === tv.ytId)) {
             finalVideos.push(tv);
             videosAdded = true;
           }
         }
 
-        // Only update if we have new videos to add or it's a new movie
         if (videosAdded || (!existingMovie && finalVideos.length > 0)) {
           movieData["media.videos"] = finalVideos;
         }
 
         if (existingMovie) {
-          // Update
-          await Movie.findByIdAndUpdate(existingMovie._id, { $set: movieData });
+          // Update existing movie.
+          // Always overwrite director + cast (cast includes crew entries by type).
+          // Also $unset the old "crew" field that may have been written by earlier
+          // scraper versions — it doesn't exist in the Movie schema and confuses
+          // the frontend cast/crew tables.
+          const updatePayload = {
+            $set:   { ...movieData },
+            $unset: { crew: "" },   // remove stale crew field from old scraper runs
+          };
+
+          // Cast array: full replacement with dedupedCast (crew + actors together)
+          if (dedupedCast.length > 0) {
+            updatePayload.$set.cast = dedupedCast;
+          }
+
+          await Movie.findByIdAndUpdate(existingMovie._id, updatePayload);
           console.log(`[TMDB] Updated: ${title} (${releaseDate})`);
           updateCount++;
         } else {
-          // Create
-          if (productionId) {
-            movieData.productionId = productionId;
-          }
+          // Create new movie — ── FIX 1: never attach a fake productionId ──
+          // productionId is intentionally omitted; only set if TMDB returns
+          // a real production company that maps to an Ollipedia Production doc.
           const newMovie = await Movie.create(movieData);
           console.log(`[TMDB] Created: ${title} (${releaseDate})`);
           newCount++;
 
-          if (typeof generateBlogCallback === 'function') {
+          if (typeof generateBlogCallback === "function") {
             try {
-              console.log(`[TMDB] Generating blog for new movie: ${title}...`);
+              console.log(
+                `[TMDB] Generating blog for new movie: ${title}...`
+              );
               // Slight delay to prevent rate limits on the AI provider
-              await new Promise(r => setTimeout(r, 2500));
+              await new Promise((r) => setTimeout(r, 2500));
               await generateBlogCallback(newMovie);
-              console.log(`[TMDB] ✅ Successfully generated blog for: ${title}`);
+              console.log(
+                `[TMDB] ✅ Successfully generated blog for: ${title}`
+              );
             } catch (err) {
-              console.error(`[TMDB] ❌ Failed to generate blog for ${title}:`, err);
+              console.error(
+                `[TMDB] ❌ Failed to generate blog for ${title}:`,
+                err
+              );
             }
           }
         }
       }
-      
+
       page++;
       // Sleep slightly to respect rate limits
-      await new Promise(r => setTimeout(r, 200));
-
+      await new Promise((r) => setTimeout(r, 200));
     } catch (err) {
       console.error(`[TMDB] Error on page ${page}:`, err);
       break;
     }
   }
 
-  console.log(`[TMDB] Scrape complete. Created: ${newCount}, Updated: ${updateCount}`);
+  console.log(
+    `[TMDB] Scrape complete. Created: ${newCount}, Updated: ${updateCount}`
+  );
 }
 
 module.exports = { runTmdbOdiaScraper };
