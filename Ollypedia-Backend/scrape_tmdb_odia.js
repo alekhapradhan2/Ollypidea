@@ -198,6 +198,7 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
                     ? `https://image.tmdb.org/t/p/w185${member.profile_path}` : "",
                   type:  crewTypeLabel(member.job),
                   role:  member.job,
+                  tmdbId: String(member.id),
                 });
               }
             }
@@ -212,6 +213,7 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
                   ? `https://image.tmdb.org/t/p/w185${member.profile_path}` : "",
                 type:  "Actor",
                 role:  member.character || "Actor",
+                tmdbId: String(member.id),
               });
             }
           }
@@ -219,15 +221,43 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
 
         if (director) movieData.director = director;
 
-        // Deduplicate: same person + same role → keep first occurrence only.
-        // Different roles for same person (e.g. Actor + Director) → keep both.
+        // Deduplicate and resolve castIds: same person + same role → keep first occurrence only.
+        const Cast = mongoose.models.Cast;
         const seen = new Set();
-        const dedupedCast = allCastEntries.filter(e => {
+        const dedupedCast = [];
+        for (const e of allCastEntries) {
           const key = `${(e.name || "").toLowerCase()}||${(e.type || "").toLowerCase()}`;
-          if (seen.has(key)) return false;
+          if (seen.has(key)) continue;
           seen.add(key);
-          return true;
-        });
+          
+          let castDoc = null;
+          if (e.tmdbId) {
+             castDoc = await Cast.findOne({ tmdbId: e.tmdbId });
+          }
+          if (!castDoc) {
+             const nameEscaped = e.name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+             const nameRegex = new RegExp(`^${nameEscaped}$`, "i");
+             castDoc = await Cast.findOne({ $or: [{ name: nameRegex }, { aliases: nameRegex }] });
+          }
+          
+          if (!castDoc) {
+             const rolesArr = e.type ? e.type.split(",").map(r => r.trim()).filter(Boolean) : ["Actor"];
+             castDoc = await Cast.create({ name: e.name, type: rolesArr[0], roles: rolesArr, photo: e.photo, tmdbId: e.tmdbId });
+          } else {
+             let needsSave = false;
+             if (e.photo && !castDoc.photo) {
+                 castDoc.photo = e.photo;
+                 needsSave = true;
+             }
+             if (e.tmdbId && castDoc.tmdbId !== e.tmdbId) {
+                 castDoc.tmdbId = e.tmdbId;
+                 needsSave = true;
+             }
+             if (needsSave) await castDoc.save();
+          }
+          e.castId = castDoc._id;
+          dedupedCast.push(e);
+        }
         // ──────────────────────────────────────────────────────────────────────
 
         // Extract youtube videos (Trailer, Teaser, Clip/Glimpse)
@@ -292,6 +322,13 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
           }
 
           await Movie.findByIdAndUpdate(existingMovie._id, updatePayload);
+          
+          // Also update each Cast profile's 'movies' array so the movie shows on their profile
+          for (const c of dedupedCast) {
+            if (c.castId) {
+              await Cast.findByIdAndUpdate(c.castId, { $addToSet: { movies: existingMovie._id } });
+            }
+          }
           console.log(`[TMDB] Updated: ${title} (${releaseDate})`);
           updateCount++;
         } else {
@@ -299,6 +336,12 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
           // productionId is intentionally omitted; only set if TMDB returns
           // a real production company that maps to an Ollipedia Production doc.
           const newMovie = await Movie.create(movieData);
+          
+          for (const c of dedupedCast) {
+            if (c.castId) {
+              await Cast.findByIdAndUpdate(c.castId, { $addToSet: { movies: newMovie._id } });
+            }
+          }
           console.log(`[TMDB] Created: ${title} (${releaseDate})`);
           newCount++;
 

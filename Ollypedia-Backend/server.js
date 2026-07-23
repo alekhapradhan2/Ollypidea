@@ -249,6 +249,8 @@ const CastSchema = new mongoose.Schema({
   website: { type: String, default: "" },
   instagram: { type: String, default: "" },
   banner: { type: String, default: "" },
+  tmdbId: { type: String, default: "", index: true },
+  aliases: [{ type: String }],
   movies: [{ type: mongoose.Schema.Types.ObjectId, ref: "Movie" }],
 }, { timestamps: true });
 
@@ -2893,8 +2895,30 @@ async function resolveCastEntry(item) {
 
   // Create new Cast document
   if (!name) throw new Error("Cast entry requires a name");
+  
+  // FIX: Look up by tmdbId, exact name, or aliases (case-insensitive) to prevent duplicates
+  const nameRegex = new RegExp(`^${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}$`, "i");
+  const lookupQuery = [];
+  if (item.tmdbId) lookupQuery.push({ tmdbId: item.tmdbId });
+  lookupQuery.push({ name: nameRegex });
+  lookupQuery.push({ aliases: nameRegex });
+  
+  const existingByQuery = await Cast.findOne({ $or: lookupQuery }).lean();
+  if (existingByQuery) {
+      if (photo && photo !== existingByQuery.photo) {
+          await Cast.findByIdAndUpdate(existingByQuery._id, { photo });
+      }
+      return {
+          castId: existingByQuery._id,
+          name: existingByQuery.name,
+          photo: photo || existingByQuery.photo,
+          type: type || existingByQuery.type,
+          role,
+      };
+  }
+
   const rolesArr = type ? type.split(",").map(r => r.trim()).filter(Boolean) : ["Actor"];
-  const nc = await Cast.create({ name, type: rolesArr[0], roles: rolesArr, bio, photo });
+  const nc = await Cast.create({ name, type: rolesArr[0], roles: rolesArr, bio, photo, tmdbId: item.tmdbId || "" });
   return {
     castId: nc._id,     // ObjectId instance
     name: nc.name,
