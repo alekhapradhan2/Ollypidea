@@ -10880,7 +10880,12 @@ Write at least 3-4 highly detailed paragraphs. Output ONLY HTML (starting with <
   }, { timezone: "Asia/Kolkata" });
   // ─────────────────────────────────────────────────────────────────────────────
 
-  app.listen(process.env.PORT || 4000, () => {
+  cron.schedule("*/14 * * * *", () => {
+    const url = process.env.RENDER_EXTERNAL_URL || ("http://localhost:" + (process.env.PORT || 4000));
+    fetch(url + "/api/ping").catch(() => {});
+});
+
+app.listen(process.env.PORT || 4000, () => {
     console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
 
 
