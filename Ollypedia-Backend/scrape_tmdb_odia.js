@@ -316,9 +316,49 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
             $unset: { crew: "" },   // remove stale crew field from old scraper runs
           };
 
-          // Cast array: full replacement with dedupedCast (crew + actors together)
+          // Cast array: Merge dedupedCast with existing cast (crew + actors together)
           if (dedupedCast.length > 0) {
-            updatePayload.$set.cast = dedupedCast;
+            let finalCast = [];
+            if (existingMovie.cast && Array.isArray(existingMovie.cast)) {
+               // Clone existing cast objects to avoid mongoose document mutation issues
+               finalCast = existingMovie.cast.map(c => c.toObject ? c.toObject() : c);
+            }
+            
+            for (const newC of dedupedCast) {
+                let matchedIndex = finalCast.findIndex(extC => {
+                    // Match by IDs if available
+                    if (newC.castId && extC.castId && newC.castId.toString() === extC.castId.toString()) return true;
+                    if (newC.tmdbId && extC.tmdbId && String(newC.tmdbId) === String(extC.tmdbId)) return true;
+                    
+                    // Match by fuzzy name and role
+                    const normNew = normalizeTitle(newC.name || "");
+                    const normExt = normalizeTitle(extC.name || "");
+                    
+                    const nameMatch = normNew && normExt && (normNew === normExt || normNew.includes(normExt) || normExt.includes(normNew));
+                    
+                    const roleMatch = ((newC.type || "").toLowerCase() === (extC.type || "").toLowerCase()) ||
+                                      ((newC.role || "").toLowerCase() === (extC.role || "").toLowerCase());
+                                      
+                    return nameMatch && roleMatch;
+                });
+                
+                if (matchedIndex >= 0) {
+                    // Update photo if missing in DB but available from TMDB
+                    if (newC.photo && !finalCast[matchedIndex].photo) {
+                        finalCast[matchedIndex].photo = newC.photo;
+                    }
+                    if (newC.tmdbId && !finalCast[matchedIndex].tmdbId) {
+                        finalCast[matchedIndex].tmdbId = newC.tmdbId;
+                    }
+                    if (newC.castId && !finalCast[matchedIndex].castId) {
+                        finalCast[matchedIndex].castId = newC.castId;
+                    }
+                } else {
+                    // Add new cast/crew
+                    finalCast.push(newC);
+                }
+            }
+            updatePayload.$set.cast = finalCast;
           }
 
           await Movie.findByIdAndUpdate(existingMovie._id, updatePayload);
