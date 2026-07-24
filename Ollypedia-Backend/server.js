@@ -3757,7 +3757,7 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       .populate("collaborators", "name logo").lean();
 
     // ── Auto-blog: Movie Details (always) + OTT Release (if OTT info given) + Song First Drops ──
-    autoGenerateMovieDetailsBlog(movie).catch(() => { });
+    // autoGenerateMovieDetailsBlog(movie).catch(() => { }); // Disabled on manual add, kept active for cron scraper
     // ★ Generate a First Drop blog for each song if songs were included at creation time
     autoGenerateAllSongBlogs(populated).catch(() => { });
     if (movie.streamingOn) {
