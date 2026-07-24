@@ -26,7 +26,6 @@
     "puppeteer": "^24.39.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "react-snap": "^1.23.0",
     "streamifier": "^0.1.1"
   },
   "devDependencies": {
