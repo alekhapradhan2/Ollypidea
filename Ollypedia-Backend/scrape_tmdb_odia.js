@@ -306,6 +306,23 @@ async function runTmdbOdiaScraper(generateBlogCallback) {
         }
 
         if (existingMovie) {
+          // Do not overwrite user-modified status or verdict.
+          // Only update to "Released" if it was "Upcoming" and is now released.
+          if (existingMovie.status) {
+            if (existingMovie.status === "Upcoming" && isReleased) {
+              movieData.status = "Released";
+            } else {
+              delete movieData.status;
+            }
+          }
+          if (existingMovie.verdict) {
+            if (existingMovie.verdict === "Upcoming" && isReleased) {
+              movieData.verdict = "Released";
+            } else {
+              delete movieData.verdict;
+            }
+          }
+
           // Update existing movie.
           // Always overwrite director + cast (cast includes crew entries by type).
           // Also $unset the old "crew" field that may have been written by earlier
