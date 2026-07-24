@@ -453,7 +453,9 @@ const Production = mongoose.model("Production", ProductionSchema);
 
 // ── Auto-generate slug on Movie create/update ─────────────────
 MovieSchema.pre("save", async function (next) {
-  if (this.isNew || this.isModified("title") || this.isModified("releaseDate") || !this.slug) {
+  // Only generate a slug if it's a new movie or the slug is completely missing.
+  // This ensures slugs remain immutable after creation, even if title or release date changes.
+  if (this.isNew || !this.slug) {
     const base = makeMovieSlug(this.title, this.releaseDate);
     let slug = base; let attempt = 0;
     while (true) {
