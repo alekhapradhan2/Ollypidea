@@ -362,16 +362,16 @@ const MovieSchema = new mongoose.Schema({
   streamingUrl: { type: String, default: "" },  // Direct link to stream the movie
   ottReleaseDate: { type: String, default: "" },  // OTT release date (ISO string or "TBA")
   ott: {
-    platform:    { type: String, default: "" },
+    platform: { type: String, default: "" },
     releaseDate: { type: String, default: "" },
-    status:      { type: String, default: "Upcoming" }, // Upcoming | Streaming | Removed
-    watchUrl:    { type: String, default: "" },
-    posterUrl:   { type: String, default: "" },
-    languages:   [{ type: String }],
-    subtitles:   [{ type: String }],
-    runtime:     { type: String, default: "" },
-    quality:     { type: String, default: "" },
-    countries:   [{ type: String }],
+    status: { type: String, default: "Upcoming" }, // Upcoming | Streaming | Removed
+    watchUrl: { type: String, default: "" },
+    posterUrl: { type: String, default: "" },
+    languages: [{ type: String }],
+    subtitles: [{ type: String }],
+    runtime: { type: String, default: "" },
+    quality: { type: String, default: "" },
+    countries: [{ type: String }],
     lastUpdated: { type: Date, default: Date.now },
   },
   detailBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null }, // auto-generated "Movie Details" blog
@@ -2897,26 +2897,26 @@ async function resolveCastEntry(item) {
 
   // Create new Cast document
   if (!name) throw new Error("Cast entry requires a name");
-  
+
   // FIX: Look up by tmdbId, exact name, or aliases (case-insensitive) to prevent duplicates
   const nameRegex = new RegExp(`^${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}$`, "i");
   const lookupQuery = [];
   if (item.tmdbId) lookupQuery.push({ tmdbId: item.tmdbId });
   lookupQuery.push({ name: nameRegex });
   lookupQuery.push({ aliases: nameRegex });
-  
+
   const existingByQuery = await Cast.findOne({ $or: lookupQuery }).lean();
   if (existingByQuery) {
-      if (photo && photo !== existingByQuery.photo) {
-          await Cast.findByIdAndUpdate(existingByQuery._id, { photo });
-      }
-      return {
-          castId: existingByQuery._id,
-          name: existingByQuery.name,
-          photo: photo || existingByQuery.photo,
-          type: type || existingByQuery.type,
-          role,
-      };
+    if (photo && photo !== existingByQuery.photo) {
+      await Cast.findByIdAndUpdate(existingByQuery._id, { photo });
+    }
+    return {
+      castId: existingByQuery._id,
+      name: existingByQuery.name,
+      photo: photo || existingByQuery.photo,
+      type: type || existingByQuery.type,
+      role,
+    };
   }
 
   const rolesArr = type ? type.split(",").map(r => r.trim()).filter(Boolean) : ["Actor"];
@@ -9876,7 +9876,7 @@ async function generateFinalBoxOfficeBlogDraft(movieId) {
   const directorName = castCrew.director || movie.director || "N/A";
   const producerName = castCrew.producer || movie.producer || "N/A";
   const leadActors = castCrew.leadCast || [];
-  
+
   const releaseYear = getYear(movie.releaseDate);
 
   const totalNet = days.reduce((sum, d) => sum + (parseToRupeesGlobal(d.net) || 0), 0);
@@ -9951,7 +9951,7 @@ Always generate a totally unique narrative flow for every movie. Do not use gene
         { role: "user", content: aiPrompt },
       ],
     }),
-    signal: AbortSignal.timeout(60000), 
+    signal: AbortSignal.timeout(60000),
   });
 
   if (!groqRes.ok) {
@@ -9971,7 +9971,7 @@ Always generate a totally unique narrative flow for every movie. Do not use gene
 
   const parseNum = (s) => parseToRupeesGlobal(s);
   let cumulativeNet = 0, cumulativeGross = 0;
-  
+
   const dataTableRows = days.map((d, i) => {
     const netNum = parseNum(d.net);
     const grossNum = parseNum(d.gross);
@@ -10359,219 +10359,219 @@ async function callModelBlogLLM(systemPrompt, userPrompt, maxTokens = 3000) {
   throw new Error("No API Key configured. Please add OPENAI_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY to your .env file.");
 }
 
-  // ── HTML sanitizer (strip script/event attrs) ─────────────────────────────────
-  function sanitizeGeneratedHTML(html) {
-    return (html || "")
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-      .replace(/\s+on\w+\s*=\s*(['"])[^'"]*\1/gi, "")
-      .replace(/javascript\s*:/gi, "")
-      .trim();
+// ── HTML sanitizer (strip script/event attrs) ─────────────────────────────────
+function sanitizeGeneratedHTML(html) {
+  return (html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+    .replace(/\s+on\w+\s*=\s*(['"])[^'"]*\1/gi, "")
+    .replace(/javascript\s*:/gi, "")
+    .trim();
+}
+
+// ── Wikipedia page fetch helper ───────────────────────────────────────────────
+async function fetchWikiSummary(title) {
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d.extract ? d : null;
+  } catch { return null; }
+}
+
+async function wikiSearch(query, limit = 3) {
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=${limit}&format=json&origin=*`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const d = await res.json();
+    return d?.query?.search || [];
+  } catch { return []; }
+}
+
+// ── Deep Wikipedia research — returns { sources, facts, confidence } ───────────
+// Tries multiple search strategies until confidence >= 90 OR all strategies exhausted.
+async function deepResearch(movie) {
+  const sources = [];
+  const facts = [];
+  const seenUrls = new Set();
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+
+  function addFact(extract, srcName, srcUrl) {
+    if (!extract || facts.some(f => f.slice(0, 60) === extract.slice(0, 60))) return;
+    facts.push(extract.slice(0, 700));
+    if (!seenUrls.has(srcUrl)) {
+      sources.push({ name: srcName, url: srcUrl, type: "wikipedia" });
+      seenUrls.add(srcUrl);
+    }
   }
 
-  // ── Wikipedia page fetch helper ───────────────────────────────────────────────
-  async function fetchWikiSummary(title) {
-    try {
-      const res = await fetch(
-        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      if (!res.ok) return null;
-      const d = await res.json();
-      return d.extract ? d : null;
-    } catch { return null; }
-  }
+  // Strategy 1: Direct title + film searches
+  const queries = [
+    `${movie.title} film`,
+    `${movie.title} Odia film`,
+    `${movie.title} ${year} film`,
+    `${movie.title} Ollywood`,
+    movie.director ? `${movie.director} director Odia` : null,
+    movie.director ? `${movie.director} filmmaker` : null,
+  ].filter(Boolean);
 
-  async function wikiSearch(query, limit = 3) {
-    try {
-      const res = await fetch(
-        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=${limit}&format=json&origin=*`,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      const d = await res.json();
-      return d?.query?.search || [];
-    } catch { return []; }
-  }
-
-  // ── Deep Wikipedia research — returns { sources, facts, confidence } ───────────
-  // Tries multiple search strategies until confidence >= 90 OR all strategies exhausted.
-  async function deepResearch(movie) {
-    const sources = [];
-    const facts = [];
-    const seenUrls = new Set();
-    const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-
-    function addFact(extract, srcName, srcUrl) {
-      if (!extract || facts.some(f => f.slice(0, 60) === extract.slice(0, 60))) return;
-      facts.push(extract.slice(0, 700));
-      if (!seenUrls.has(srcUrl)) {
-        sources.push({ name: srcName, url: srcUrl, type: "wikipedia" });
-        seenUrls.add(srcUrl);
-      }
-    }
-
-    // Strategy 1: Direct title + film searches
-    const queries = [
-      `${movie.title} film`,
-      `${movie.title} Odia film`,
-      `${movie.title} ${year} film`,
-      `${movie.title} Ollywood`,
-      movie.director ? `${movie.director} director Odia` : null,
-      movie.director ? `${movie.director} filmmaker` : null,
-    ].filter(Boolean);
-
-    for (const q of queries) {
-      const hits = await wikiSearch(q, 2);
-      for (const hit of hits.slice(0, 2)) {
-        const sum = await fetchWikiSummary(hit.title);
-        if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title}`, sum.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`);
-      }
-    }
-
-    // Strategy 2: Search for lead actors on Wikipedia
-    const actors = (movie.cast || []).filter(c => c.type === "Actor" || c.type === "Actress").slice(0, 3);
-    for (const actor of actors) {
-      const hits = await wikiSearch(`${actor.name} Indian actor Odisha`, 1);
-      for (const hit of hits.slice(0, 1)) {
-        const sum = await fetchWikiSummary(hit.title);
-        if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Cast)`, sum.content_urls?.desktop?.page || "");
-      }
-    }
-
-    // Strategy 3: Ollywood / Odia film industry context
-    const contextHits = await wikiSearch("Odia cinema Ollywood film industry", 1);
-    for (const hit of contextHits.slice(0, 1)) {
+  for (const q of queries) {
+    const hits = await wikiSearch(q, 2);
+    for (const hit of hits.slice(0, 2)) {
       const sum = await fetchWikiSummary(hit.title);
-      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Industry Context)`, sum.content_urls?.desktop?.page || "");
+      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title}`, sum.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`);
     }
-
-    // Strategy 4: Music director
-    if (movie.media?.songs?.[0]?.musicDirector) {
-      const md = movie.media.songs[0].musicDirector;
-      const hits = await wikiSearch(`${md} music composer Odia`, 1);
-      for (const hit of hits.slice(0, 1)) {
-        const sum = await fetchWikiSummary(hit.title);
-        if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Music)`, sum.content_urls?.desktop?.page || "");
-      }
-    }
-
-    // Strategy 5: Genre context (e.g. Odia action film, Odia romantic film)
-    const genre = (movie.genre || [])[0];
-    if (genre) {
-      const hits = await wikiSearch(`${genre} Odia film Ollywood`, 1);
-      for (const hit of hits.slice(0, 1)) {
-        const sum = await fetchWikiSummary(hit.title);
-        if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Genre)`, sum.content_urls?.desktop?.page || "");
-      }
-    }
-
-    // ── Confidence scoring ─────────────────────────────────────────────────────
-    // Each field contributes; Wikipedia facts add significant weight.
-    let confidence = 40; // base (we always have DB)
-    if (movie.title) confidence += 5;
-    if (movie.synopsis?.length > 100) confidence += 10;
-    if (movie.synopsis?.length > 30 && confidence < 95) confidence += 3;
-    if ((movie.cast || []).length >= 3) confidence += 8;
-    if ((movie.cast || []).length >= 1) confidence += 3;
-    if (movie.director) confidence += 5;
-    if (movie.producer) confidence += 3;
-    if (movie.releaseDate) confidence += 4;
-    if (movie.genre?.length) confidence += 3;
-    if (movie.runtime) confidence += 2;
-    if (movie.streamingOn) confidence += 2;
-    if (movie.boxOffice?.total && movie.boxOffice.total !== "TBA") confidence += 4;
-    if (movie.boxOfficeDays?.length > 0) confidence += 4;
-    if ((movie.media?.songs || []).length > 0) confidence += 3;
-    if (movie.imdbRating) confidence += 3;
-    if (movie.budget) confidence += 2;
-    // Each Wikipedia fact source: +4 each, capped
-    confidence += Math.min(facts.length * 4, 20);
-    confidence = Math.min(confidence, 98);
-
-    return { sources, facts, confidence };
   }
 
-  // ── POST /api/admin/model-blog/research ──────────────────────────────────────
-  // Fetch full movie data from DB + run deep multi-strategy Wikipedia research.
-  // Retries up to 2 extra passes if confidence < 90.
-  // Returns: { movie, research: { sources, facts, confidence } }
-  app.post("/api/admin/model-blog/research", adminAuth, async (req, res) => {
-    try {
-      const { movieId } = req.body;
-      if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+  // Strategy 2: Search for lead actors on Wikipedia
+  const actors = (movie.cast || []).filter(c => c.type === "Actor" || c.type === "Actress").slice(0, 3);
+  for (const actor of actors) {
+    const hits = await wikiSearch(`${actor.name} Indian actor Odisha`, 1);
+    for (const hit of hits.slice(0, 1)) {
+      const sum = await fetchWikiSummary(hit.title);
+      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Cast)`, sum.content_urls?.desktop?.page || "");
+    }
+  }
 
-      // ── Populate only fields that exist in MovieSchema ──────────────────────
-      const movie = await Movie.findById(movieId)
-        .populate("cast.castId", "name type photo bio")
-        .populate("productionId", "name logo website")
-        .populate("collaborators", "name")
-        .populate("news", "title content category createdAt")
-        .lean();
-      if (!movie) return res.status(404).json({ error: "Movie not found" });
+  // Strategy 3: Ollywood / Odia film industry context
+  const contextHits = await wikiSearch("Odia cinema Ollywood film industry", 1);
+  for (const hit of contextHits.slice(0, 1)) {
+    const sum = await fetchWikiSummary(hit.title);
+    if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Industry Context)`, sum.content_urls?.desktop?.page || "");
+  }
 
-      // Attach existing blogs for this movie
-      const existingBlogs = await Blog.find({ movieId }, "title slug category published createdAt").lean();
-      movie._existingBlogs = existingBlogs;
+  // Strategy 4: Music director
+  if (movie.media?.songs?.[0]?.musicDirector) {
+    const md = movie.media.songs[0].musicDirector;
+    const hits = await wikiSearch(`${md} music composer Odia`, 1);
+    for (const hit of hits.slice(0, 1)) {
+      const sum = await fetchWikiSummary(hit.title);
+      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Music)`, sum.content_urls?.desktop?.page || "");
+    }
+  }
 
-      // ── Deep research pass ──────────────────────────────────────────────────
-      let research = await deepResearch(movie);
+  // Strategy 5: Genre context (e.g. Odia action film, Odia romantic film)
+  const genre = (movie.genre || [])[0];
+  if (genre) {
+    const hits = await wikiSearch(`${genre} Odia film Ollywood`, 1);
+    for (const hit of hits.slice(0, 1)) {
+      const sum = await fetchWikiSummary(hit.title);
+      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Genre)`, sum.content_urls?.desktop?.page || "");
+    }
+  }
 
-      // Retry up to 2 more passes if still below 90%
-      if (research.confidence < 90) {
-        const extra = await deepResearch(movie);
-        // Merge unique facts/sources
-        for (const f of extra.facts) {
-          if (!research.facts.some(ef => ef.slice(0, 60) === f.slice(0, 60))) research.facts.push(f);
-        }
-        for (const s of extra.sources) {
-          if (!research.sources.some(es => es.url === s.url)) research.sources.push(s);
-        }
-        // Recalculate confidence with merged facts
-        let c = research.confidence;
-        c += Math.min((extra.facts.length - research.facts.length + extra.facts.length) * 2, 10);
-        research.confidence = Math.min(c, 98);
-      }
+  // ── Confidence scoring ─────────────────────────────────────────────────────
+  // Each field contributes; Wikipedia facts add significant weight.
+  let confidence = 40; // base (we always have DB)
+  if (movie.title) confidence += 5;
+  if (movie.synopsis?.length > 100) confidence += 10;
+  if (movie.synopsis?.length > 30 && confidence < 95) confidence += 3;
+  if ((movie.cast || []).length >= 3) confidence += 8;
+  if ((movie.cast || []).length >= 1) confidence += 3;
+  if (movie.director) confidence += 5;
+  if (movie.producer) confidence += 3;
+  if (movie.releaseDate) confidence += 4;
+  if (movie.genre?.length) confidence += 3;
+  if (movie.runtime) confidence += 2;
+  if (movie.streamingOn) confidence += 2;
+  if (movie.boxOffice?.total && movie.boxOffice.total !== "TBA") confidence += 4;
+  if (movie.boxOfficeDays?.length > 0) confidence += 4;
+  if ((movie.media?.songs || []).length > 0) confidence += 3;
+  if (movie.imdbRating) confidence += 3;
+  if (movie.budget) confidence += 2;
+  // Each Wikipedia fact source: +4 each, capped
+  confidence += Math.min(facts.length * 4, 20);
+  confidence = Math.min(confidence, 98);
 
-      res.json({
-        movie,
-        research: {
-          sources: research.sources,
-          facts: research.facts,
-          confidence: research.confidence,
-          researchTime: Date.now(),
-          retried: research.confidence < 90,
-        },
-      });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
+  return { sources, facts, confidence };
+}
 
-  // ── POST /api/admin/model-blog/generate ──────────────────────────────────────
-  // Full AI generation pipeline: build context → Pass 1 (SEO/outline JSON) →
-  //   Pass 2 (full HTML article) → Pass 3 (humanization).
-  // Returns: { html, seo, faqs, confidence, logId }
-  app.post("/api/admin/model-blog/generate", adminAuth, async (req, res) => {
-    const startTime = Date.now();
-    const { movieId, prompt: adminPrompt, research } = req.body;
+// ── POST /api/admin/model-blog/research ──────────────────────────────────────
+// Fetch full movie data from DB + run deep multi-strategy Wikipedia research.
+// Retries up to 2 extra passes if confidence < 90.
+// Returns: { movie, research: { sources, facts, confidence } }
+app.post("/api/admin/model-blog/research", adminAuth, async (req, res) => {
+  try {
+    const { movieId } = req.body;
     if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
 
-    let logDoc = null;
-    try {
-      const movie = await Movie.findById(movieId).lean();
-      if (!movie) return res.status(404).json({ error: "Movie not found" });
-      const existingBlogs = await Blog.find({ movieId }, "title slug").lean();
+    // ── Populate only fields that exist in MovieSchema ──────────────────────
+    const movie = await Movie.findById(movieId)
+      .populate("cast.castId", "name type photo bio")
+      .populate("productionId", "name logo website")
+      .populate("collaborators", "name")
+      .populate("news", "title content category createdAt")
+      .lean();
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
 
-      // ── Build rich context string from DB data ──────────────────────────────
-      const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
-      const releaseFmt = movie.releaseDate ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "TBA";
-      const castLines = (movie.cast || []).slice(0, 12).map(c => `  • ${c.name} (${c.type || "Actor"}${c.role ? ` — ${c.role}` : ""})`).join("\n");
-      const songLines = (movie.media?.songs || []).slice(0, 8).map(s => `  • "${s.title}" — ${s.singer || "N/A"} | Music: ${s.musicDirector || "N/A"}`).join("\n");
-      const existingBlogLines = existingBlogs.map(b => `  • "${b.title}" → /blog/${b.slug}`).join("\n");
-      const boxOfficeLines = (movie.boxOfficeDays || []).slice(0, 15).map(d => `  • Day ${d.day}: Net ${d.net || "TBA"} | Gross ${d.gross || "TBA"}`).join("\n");
-      const researchFacts = (research?.facts || []).join("\n\n");
-      const researchSources = (research?.sources || []).map(s => `  • ${s.name}: ${s.url}`).join("\n");
-      const confidence = research?.confidence || 50;
+    // Attach existing blogs for this movie
+    const existingBlogs = await Blog.find({ movieId }, "title slug category published createdAt").lean();
+    movie._existingBlogs = existingBlogs;
 
-      const contextBlock = `
+    // ── Deep research pass ──────────────────────────────────────────────────
+    let research = await deepResearch(movie);
+
+    // Retry up to 2 more passes if still below 90%
+    if (research.confidence < 90) {
+      const extra = await deepResearch(movie);
+      // Merge unique facts/sources
+      for (const f of extra.facts) {
+        if (!research.facts.some(ef => ef.slice(0, 60) === f.slice(0, 60))) research.facts.push(f);
+      }
+      for (const s of extra.sources) {
+        if (!research.sources.some(es => es.url === s.url)) research.sources.push(s);
+      }
+      // Recalculate confidence with merged facts
+      let c = research.confidence;
+      c += Math.min((extra.facts.length - research.facts.length + extra.facts.length) * 2, 10);
+      research.confidence = Math.min(c, 98);
+    }
+
+    res.json({
+      movie,
+      research: {
+        sources: research.sources,
+        facts: research.facts,
+        confidence: research.confidence,
+        researchTime: Date.now(),
+        retried: research.confidence < 90,
+      },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/admin/model-blog/generate ──────────────────────────────────────
+// Full AI generation pipeline: build context → Pass 1 (SEO/outline JSON) →
+//   Pass 2 (full HTML article) → Pass 3 (humanization).
+// Returns: { html, seo, faqs, confidence, logId }
+app.post("/api/admin/model-blog/generate", adminAuth, async (req, res) => {
+  const startTime = Date.now();
+  const { movieId, prompt: adminPrompt, research } = req.body;
+  if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+
+  let logDoc = null;
+  try {
+    const movie = await Movie.findById(movieId).lean();
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+    const existingBlogs = await Blog.find({ movieId }, "title slug").lean();
+
+    // ── Build rich context string from DB data ──────────────────────────────
+    const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
+    const releaseFmt = movie.releaseDate ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "TBA";
+    const castLines = (movie.cast || []).slice(0, 12).map(c => `  • ${c.name} (${c.type || "Actor"}${c.role ? ` — ${c.role}` : ""})`).join("\n");
+    const songLines = (movie.media?.songs || []).slice(0, 8).map(s => `  • "${s.title}" — ${s.singer || "N/A"} | Music: ${s.musicDirector || "N/A"}`).join("\n");
+    const existingBlogLines = existingBlogs.map(b => `  • "${b.title}" → /blog/${b.slug}`).join("\n");
+    const boxOfficeLines = (movie.boxOfficeDays || []).slice(0, 15).map(d => `  • Day ${d.day}: Net ${d.net || "TBA"} | Gross ${d.gross || "TBA"}`).join("\n");
+    const researchFacts = (research?.facts || []).join("\n\n");
+    const researchSources = (research?.sources || []).map(s => `  • ${s.name}: ${s.url}`).join("\n");
+    const confidence = research?.confidence || 50;
+
+    const contextBlock = `
 === MOVIE DATA FROM DATABASE ===
 Title:        ${movie.title}
 Year:         ${year}
@@ -10603,21 +10603,21 @@ ${researchFacts ? `\n=== RESEARCH FACTS (Wikipedia) ===\n${researchFacts}\n=== E
 ${researchSources ? `\nSources:\n${researchSources}` : ""}
 `;
 
-      const customPromptSection = adminPrompt?.trim()
-        ? `\n=== ADMIN INSTRUCTIONS ===\n${adminPrompt}\n=== END ADMIN INSTRUCTIONS ===`
-        : "";
+    const customPromptSection = adminPrompt?.trim()
+      ? `\n=== ADMIN INSTRUCTIONS ===\n${adminPrompt}\n=== END ADMIN INSTRUCTIONS ===`
+      : "";
 
-      // ─────────────────────────────────────────────────────────────────────────
-      // PASS 1 — PLANNER AGENT (SEO + Outline)
-      // ─────────────────────────────────────────────────────────────────────────
-      const pass1System = `You are an expert SEO strategist and entertainment journalist for Ollypedia, India's leading Odia cinema database.
+    // ─────────────────────────────────────────────────────────────────────────
+    // PASS 1 — PLANNER AGENT (SEO + Outline)
+    // ─────────────────────────────────────────────────────────────────────────
+    const pass1System = `You are an expert SEO strategist and entertainment journalist for Ollypedia, India's leading Odia cinema database.
 Your job is to produce a structured JSON plan for a blog article.
 RULES:
 - Return ONLY a valid JSON object. No markdown fences.
 - All values must match the schema exactly.
 - Do NOT invent facts not present in the data.`;
 
-      const pass1User = `${contextBlock}${customPromptSection}
+    const pass1User = `${contextBlock}${customPromptSection}
 
 Generate a complete SEO plan and article outline for the Odia film "${movie.title}" (${year}).
 
@@ -10648,33 +10648,33 @@ Return ONLY this JSON object (no markdown, no code fences):
   "articleExcerpt": "2-sentence compelling excerpt for blog listing pages"
 }`;
 
-      let seoData = {};
-      try {
-        const pass1Raw = await callModelBlogLLM(pass1System, pass1User, 2000);
-        const jsonMatch = pass1Raw.match(/\{[\s\S]*\}/);
-        if (jsonMatch) seoData = JSON.parse(jsonMatch[0]);
-      } catch (e) {
-        console.error("PASS 1 ERROR:", e.message);
-        // Fallback SEO data
-        seoData = {
-          seoTitle: `${movie.title} (${year}) — Complete Odia Film Review & Box Office Details`,
-          metaTitle: `${movie.title} (${year}) — Complete Odia Film Review & Box Office Details`,
-          metaDescription: `Complete guide to ${movie.title}, the ${year} Odia film.`,
-          focusKeyword: `${movie.title} Odia film`,
-          slug: `${movie.title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-")}-${year}-review`,
-          canonicalPath: `/blog/${movie.slug || ""}`,
-          articleSections: [
-            { heading: "Introduction", instructions: "Write a 3-paragraph introduction summarizing the film's premise." },
-            { heading: "Cast & Performances", instructions: "Analyze the lead actors and their roles." },
-            { heading: "Conclusion", instructions: "Summarize why audiences should watch it." }
-          ]
-        };
-      }
+    let seoData = {};
+    try {
+      const pass1Raw = await callModelBlogLLM(pass1System, pass1User, 2000);
+      const jsonMatch = pass1Raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) seoData = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error("PASS 1 ERROR:", e.message);
+      // Fallback SEO data
+      seoData = {
+        seoTitle: `${movie.title} (${year}) — Complete Odia Film Review & Box Office Details`,
+        metaTitle: `${movie.title} (${year}) — Complete Odia Film Review & Box Office Details`,
+        metaDescription: `Complete guide to ${movie.title}, the ${year} Odia film.`,
+        focusKeyword: `${movie.title} Odia film`,
+        slug: `${movie.title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-")}-${year}-review`,
+        canonicalPath: `/blog/${movie.slug || ""}`,
+        articleSections: [
+          { heading: "Introduction", instructions: "Write a 3-paragraph introduction summarizing the film's premise." },
+          { heading: "Cast & Performances", instructions: "Analyze the lead actors and their roles." },
+          { heading: "Conclusion", instructions: "Summarize why audiences should watch it." }
+        ]
+      };
+    }
 
-      // ─────────────────────────────────────────────────────────────────────────
-      // PASS 2 — WRITER AGENT (Section-by-Section Loop)
-      // ─────────────────────────────────────────────────────────────────────────
-      const pass2System = `You are a senior entertainment journalist for Ollypedia.
+    // ─────────────────────────────────────────────────────────────────────────
+    // PASS 2 — WRITER AGENT (Section-by-Section Loop)
+    // ─────────────────────────────────────────────────────────────────────────
+    const pass2System = `You are a senior entertainment journalist for Ollypedia.
 STRICT OUTPUT RULES:
 1. Output ONLY clean, valid HTML for the requested section. Do NOT wrap in <article>.
 2. NO markdown, NO code fences.
@@ -10684,18 +10684,18 @@ STRICT OUTPUT RULES:
 6. Never hallucinate facts — if something is not in the data, adapt gracefully.
 7. Use natural storytelling.`;
 
-      let articleHTML = "<article class=\"blog-article\">\n";
-      const sections = (Array.isArray(seoData.articleSections) && seoData.articleSections.length > 0) 
-        ? seoData.articleSections 
-        : [
-            { heading: "Introduction", instructions: "Write a 3-paragraph introduction summarizing the film's premise." },
-            { heading: "Cast & Performances", instructions: "Analyze the lead actors and their roles." },
-            { heading: "Conclusion", instructions: "Summarize why audiences should watch it." }
-          ];
+    let articleHTML = "<article class=\"blog-article\">\n";
+    const sections = (Array.isArray(seoData.articleSections) && seoData.articleSections.length > 0)
+      ? seoData.articleSections
+      : [
+        { heading: "Introduction", instructions: "Write a 3-paragraph introduction summarizing the film's premise." },
+        { heading: "Cast & Performances", instructions: "Analyze the lead actors and their roles." },
+        { heading: "Conclusion", instructions: "Summarize why audiences should watch it." }
+      ];
 
-      for (let i = 0; i < sections.length; i++) {
-        const sec = sections[i];
-        const pass2User = `${contextBlock}${customPromptSection}
+    for (let i = 0; i < sections.length; i++) {
+      const sec = sections[i];
+      const pass2User = `${contextBlock}${customPromptSection}
 SEO Focus Keyword: ${seoData.focusKeyword || movie.title}
 
 TASK: Write ONLY the following section of the article for "${movie.title}" (${year}):
@@ -10704,209 +10704,209 @@ Instructions: ${sec.instructions}
 
 Write at least 3-4 highly detailed paragraphs. Output ONLY HTML (starting with <h2>${sec.heading}</h2>).`;
 
-        // 4-second delay before EACH section to completely bypass rate limits
-        await new Promise(r => setTimeout(r, 4000));
+      // 4-second delay before EACH section to completely bypass rate limits
+      await new Promise(r => setTimeout(r, 4000));
 
-        try {
-          let sectionHTML = await callModelBlogLLM(pass2System, pass2User, 1500);
-          // Strip code fences if the model still outputs them
-          sectionHTML = sectionHTML.replace(/^```html/i, "").replace(/```$/i, "").trim();
-          articleHTML += sectionHTML + "\n\n";
-        } catch (e) {
-          console.error(`PASS 2 ERROR on section ${sec.heading}:`, e.message);
-          if (e.message.includes("429") || e.message.includes("Rate Limit") || e.message.includes("quota")) {
-            const provider = process.env.GEMINI_API_KEY ? "Gemini" : (process.env.OPENAI_API_KEY ? "OpenAI" : "Groq");
-            return res.status(429).json({ error: `${provider} API Rate Limit Exceeded during section "${sec.heading}". Please wait 1 minute before generating again.` });
-          }
-          // If a section fails but not a rate limit, just skip it to salvage the rest of the article
-          articleHTML += `<h2>${sec.heading}</h2><p><i>Content temporarily unavailable.</i></p>\n\n`;
+      try {
+        let sectionHTML = await callModelBlogLLM(pass2System, pass2User, 1500);
+        // Strip code fences if the model still outputs them
+        sectionHTML = sectionHTML.replace(/^```html/i, "").replace(/```$/i, "").trim();
+        articleHTML += sectionHTML + "\n\n";
+      } catch (e) {
+        console.error(`PASS 2 ERROR on section ${sec.heading}:`, e.message);
+        if (e.message.includes("429") || e.message.includes("Rate Limit") || e.message.includes("quota")) {
+          const provider = process.env.GEMINI_API_KEY ? "Gemini" : (process.env.OPENAI_API_KEY ? "OpenAI" : "Groq");
+          return res.status(429).json({ error: `${provider} API Rate Limit Exceeded during section "${sec.heading}". Please wait 1 minute before generating again.` });
         }
+        // If a section fails but not a rate limit, just skip it to salvage the rest of the article
+        articleHTML += `<h2>${sec.heading}</h2><p><i>Content temporarily unavailable.</i></p>\n\n`;
       }
-      articleHTML += "</article>";
+    }
+    articleHTML += "</article>";
 
-      let finalHTML = articleHTML;
+    let finalHTML = articleHTML;
 
-      // Sanitize
-      finalHTML = sanitizeGeneratedHTML(finalHTML);
+    // Sanitize
+    finalHTML = sanitizeGeneratedHTML(finalHTML);
 
-      const schemaMarkup = JSON.stringify({
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "Article",
-            "headline": seoData.seoTitle || movie.title,
-            "description": seoData.metaDescription || "",
-            "author": { "@type": "Organization", "name": "Ollypedia", "url": "https://www.ollypedia.in" },
-            "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "https://www.ollypedia.in", "logo": { "@type": "ImageObject", "url": "https://www.ollypedia.in/logo.png" } },
-            "datePublished": new Date().toISOString(),
-            "dateModified": new Date().toISOString(),
-            "mainEntityOfPage": { "@type": "WebPage", "@id": `https://www.ollypedia.in${seoData.canonicalPath || ""}` },
-            "keywords": (seoData.primaryKeywords || []).concat(seoData.secondaryKeywords || []).join(", "),
-          },
-          {
-            "@type": "Movie",
-            "name": movie.title,
-            "description": movie.synopsis || "",
-            "datePublished": movie.releaseDate || "",
-            "director": movie.director ? { "@type": "Person", "name": movie.director } : undefined,
-            "genre": movie.genre || [],
-            "inLanguage": movie.language || "Odia",
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.ollypedia.in" },
-              { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.ollypedia.in/blog" },
-              { "@type": "ListItem", "position": 3, "name": movie.title, "item": `https://www.ollypedia.in${seoData.canonicalPath || ""}` },
-            ],
-          },
-        ],
-      }, null, 2);
+    const schemaMarkup = JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Article",
+          "headline": seoData.seoTitle || movie.title,
+          "description": seoData.metaDescription || "",
+          "author": { "@type": "Organization", "name": "Ollypedia", "url": "https://www.ollypedia.in" },
+          "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "https://www.ollypedia.in", "logo": { "@type": "ImageObject", "url": "https://www.ollypedia.in/logo.png" } },
+          "datePublished": new Date().toISOString(),
+          "dateModified": new Date().toISOString(),
+          "mainEntityOfPage": { "@type": "WebPage", "@id": `https://www.ollypedia.in${seoData.canonicalPath || ""}` },
+          "keywords": (seoData.primaryKeywords || []).concat(seoData.secondaryKeywords || []).join(", "),
+        },
+        {
+          "@type": "Movie",
+          "name": movie.title,
+          "description": movie.synopsis || "",
+          "datePublished": movie.releaseDate || "",
+          "director": movie.director ? { "@type": "Person", "name": movie.director } : undefined,
+          "genre": movie.genre || [],
+          "inLanguage": movie.language || "Odia",
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.ollypedia.in" },
+            { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.ollypedia.in/blog" },
+            { "@type": "ListItem", "position": 3, "name": movie.title, "item": `https://www.ollypedia.in${seoData.canonicalPath || ""}` },
+          ],
+        },
+      ],
+    }, null, 2);
 
-      // Inject schema markup at the top
-      const fullHTML = `<script type="application/ld+json">\n${schemaMarkup}\n</script>\n\n${finalHTML}`;
+    // Inject schema markup at the top
+    const fullHTML = `<script type="application/ld+json">\n${schemaMarkup}\n</script>\n\n${finalHTML}`;
 
-      const generationTime = Date.now() - startTime;
-      const model = process.env.OPENAI_API_KEY ? "gpt-4o" : (process.env.GEMINI_API_KEY ? "gemini-flash-latest" : (process.env.GROQ_MODEL_BLOG || "llama-3.3-70b-versatile"));
+    const generationTime = Date.now() - startTime;
+    const model = process.env.OPENAI_API_KEY ? "gpt-4o" : (process.env.GEMINI_API_KEY ? "gemini-flash-latest" : (process.env.GROQ_MODEL_BLOG || "llama-3.3-70b-versatile"));
 
-      // Save generation log
-      try {
-        logDoc = await ModelBlogLog.create({
-          movieId,
-          movieTitle: movie.title,
-          prompt: adminPrompt || "",
-          generatedHTML: fullHTML,
-          seoData,
-          sources: research?.sources || [],
-          confidence,
-          llmModel: model,
-          generationTime,
-          status: "draft",
-        });
-      } catch { /* log failure is non-fatal */ }
-
-      res.json({
-        html: fullHTML,
-        seo: seoData,
+    // Save generation log
+    try {
+      logDoc = await ModelBlogLog.create({
+        movieId,
+        movieTitle: movie.title,
+        prompt: adminPrompt || "",
+        generatedHTML: fullHTML,
+        seoData,
+        sources: research?.sources || [],
         confidence,
+        llmModel: model,
         generationTime,
-        logId: logDoc?._id || null,
-        model,
+        status: "draft",
       });
-    } catch (e) {
-      // Log error
+    } catch { /* log failure is non-fatal */ }
+
+    res.json({
+      html: fullHTML,
+      seo: seoData,
+      confidence,
+      generationTime,
+      logId: logDoc?._id || null,
+      model,
+    });
+  } catch (e) {
+    // Log error
+    try {
+      if (req.body?.movieId && isOid(req.body.movieId)) {
+        const movie = await Movie.findById(req.body.movieId, "title").lean();
+        await ModelBlogLog.create({
+          movieId: req.body.movieId, movieTitle: movie?.title || "",
+          prompt: req.body?.prompt || "", status: "error", errorMsg: e.message,
+          generationTime: Date.now() - startTime,
+        });
+      }
+    } catch { /* silent */ }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/admin/model-blog/logs/:movieId ───────────────────────────────────
+// Returns previous generation logs for versioning UI
+app.get("/api/admin/model-blog/logs/:movieId", adminAuth, async (req, res) => {
+  try {
+    const { movieId } = req.params;
+    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
+    const logs = await ModelBlogLog.find({ movieId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select("-generatedHTML") // omit large HTML from list — full HTML fetched on restore
+      .lean();
+    res.json(logs);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/admin/model-blog/logs/:movieId/:logId ────────────────────────────
+// Returns a single log's full generated HTML (for restore)
+app.get("/api/admin/model-blog/log/:logId", adminAuth, async (req, res) => {
+  try {
+    const { logId } = req.params;
+    if (!isOid(logId)) return res.status(400).json({ error: "Invalid logId" });
+    const log = await ModelBlogLog.findById(logId).lean();
+    if (!log) return res.status(404).json({ error: "Log not found" });
+    res.json(log);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PATCH /api/admin/model-blog/log/:logId/published ─────────────────────────
+// Mark a log as published (called after blog is saved)
+app.patch("/api/admin/model-blog/log/:logId/publish", adminAuth, async (req, res) => {
+  try {
+    const { logId } = req.params;
+    if (!isOid(logId)) return res.status(400).json({ error: "Invalid logId" });
+    const { blogId } = req.body;
+    const log = await ModelBlogLog.findByIdAndUpdate(
+      logId,
+      { status: "published", publishedBlogId: isOid(blogId) ? blogId : null },
+      { new: true }
+    ).lean();
+    if (!log) return res.status(404).json({ error: "Log not found" });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// END MODEL BLOG ROUTES
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Serve Vite frontend build (Render.com deployment) ──────────────
+// "dist" is Vite's default output folder — make sure your build
+// command is: cd frontend && npm run build  (or wherever your React app lives)
+const distPath = path.join(__dirname, "dist");
+app.use(express.static(distPath));
+
+// SPA fallback — any route that isn't /api/* gets index.html
+// so React Router can handle /movie/abc, /song/xyz etc. on refresh
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "API endpoint not found" });
+  }
+  res.sendFile(path.join(distPath, "index.html"));
+});
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── TMDB Odia Movie Scraper Cron Job ──────────────────────────────────────────
+const { runTmdbOdiaScraper } = require("./scrape_tmdb_odia");
+
+cron.schedule("0 3 * * *", async () => {
+  console.log("Cron: Starting daily TMDB Odia Movie Scraper...");
+  await runTmdbOdiaScraper(autoGenerateMovieDetailsBlog);
+}, { timezone: "Asia/Kolkata" });
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.listen(process.env.PORT || 4000, () => {
+  console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
+
+  // ── Self-ping every 13 minutes to prevent Render free-tier spin-down ──────
+  // Hits GET /api/ping — lightweight no-DB endpoint defined just above.
+  // Set SELF_URL in your Render environment variables:
+  //   SELF_URL = https://your-app-name.onrender.com
+  const SELF_URL = process.env.SELF_URL;
+  if (SELF_URL) {
+    const PING_INTERVAL_MS = 13 * 60 * 1000; // 13 minutes
+    setInterval(async () => {
       try {
-        if (req.body?.movieId && isOid(req.body.movieId)) {
-          const movie = await Movie.findById(req.body.movieId, "title").lean();
-          await ModelBlogLog.create({
-            movieId: req.body.movieId, movieTitle: movie?.title || "",
-            prompt: req.body?.prompt || "", status: "error", errorMsg: e.message,
-            generationTime: Date.now() - startTime,
-          });
-        }
-      } catch { /* silent */ }
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ── GET /api/admin/model-blog/logs/:movieId ───────────────────────────────────
-  // Returns previous generation logs for versioning UI
-  app.get("/api/admin/model-blog/logs/:movieId", adminAuth, async (req, res) => {
-    try {
-      const { movieId } = req.params;
-      if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
-      const logs = await ModelBlogLog.find({ movieId })
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .select("-generatedHTML") // omit large HTML from list — full HTML fetched on restore
-        .lean();
-      res.json(logs);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // ── GET /api/admin/model-blog/logs/:movieId/:logId ────────────────────────────
-  // Returns a single log's full generated HTML (for restore)
-  app.get("/api/admin/model-blog/log/:logId", adminAuth, async (req, res) => {
-    try {
-      const { logId } = req.params;
-      if (!isOid(logId)) return res.status(400).json({ error: "Invalid logId" });
-      const log = await ModelBlogLog.findById(logId).lean();
-      if (!log) return res.status(404).json({ error: "Log not found" });
-      res.json(log);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // ── PATCH /api/admin/model-blog/log/:logId/published ─────────────────────────
-  // Mark a log as published (called after blog is saved)
-  app.patch("/api/admin/model-blog/log/:logId/publish", adminAuth, async (req, res) => {
-    try {
-      const { logId } = req.params;
-      if (!isOid(logId)) return res.status(400).json({ error: "Invalid logId" });
-      const { blogId } = req.body;
-      const log = await ModelBlogLog.findByIdAndUpdate(
-        logId,
-        { status: "published", publishedBlogId: isOid(blogId) ? blogId : null },
-        { new: true }
-      ).lean();
-      if (!log) return res.status(404).json({ error: "Log not found" });
-      res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-  });
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // END MODEL BLOG ROUTES
-  // ════════════════════════════════════════════════════════════════════════════
-
-  // ── Serve Vite frontend build (Render.com deployment) ──────────────
-  // "dist" is Vite's default output folder — make sure your build
-  // command is: cd frontend && npm run build  (or wherever your React app lives)
-  const distPath = path.join(__dirname, "dist");
-  app.use(express.static(distPath));
-
-  // SPA fallback — any route that isn't /api/* gets index.html
-  // so React Router can handle /movie/abc, /song/xyz etc. on refresh
-  app.get("*", (req, res) => {
-    if (req.path.startsWith("/api/")) {
-      return res.status(404).json({ error: "API endpoint not found" });
-    }
-    res.sendFile(path.join(distPath, "index.html"));
-  });
-  // ════════════════════════════════════════════════════════════════════════════
-  
-  // ── TMDB Odia Movie Scraper Cron Job ──────────────────────────────────────────
-  const { runTmdbOdiaScraper } = require("./scrape_tmdb_odia");
-  
-  cron.schedule("0 3 * * *", async () => {
-    console.log("Cron: Starting daily TMDB Odia Movie Scraper...");
-    await runTmdbOdiaScraper(autoGenerateMovieDetailsBlog);
-  }, { timezone: "Asia/Kolkata" });
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  app.listen(process.env.PORT || 4000, () => {
-    console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
-
-    // ── Self-ping every 13 minutes to prevent Render free-tier spin-down ──────
-    // Hits GET /api/ping — lightweight no-DB endpoint defined just above.
-    // Set SELF_URL in your Render environment variables:
-    //   SELF_URL = https://your-app-name.onrender.com
-    const SELF_URL = process.env.SELF_URL;
-    if (SELF_URL) {
-      const PING_INTERVAL_MS = 13 * 60 * 1000; // 13 minutes
-      setInterval(async () => {
-        try {
-          const res = await fetch(`${SELF_URL}/api/ping`);
-          console.log(`[Keep-Alive] Ping → ${res.status} at ${new Date().toISOString()}`);
-        } catch (e) {
-          console.warn(`[Keep-Alive] Ping failed: ${e.message}`);
-        }
-      }, PING_INTERVAL_MS);
-      console.log(`✅ Keep-alive self-ping active every 13 min → ${SELF_URL}/api/ping`);
-    } else {
-      console.log(`ℹ️  Keep-alive disabled — set SELF_URL env var to enable (e.g. https://your-app.onrender.com)`);
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+        const res = await fetch(`${SELF_URL}/api/ping`);
+        console.log(`[Keep-Alive] Ping → ${res.status} at ${new Date().toISOString()}`);
+      } catch (e) {
+        console.warn(`[Keep-Alive] Ping failed: ${e.message}`);
+      }
+    }, PING_INTERVAL_MS);
+    console.log(`✅ Keep-alive self-ping active every 13 min → ${SELF_URL}/api/ping`);
+  } else {
+    console.log(`ℹ️  Keep-alive disabled — set SELF_URL env var to enable (e.g. https://your-app.onrender.com)`);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
 
-  });
+});
 // ── KEEP-ALIVE PATCH — replace the last app.listen() above with this ────────
 // (Already patched inline below — this comment is for reference only)

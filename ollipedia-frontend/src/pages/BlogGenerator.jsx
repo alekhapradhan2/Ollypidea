@@ -731,6 +731,358 @@ function YoutubePicker({ value, onChange }) {
   );
 }
 
+// ─── Entity Linker UI ─────────────────────────────────────────────────────────
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function makeFuzzyRegex(name) {
+  const trimmed = name.trim();
+  // If the entire name is very short, do not use fuzzy matching to prevent crazy false positives.
+  if (trimmed.length < 5) {
+      return new RegExp(`(^|[\\s\\W])(${escapeRegex(trimmed)})(?=[\\s\\W]|$)`, 'gi');
+  }
+
+  const words = trimmed.split(/\s+/);
+  const fuzzyWords = words.map(word => {
+     // Don't fuzzy match very short individual words (e.g., "Om", "of", "the")
+     if (word.length <= 3) return escapeRegex(word);
+
+     let pattern = '';
+     for (let i = 0; i < word.length; i++) {
+        const char = word[i];
+        if (/[a-zA-Z0-9]/.test(char)) {
+            if (i === 0) {
+                // ALWAYS keep the first letter exact to prevent matching completely different words
+                pattern += char;
+            } else if (/[aeiouyAEIOUY]/.test(char)) {
+                pattern += '[aeiouyAEIOUY]*';
+            } else {
+                pattern += char + '[aeiouyAEIOUY]*';
+            }
+        } else {
+            pattern += '\\' + char; // Escape special characters
+        }
+     }
+     return pattern.replace(/(\[aeiouyAEIOUY\]\*)+/g, '[aeiouyAEIOUY]*');
+  });
+  return new RegExp(`(^|[\\s\\W])(${fuzzyWords.join('\\s+')})(?=[\\s\\W]|$)`, 'gi');
+}
+
+function applyEntityLink(content, name, url) {
+  if (!content) return content;
+  const regex = new RegExp(`(^|[\\s\\W])(${escapeRegex(name)})(?=[\\s\\W]|$)`, 'gi');
+  const parts = content.split(/(<[^>]*>)/g);
+  
+  const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+  
+  // Pass 1: Check if already linked in body
+  let tagStack = [];
+  let alreadyLinkedInBody = false;
+  for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.startsWith('</')) {
+          const match = part.match(/^<\/\s*([a-z0-9]+)/i);
+          if (match) {
+              const tagName = match[1].toLowerCase();
+              const idx = tagStack.lastIndexOf(tagName);
+              if (idx !== -1) tagStack.splice(idx, 1);
+          }
+      } else if (part.startsWith('<')) {
+          const match = part.match(/^<\s*([a-z0-9]+)/i);
+          if (match) {
+              const tagName = match[1].toLowerCase();
+              if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
+                  tagStack.push(tagName);
+              }
+          }
+          if (part.toLowerCase().startsWith('<a ') && part.includes(url)) {
+              const inTableOrList = tagStack.includes('table') || tagStack.includes('ul') || tagStack.includes('ol');
+              if (!inTableOrList) {
+                  alreadyLinkedInBody = true;
+              }
+          }
+      }
+  }
+
+  // Pass 2: Actual replacement
+  tagStack = [];
+  let hasLinkedInBody = alreadyLinkedInBody;
+
+  for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      
+      if (part.startsWith('</')) {
+          const match = part.match(/^<\/\s*([a-z0-9]+)/i);
+          if (match) {
+              const tagName = match[1].toLowerCase();
+              const idx = tagStack.lastIndexOf(tagName);
+              if (idx !== -1) tagStack.splice(idx, 1);
+          }
+      } else if (part.startsWith('<')) {
+          const match = part.match(/^<\s*([a-z0-9]+)/i);
+          if (match) {
+              const tagName = match[1].toLowerCase();
+              if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
+                  tagStack.push(tagName);
+              }
+          }
+      } else if (part.trim().length > 0) {
+          // It's a non-empty text node
+          const inA = tagStack.includes('a');
+          const inHeading = tagStack.some(t => /^h[1-6]$/.test(t));
+          const inTableOrList = tagStack.includes('table') || tagStack.includes('ul') || tagStack.includes('ol');
+          
+          if (!inA && !inHeading) {
+              parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+                  if (inTableOrList) {
+                      return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+                  } else {
+                      if (!hasLinkedInBody) {
+                          hasLinkedInBody = true;
+                          return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+                      }
+                      return fullMatch;
+                  }
+              });
+          }
+      }
+  }
+  return parts.join('');
+}
+
+function EntityLinkerUI({ content, movies=[], cast=[], onChange }) {
+  const [detected, setDetected] = useState([]);
+  const [linked, setLinked] = useState([]);
+  const [verifyingEntity, setVerifyingEntity] = useState(null);
+  const [ignored, setIgnored] = useState([]);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!content) { setDetected([]); setLinked([]); return; }
+      
+      // 1. Find already linked
+      const linkRegex = /<a[^>]*href="([^"]*?(?:\/movie\/|\/cast\/)[^"]*)"[^>]*>(.*?)<\/a>/gi;
+      const newLinked = [];
+      let m;
+      while ((m = linkRegex.exec(content)) !== null) {
+          if (!newLinked.some(l => l.fullTag === m[0])) {
+              newLinked.push({ fullTag: m[0], href: m[1], text: m[2], id: m[1] + m[2] });
+          }
+      }
+      setLinked(newLinked);
+
+      // 2. Find unlinked detected mentions
+      const unlinkedText = content.replace(/<a[^>]*>.*?<\/a>/gi, ' ');
+      const newDetected = [];
+      
+      const checkEntity = (name, item, type) => {
+        if (ignored.includes(item._id)) return; // Skip if user ignored it
+        if (!name || name.trim().length < 3) return;
+        const regex = makeFuzzyRegex(name);
+        
+        let match;
+        while ((match = regex.exec(unlinkedText)) !== null) {
+           if (match.index === regex.lastIndex) {
+               regex.lastIndex++; // Prevent infinite loops on zero-length matches
+           }
+           const matchedText = match[2];
+           const maxDiff = Math.max(1, Math.floor(name.trim().length * 0.2)); // Adaptive length difference
+           if (matchedText && Math.abs(matchedText.length - name.trim().length) <= maxDiff) {
+               const urlPart = type === 'movie' ? `/movie/${item.slug || slugify(item.title)}` : `/cast/${item._id}`;
+               
+               // Dry-run: Does this entity have any VALID unlinked occurrences left?
+               // (i.e., not a duplicate occurrence in the body)
+               const dryRun = applyEntityLink(content, matchedText, urlPart);
+               if (dryRun !== content) {
+                   if (!newDetected.some(d => d._id === item._id)) {
+                       newDetected.push({ ...item, type, linkUrl: urlPart, displayName: matchedText });
+                   }
+               }
+               break; 
+           }
+        }
+      };
+
+      movies.forEach(m => checkEntity(m.title, m, 'movie'));
+      cast.forEach(c => checkEntity(c.name, c, 'cast'));
+
+      setDetected(newDetected);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [content, movies, cast]);
+
+  const handleLink = (entity) => {
+    onChange(applyEntityLink(content, entity.displayName, entity.linkUrl));
+    if (verifyingEntity && verifyingEntity._id === entity._id) {
+      setVerifyingEntity(null);
+    }
+  };
+
+  const handleLinkAll = () => {
+    if (!window.confirm(`Auto-link all ${detected.length} detected mentions?`)) return;
+    let newContent = content;
+    detected.forEach(entity => {
+      newContent = applyEntityLink(newContent, entity.displayName, entity.linkUrl);
+    });
+    onChange(newContent);
+  };
+
+  const handleUnlink = (linkItem) => {
+    onChange(content.replace(linkItem.fullTag, linkItem.text));
+  };
+
+  const getContextSnippet = (entity) => {
+      const plainText = content.replace(/<[^>]*>/g, ' ');
+      const idx = plainText.toLowerCase().indexOf(entity.displayName.toLowerCase());
+      if (idx === -1) return null;
+      const start = Math.max(0, idx - 45);
+      const end = Math.min(plainText.length, idx + entity.displayName.length + 45);
+      const snippet = "..." + plainText.substring(start, end).replace(/\s+/g, ' ') + "...";
+      const parts = snippet.split(new RegExp(`(${escapeRegex(entity.displayName)})`, 'i'));
+      
+      return (
+          <div style={{ fontSize: ".75rem", fontStyle: "italic", color: "var(--muted)", background: "rgba(255,255,255,0.05)", padding: 8, borderRadius: 4, marginTop: 12 }}>
+             {parts.map((p, i) => p.toLowerCase() === entity.displayName.toLowerCase() ? <strong key={i} style={{ color: "var(--text)" }}>{p}</strong> : p)}
+          </div>
+      );
+  };
+
+  if (detected.length === 0 && linked.length === 0) return null;
+
+  return (
+    <>
+      {(detected.length > 0 || linked.length > 0) && (
+        <div style={{ marginTop: 10, padding: 12, background: "rgba(126,200,227,.04)", border: "1px solid rgba(126,200,227,.15)", borderRadius: 8 }}>
+          {detected.length > 0 && (
+            <div style={{ marginBottom: linked.length > 0 ? 16 : 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontSize: ".75rem", fontWeight: 700, color: "#7ec8e3" }}>✨ Detected Mentions (Not Linked Yet)</span>
+                <button className="bg-btn bg-btn-blue" style={{ fontSize: ".7rem", padding: "4px 8px" }} onClick={handleLinkAll}>
+                  🔗 Link All
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", maxHeight: 160, overflowY: "auto", paddingBottom: 6, paddingRight: 4 }}>
+                {detected.map(d => (
+                  <div key={d._id} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg3)", padding: "6px 10px", borderRadius: 6, border: "1px solid rgba(126,200,227,.3)", width: "max-content" }}>
+                    <img 
+                      src={d.type === 'movie' ? (d.posterUrl || d.thumbnailUrl) : d.photo} 
+                      alt={d.displayName}
+                      style={{ width: 24, height: 24, borderRadius: d.type === 'cast' ? "50%" : 4, objectFit: "cover" }} 
+                      onError={e => e.target.style.display="none"}
+                    />
+                    <div>
+                      <div style={{ fontSize: ".75rem", fontWeight: 700, color: "var(--text)" }}>{d.displayName}</div>
+                      <div style={{ fontSize: ".65rem", color: "var(--muted)" }}>{d.type === 'movie' ? 'Movie' : 'Cast/Crew'}</div>
+                    </div>
+                    <button className="bg-btn bg-btn-ghost" style={{ fontSize: ".65rem", padding: "3px 8px", marginLeft: 4 }} onClick={() => setVerifyingEntity(d)}>
+                      Verify
+                    </button>
+                    <button className="bg-btn bg-btn-ghost" style={{ fontSize: ".65rem", padding: "3px 6px", color: "#e57373" }} onClick={() => setIgnored([...ignored, d._id])} title="Ignore">
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {linked.length > 0 && (
+            <div style={{ borderTop: detected.length > 0 ? "1px solid rgba(255,255,255,.05)" : "none", paddingTop: detected.length > 0 ? 10 : 0 }}>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: ".75rem", fontWeight: 700, color: "var(--muted)" }}>✅ Already Linked</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", maxHeight: 120, overflowY: "auto", paddingBottom: 4, paddingRight: 4 }}>
+                {linked.map(l => (
+                  <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.03)", padding: "4px 8px", borderRadius: 4, border: "1px solid rgba(255,255,255,.08)", width: "max-content" }}>
+                    <span style={{ fontSize: ".72rem", color: "var(--text)" }}>{l.text}</span>
+                    <button className="bg-btn bg-btn-ghost" style={{ fontSize: ".6rem", padding: "2px 6px", color: "#e57373" }} onClick={() => handleUnlink(l)}>
+                      ✕ Unlink
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {verifyingEntity && (
+        <div className="bg-overlay" onClick={e => e.target === e.currentTarget && setVerifyingEntity(null)} style={{ zIndex: 100000 }}>
+          <div className="bg-modal" style={{ maxWidth: 500 }}>
+            <div className="bg-modal-head">
+              <span className="bg-modal-title">🔍 Verify Entity Link</span>
+              <button className="bg-modal-close" onClick={() => setVerifyingEntity(null)}>×</button>
+            </div>
+            <div className="bg-modal-body" style={{ display: "flex", gap: 16 }}>
+              <img 
+                src={verifyingEntity.type === 'movie' ? (verifyingEntity.posterUrl || verifyingEntity.thumbnailUrl) : verifyingEntity.photo} 
+                alt={verifyingEntity.displayName}
+                style={{ width: 120, height: verifyingEntity.type === 'movie' ? 170 : 120, borderRadius: verifyingEntity.type === 'cast' ? "50%" : 8, objectFit: "cover", border: "1px solid var(--border)" }} 
+                onError={e => e.target.style.display="none"}
+              />
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: "1.2rem", color: "var(--text)" }}>{verifyingEntity.displayName}</h3>
+                <div style={{ fontSize: ".8rem", color: "var(--gold)", fontWeight: 600, marginBottom: 12 }}>
+                  {verifyingEntity.type === 'movie' ? '🎬 Movie' : `🎭 ${verifyingEntity.type || 'Cast/Crew'}`}
+                </div>
+                
+                {getContextSnippet(verifyingEntity)}
+                
+                {verifyingEntity.type === 'movie' ? (
+                  <>
+                    {verifyingEntity.releaseDate && <div style={{ fontSize: ".75rem", marginBottom: 4, color: "var(--muted)" }}><strong>Released:</strong> {new Date(verifyingEntity.releaseDate).getFullYear()}</div>}
+                    {verifyingEntity.director && <div style={{ fontSize: ".75rem", marginBottom: 8, color: "var(--muted)" }}><strong>Director:</strong> {verifyingEntity.director}</div>}
+                    {verifyingEntity.synopsis ? (
+                      <div style={{ fontSize: ".8rem", color: "var(--text)", lineHeight: 1.5, maxHeight: 100, overflowY: "auto", marginTop: 12 }}>
+                        {verifyingEntity.synopsis}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: ".8rem", color: "var(--muted)", fontStyle: "italic", marginTop: 12 }}>No synopsis available.</div>
+                    )}
+                    {verifyingEntity.cast && verifyingEntity.cast.length > 0 && (
+                      <div style={{ marginTop: 12, fontSize: ".75rem", color: "var(--muted)" }}>
+                        <strong>Cast:</strong> {verifyingEntity.cast.slice(0, 4).map(c => c.name).join(', ')}{verifyingEntity.cast.length > 4 ? '...' : ''}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {verifyingEntity.bio ? (
+                      <div style={{ fontSize: ".8rem", color: "var(--text)", lineHeight: 1.5, maxHeight: 120, overflowY: "auto", marginTop: 12 }}>
+                        {verifyingEntity.bio}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: ".8rem", color: "var(--muted)", fontStyle: "italic", marginTop: 12 }}>No bio available.</div>
+                    )}
+                    <div style={{ marginTop: 12, fontSize: ".75rem", color: "var(--muted)" }}>
+                      <strong>Roles:</strong> {verifyingEntity.roles && verifyingEntity.roles.length > 0 ? verifyingEntity.roles.join(', ') : (verifyingEntity.type || 'Cast/Crew')}
+                    </div>
+                    <div style={{ marginTop: 12, fontSize: ".75rem", color: "var(--muted)" }}>
+                      <strong>Filmography:</strong> {
+                        movies
+                          .filter(m => m.cast && m.cast.some(c => c.castId === verifyingEntity._id || c.name === verifyingEntity.name))
+                          .slice(0, 8)
+                          .map(m => m.title)
+                          .join(', ') || 'No known movies in database.'
+                      }
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="bg-modal-foot">
+              <button className="bg-btn bg-btn-ghost" onClick={() => setVerifyingEntity(null)}>Cancel</button>
+              <button className="bg-btn bg-btn-blue" onClick={() => handleLink(verifyingEntity)}>
+                ✅ Approve & Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
   const [title,          setTitle]          = useState(article.title          || "");
@@ -867,6 +1219,7 @@ function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
               onToast={onToast}
             />
             <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall" value={content} onChange={e => setContent(e.target.value)} />
+            <EntityLinkerUI content={content} movies={movies} cast={cast} onChange={setContent} />
           </div>
           <YoutubePicker value={youtubeVideoId} onChange={setYoutubeVideoId} />
 
@@ -1482,6 +1835,7 @@ function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
                 <textarea ref={contentRef} className="bg-field-input bg-field-textarea tall"
                   style={{ minHeight:240, resize:"vertical" }}
                   value={blogContent} onChange={e=>setBlogContent(e.target.value)} />
+                <EntityLinkerUI content={blogContent} movies={movies} cast={cast} onChange={setBlogContent} />
               </div>
 
               {MetaFields}
@@ -1519,6 +1873,7 @@ function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
                   style={{ minHeight:260, resize:"vertical" }}
                   value={blogContent} onChange={e=>setBlogContent(e.target.value)}
                   placeholder="Write your full blog content here…" />
+                <EntityLinkerUI content={blogContent} movies={movies} cast={cast} onChange={setBlogContent} />
               </div>
 
               {MetaFields}
