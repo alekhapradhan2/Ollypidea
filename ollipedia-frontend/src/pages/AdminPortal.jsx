@@ -3321,8 +3321,8 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                     </td>
                                   )}
                                   <td
-                                    style={{ padding: "14px 20px", fontWeight: 700, color: "var(--text)", cursor: "pointer" }}
-                                    onClick={() => selectMode ? toggleSel(m._id) : openMovieDetail(m)}
+                                    style={{ padding: "14px 20px", fontWeight: 700, color: "var(--text)", cursor: selectMode ? "pointer" : "default" }}
+                                    onClick={() => selectMode && toggleSel(m._id)}
                                   >
                                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                                       {m.posterUrl || m.thumbnailUrl ? (

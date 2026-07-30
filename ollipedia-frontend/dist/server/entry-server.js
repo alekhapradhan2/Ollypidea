@@ -15393,8 +15393,8 @@ function AdminPortal({ admin, onLogout, onToast }) {
                         /* @__PURE__ */ jsx(
                           "td",
                           {
-                            style: { padding: "14px 20px", fontWeight: 700, color: "var(--text)", cursor: "pointer" },
-                            onClick: () => selectMode ? toggleSel(m._id) : openMovieDetail(m),
+                            style: { padding: "14px 20px", fontWeight: 700, color: "var(--text)", cursor: selectMode ? "pointer" : "default" },
+                            onClick: () => selectMode && toggleSel(m._id),
                             children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: [
                               m.posterUrl || m.thumbnailUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl || m.thumbnailUrl, alt: m.title, style: { width: 28, height: 40, objectFit: "cover", borderRadius: 4 }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("span", { style: { fontSize: "1.2rem" }, children: "🎬" }),
                               /* @__PURE__ */ jsxs("div", { children: [
