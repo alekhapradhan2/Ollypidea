@@ -506,7 +506,6 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     bannerUrl: initial?.bannerUrl || "",
     boxOffice: initial?.boxOffice || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
     trivia: initial?.trivia || [],
-    trivia: initial?.trivia || [],
     streamingOn: initial?.streamingOn || initial?.ott?.platform || "",
     streamingUrl: initial?.streamingUrl || initial?.ott?.watchUrl || "",
     ottReleaseDate: initial?.ottReleaseDate || initial?.ott?.releaseDate || "",
@@ -2463,6 +2462,323 @@ function AnalyticsPanel({ onToast }) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// STAFF MANAGEMENT PANEL
+// ════════════════════════════════════════════════════════════════
+const ALL_MODULES = [
+  { key: "dashboard", icon: "🏠", label: "Dashboard" },
+  { key: "movies", icon: "🎬", label: "Movies" },
+  { key: "songs", icon: "🎵", label: "Songs" },
+  { key: "cast", icon: "🎭", label: "Cast & Crew" },
+  { key: "productions", icon: "🎥", label: "Productions" },
+  { key: "news", icon: "📰", label: "News" },
+  { key: "blog", icon: "✍️", label: "Blog" },
+  { key: "modelblog", icon: "🤖", label: "Model Blog" },
+  { key: "boxoffice", icon: "📊", label: "Box Office" },
+  { key: "tracker", icon: "🎟", label: "BMS Tracker" },
+  { key: "sacnilk", icon: "🕷️", label: "Sacnilk" },
+  { key: "poster", icon: "🖼️", label: "Poster Generator" },
+  { key: "enquiries", icon: "✉️", label: "Enquiries" },
+  { key: "analytics", icon: "📈", label: "Analytics" },
+  { key: "merge", icon: "🔀", label: "Merge Duplicates" },
+  { key: "autoindex", icon: "📡", label: "Auto-Indexing" },
+  { key: "staff", icon: "👥", label: "Staff Management" },
+  { key: "settings", icon: "⚙️", label: "Settings" },
+];
+
+function StaffPanel({ onToast }) {
+  const [staffList, setStaffList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(null); // null | { mode: "create"|"edit", data: null|staffObj }
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+
+  // Form states
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [selectedPerms, setSelectedPerms] = useState(new Set());
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  const loadStaff = async () => {
+    setLoading(true);
+    try {
+      const list = await API.adminGetStaff();
+      setStaffList(list);
+    } catch (e) {
+      onToast?.(e.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openCreateModal = () => {
+    setName("");
+    setEmail("");
+    setPassword("");
+    setSelectedPerms(new Set(["dashboard", "movies", "songs", "cast"]));
+    setModal({ mode: "create", data: null });
+  };
+
+  const openEditModal = (staff) => {
+    setName(staff.name || "");
+    setEmail(staff.email || "");
+    setPassword("");
+    setSelectedPerms(new Set(staff.permissions || []));
+    setModal({ mode: "edit", data: staff });
+  };
+
+  const togglePerm = (key) => {
+    setSelectedPerms((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAllPerms = () => {
+    setSelectedPerms(new Set(ALL_MODULES.map((m) => m.key)));
+  };
+
+  const clearAllPerms = () => {
+    setSelectedPerms(new Set([]));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return onToast?.("Name is required", "error");
+    if (!email.trim()) return onToast?.("Email is required", "error");
+    if (modal.mode === "create" && !password.trim()) {
+      return onToast?.("Password is required for new staff", "error");
+    }
+    if (password && password.length < 6) {
+      return onToast?.("Password must be at least 6 characters", "error");
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        name: name.trim(),
+        email: email.trim(),
+        permissions: Array.from(selectedPerms),
+      };
+      if (password.trim()) payload.password = password.trim();
+
+      if (modal.mode === "create") {
+        const created = await API.adminCreateStaff(payload);
+        setStaffList((prev) => [created, ...prev]);
+        onToast?.(`Staff member "${created.name}" created!`);
+      } else {
+        const updated = await API.adminUpdateStaff(modal.data._id, payload);
+        setStaffList((prev) => prev.map((s) => (s._id === updated._id ? updated : s)));
+        onToast?.(`Staff member "${updated.name}" updated!`);
+      }
+      setModal(null);
+    } catch (e) {
+      onToast?.(e.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = (staff) => {
+    setConfirm({
+      message: `Delete staff member "${staff.name}" (${staff.email})? This cannot be undone.`,
+      onConfirm: async () => {
+        setConfirm(null);
+        try {
+          await API.adminDeleteStaff(staff._id);
+          setStaffList((prev) => prev.filter((s) => s._id !== staff._id));
+          onToast?.(`Staff member "${staff.name}" deleted.`);
+        } catch (e) {
+          onToast?.(e.message, "error");
+        }
+      },
+    });
+  };
+
+  return (
+    <div style={{ padding: "28px 28px 40px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ fontSize: "1.5rem", marginBottom: 4 }}>Staff Management</h2>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+            Create staff accounts, assign passwords, and control module access permissions.
+          </p>
+        </div>
+        <button className="btn btn-gold" onClick={openCreateModal}>
+          + Add New Staff
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>Loading staff accounts…</div>
+      ) : staffList.length === 0 ? (
+        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>👥</div>
+          <div style={{ fontWeight: 700, fontSize: "1.1rem", marginBottom: 6 }}>No Staff Accounts</div>
+          <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: 20 }}>
+            You haven't created any staff members yet. Click "+ Add New Staff" to create one.
+          </p>
+          <button className="btn btn-gold" onClick={openCreateModal}>
+            + Add New Staff
+          </button>
+        </div>
+      ) : (
+        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+            <thead>
+              <tr style={{ background: "var(--bg3)", color: "var(--muted)", textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+                <th style={{ padding: "12px 16px" }}>Staff Name</th>
+                <th style={{ padding: "12px 16px" }}>Email</th>
+                <th style={{ padding: "12px 16px" }}>Module Permissions</th>
+                <th style={{ padding: "12px 16px" }}>Created</th>
+                <th style={{ padding: "12px 16px", textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffList.map((s) => {
+                const permCount = (s.permissions || []).length;
+                return (
+                  <tr key={s._id} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "14px 16px", fontWeight: 700, color: "var(--text)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--gold)", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.9rem" }}>
+                          {s.name?.[0]?.toUpperCase() || "S"}
+                        </div>
+                        <div>{s.name}</div>
+                      </div>
+                    </td>
+                    <td style={{ padding: "14px 16px", color: "var(--muted)" }}>{s.email}</td>
+                    <td style={{ padding: "14px 16px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxWidth: 450 }}>
+                        {(s.permissions || []).map((pKey) => {
+                          const mod = ALL_MODULES.find((m) => m.key === pKey);
+                          return (
+                            <span key={pKey} style={{ fontSize: "0.7rem", background: "rgba(201,151,58,0.12)", color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)", padding: "2px 8px", borderRadius: 12 }}>
+                              {mod ? `${mod.icon} ${mod.label}` : pKey}
+                            </span>
+                          );
+                        })}
+                        {permCount === 0 && (
+                          <span style={{ fontSize: "0.72rem", color: "#e05555", background: "rgba(224,85,85,0.1)", padding: "2px 8px", borderRadius: 12 }}>
+                            No permissions granted
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: "14px 16px", color: "var(--muted)", fontSize: "0.78rem" }}>
+                      {fmtDate(s.createdAt)}
+                    </td>
+                    <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => openEditModal(s)}>
+                          Edit / Permissions
+                        </button>
+                        <button className="btn btn-ghost btn-sm" style={{ color: "#e05555" }} onClick={() => handleDelete(s)}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Staff Create / Edit Modal */}
+      {modal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 640, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 800 }}>
+                {modal.mode === "create" ? "Add New Staff Member" : `Edit Staff: ${modal.data.name}`}
+              </h3>
+              <button onClick={() => setModal(null)} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: "1.4rem", cursor: "pointer" }}>
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} style={{ padding: 24, overflowY: "auto", flex: 1 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label className="form-label">Full Name *</label>
+                  <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahul Sharma" required />
+                </div>
+                <div>
+                  <label className="form-label">Email Address *</label>
+                  <input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="staff@ollipedia.in" required />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <label className="form-label">
+                  Password {modal.mode === "edit" && <span style={{ color: "var(--muted)", fontWeight: 400 }}>(leave blank to keep current password)</span>} *
+                </label>
+                <input className="form-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={modal.mode === "create" ? "Min 6 characters" : "••••••••"} required={modal.mode === "create"} />
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div>
+                    <label className="form-label" style={{ marginBottom: 2 }}>Module Access Permissions</label>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Check the modules this staff member is allowed to see and manage.</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" onClick={selectAllPerms} className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem" }}>Select All</button>
+                    <button type="button" onClick={clearAllPerms} className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem", color: "var(--muted)" }}>Clear All</button>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, background: "var(--bg1)", padding: 16, borderRadius: 10, border: "1px solid var(--border)" }}>
+                  {ALL_MODULES.map((m) => {
+                    const isChecked = selectedPerms.has(m.key);
+                    return (
+                      <label key={m.key} onClick={() => togglePerm(m.key)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 6, background: isChecked ? "rgba(201,151,58,0.1)" : "transparent", border: `1px solid ${isChecked ? "var(--gold)" : "transparent"}`, cursor: "pointer", transition: "all 0.15s" }}>
+                        <input type="checkbox" checked={isChecked} onChange={() => {}} style={{ accentColor: "var(--gold)", cursor: "pointer" }} />
+                        <span style={{ fontSize: "1rem" }}>{m.icon}</span>
+                        <span style={{ fontSize: "0.83rem", fontWeight: isChecked ? 700 : 400, color: isChecked ? "var(--gold)" : "var(--text)" }}>{m.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+                <button type="submit" className="btn btn-gold" disabled={saving}>
+                  {saving ? "Saving…" : modal.mode === "create" ? "Create Staff Member" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 24, width: "100%", maxWidth: 420, textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontWeight: 700, fontSize: "1.1rem", marginBottom: 12 }}>Are you sure?</div>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: 24, lineHeight: 1.5 }}>{confirm.message}</p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button className="btn btn-ghost" onClick={() => setConfirm(null)}>Cancel</button>
+              <button className="btn btn-danger" style={{ background: "#e05555", color: "#fff" }} onClick={confirm.onConfirm}>Delete Staff</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════
 // MAIN ADMIN PORTAL
 // ════════════════════════════════════════════════════════════════
 export default function AdminPortal({ admin, onLogout, onToast }) {
@@ -2478,7 +2794,33 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const [loadingSecondary, setLoadingSecondary] = useState(true); // cast/productions/news/enquiries still fetching
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [movieView, setMovieView] = useState("grid"); // "grid" | "list" — staff defaults to "list" via useEffect
+  const [yearFilter, setYearFilter] = useState("");   // "" for all years, or e.g. "2026"
+  const [editingDateId, setEditingDateId] = useState(null);
+  const [editingDateValue, setEditingDateValue] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
   const setQ = (v) => { setSearch(v); resetPages(); };
+
+  // Set default view for staff to List View
+  useEffect(() => {
+    if (admin && !admin.isSuperAdmin && admin.permissions && !admin.permissions.includes("*")) {
+      setMovieView("list");
+    }
+  }, [admin]);
+
+  const handleSaveReleaseDate = async (movieId) => {
+    setSavingDate(true);
+    try {
+      const updated = await API.adminUpdateMovie(movieId, { releaseDate: editingDateValue });
+      setMovies(prev => prev.map(m => m._id === movieId ? updated : m));
+      onToast?.("Release date updated!");
+      setEditingDateId(null);
+    } catch (e) {
+      onToast?.(e.message, "error");
+    } finally {
+      setSavingDate(false);
+    }
+  };
   const [modal, setModal] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [detailMovie, setDetailMovie] = useState(null);
@@ -2492,10 +2834,29 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const PG = { movies: 24, cast: 32, songs: 12, prods: 12, news: 16 };
   const resetPages = () => { setMoviePage(1); setCastPage(1); setProdPage(1); setNewsPage(1); setSongPage(1); };
 
+  // Permissions check
+  const isSuperAdmin = admin?.isSuperAdmin || !admin?.permissions || admin?.permissions?.includes("*");
+  const userPermissions = isSuperAdmin
+    ? ALL_MODULES.map(m => m.key)
+    : (admin?.permissions || ["dashboard"]);
+
+  const hasAccess = (moduleKey) => {
+    if (isSuperAdmin) return true;
+    return Array.isArray(userPermissions) && userPermissions.includes(moduleKey);
+  };
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!admin || !getAdminToken()) navigate("/admin/login");
   }, [admin]);
+
+  // Restrict access to unpermitted tabs
+  useEffect(() => {
+    if (admin && !hasAccess(tab)) {
+      const fallback = userPermissions[0] || "dashboard";
+      setTab(fallback);
+    }
+  }, [admin, tab]);
 
   useEffect(() => {
     if (admin) loadAll();
@@ -2672,8 +3033,28 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const clearSel = () => { setSelected(new Set()); setSelectMode(false); };
 
   const q = search.toLowerCase();
+
+  // Extract distinct release years
+  const availableYears = Array.from(new Set(
+    movies
+      .map(m => {
+        if (!m.releaseDate) return null;
+        const d = new Date(m.releaseDate);
+        const y = d.getFullYear();
+        return isNaN(y) ? null : String(y);
+      })
+      .filter(Boolean)
+  )).sort((a, b) => b - a);
+
   const filteredMovies = movies
-    .filter(m => !q || m.title?.toLowerCase().includes(q))
+    .filter(m => {
+      const matchSearch = !q || m.title?.toLowerCase().includes(q);
+      const mYear = m.releaseDate && !isNaN(new Date(m.releaseDate).getFullYear())
+        ? String(new Date(m.releaseDate).getFullYear())
+        : "";
+      const matchYear = !yearFilter || mYear === yearFilter;
+      return matchSearch && matchYear;
+    })
     .slice().sort((a, b) => {
       const now = Date.now();
       const da = a.releaseDate ? new Date(a.releaseDate).getTime() : Infinity;
@@ -2694,6 +3075,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
     setTab(newTab);
     setDetailMovie(null);
     setSearch("");
+    setYearFilter("");
     setSelected(new Set());
     setSelectMode(false);
     resetPages();
@@ -2732,25 +3114,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           display: "flex", flexDirection: "column", padding: "24px 0",
           flexShrink: 0, height: "100%", overflowY: "auto",
         }}>
-          {[
-            ["dashboard", "🏠", "Dashboard"],
-            ["movies", "🎬", "Movies"],
-            ["songs", "🎵", "Songs"],
-            ["cast", "🎭", "Cast & Crew"],
-            ["productions", "🎥", "Productions"],
-            ["news", "📰", "News"],
-            ["blog", "✍️", "Blog"],
-            ["modelblog", "🤖", "Model Blog"],
-            ["boxoffice", "📊", "Box Office"],
-            ["tracker", "🎟", "BMS Tracker"],
-            ["sacnilk", "🕷️ Sacnilk"],
-            ["poster", "🖼️", "Poster Generator"],
-            ["enquiries", "✉️", "Enquiries"],
-            ["analytics", "📈", "Analytics"],
-            ["merge", "🔀", "Merge Duplicates"],
-            ["autoindex", "📡", "Auto-Indexing"],
-            ["settings", "⚙️", "Settings"],
-          ].map(([key, icon, label]) => {
+          {ALL_MODULES.filter(m => hasAccess(m.key)).map(({ key, icon, label }) => {
             const unread = key === "enquiries" ? enquiries.filter(e => !e.read).length : 0;
             return (
               <button key={key} onClick={() => handleTabChange(key)} style={{
@@ -2796,7 +3160,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                       ["🎥", "Productions", stats?.productions || prods.length, "productions"],
                       ["📰", "News Articles", stats?.news || news.length, "news"],
                       ["✉️", "Enquiries", enquiries.length, "enquiries"],
-                    ].map(([icon, label, count, key]) => {
+                    ].filter(([, , , key]) => hasAccess(key)).map(([icon, label, count, key]) => {
                       const unread = key === "enquiries" ? enquiries.filter(e => !e.read).length : 0;
                       return (
                         <div key={key} onClick={() => handleTabChange(key)} style={{ background: "var(--bg2)", border: `1px solid ${unread > 0 ? "rgba(224,85,85,.5)" : "var(--border)"}`, borderRadius: 10, padding: "20px 22px", cursor: "pointer", transition: "border-color 0.15s", position: "relative" }}
@@ -2834,7 +3198,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
               {/* ── MOVIES ── */}
               {tab === "movies" && !detailMovie && (() => {
-                const pagedMovies = filteredMovies.slice((moviePage - 1) * PG.movies, moviePage * PG.movies);
+                const pagedMovies = yearFilter
+                  ? filteredMovies
+                  : filteredMovies.slice((moviePage - 1) * PG.movies, moviePage * PG.movies);
                 const allIds = filteredMovies.map(m => m._id);
                 const allSel = allIds.length > 0 && allIds.every(id => selected.has(id));
                 return (
@@ -2845,10 +3211,53 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                       <span style={{ fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", padding: "2px 9px", borderRadius: 12, fontWeight: 600 }}>
                         {filteredMovies.length !== movies.length ? `${filteredMovies.length} / ${movies.length}` : `${movies.length} total`}
                       </span>
+
+                      {/* Year Filter Dropdown */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
+                        <span style={{ fontSize: "0.78rem", color: "var(--muted)", fontWeight: 600 }}>Year:</span>
+                        <select
+                          className="form-input"
+                          style={{ width: "auto", padding: "4px 10px", fontSize: "0.82rem", background: "var(--bg2)", color: "var(--text)" }}
+                          value={yearFilter}
+                          onChange={e => { setYearFilter(e.target.value); resetPages(); }}
+                        >
+                          <option value="">All Years</option>
+                          {availableYears.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* View Switcher (Grid / List) */}
+                      <div style={{ display: "flex", background: "var(--bg2)", borderRadius: 8, padding: 2, border: "1px solid var(--border)", marginLeft: 6 }}>
+                        <button
+                          onClick={() => setMovieView("grid")}
+                          style={{
+                            padding: "4px 10px", border: "none", borderRadius: 6, cursor: "pointer",
+                            background: movieView === "grid" ? "var(--gold)" : "transparent",
+                            color: movieView === "grid" ? "#000" : "var(--muted)",
+                            fontWeight: 700, fontSize: "0.78rem", display: "flex", alignItems: "center", gap: 4
+                          }}
+                        >
+                          ▦ Grid
+                        </button>
+                        <button
+                          onClick={() => setMovieView("list")}
+                          style={{
+                            padding: "4px 10px", border: "none", borderRadius: 6, cursor: "pointer",
+                            background: movieView === "list" ? "var(--gold)" : "transparent",
+                            color: movieView === "list" ? "#000" : "var(--muted)",
+                            fontWeight: 700, fontSize: "0.78rem", display: "flex", alignItems: "center", gap: 4
+                          }}
+                        >
+                          ☰ List
+                        </button>
+                      </div>
+
                       <div style={{ flex: 1 }} />
                       <div style={{ position: "relative" }}>
                         <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--muted)", pointerEvents: "none" }}>🔍</span>
-                        <input className="form-input" style={{ paddingLeft: 30, width: 200 }} placeholder="Search movies…" value={search} onChange={e => setQ(e.target.value)} />
+                        <input className="form-input" style={{ paddingLeft: 30, width: 180 }} placeholder="Search title…" value={search} onChange={e => setQ(e.target.value)} />
                       </div>
                       <button className={`btn btn-sm ${selectMode ? "btn-gold" : "btn-outline"}`} onClick={() => { setSelectMode(s => !s); setSelected(new Set()); }}>
                         {selectMode ? "✓ Selecting" : "☐ Select"}
@@ -2860,6 +3269,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                       )}
                       {!selectMode && <button className="btn btn-gold btn-sm" onClick={() => openCreate("movie")}>+ Add Movie</button>}
                     </div>
+
                     {/* ── Select-all bar ── */}
                     {selectMode && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "8px 14px", background: "rgba(201,151,58,0.07)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.2)" }}>
@@ -2870,10 +3280,136 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                         {selected.size > 0 && <button className="btn btn-ghost btn-sm" onClick={clearSel} style={{ marginLeft: "auto", fontSize: "0.72rem" }}>Clear</button>}
                       </div>
                     )}
-                    {/* ── Grid ── */}
-                    {filteredMovies.length === 0
-                      ? <div style={{ textAlign: "center", padding: "60px 0", color: "var(--muted)" }}><div style={{ fontSize: "3rem", marginBottom: 12 }}>🎬</div>No movies found.</div>
-                      : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 14 }}>
+
+                    {/* ── Content: List View vs Grid View ── */}
+                    {filteredMovies.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "60px 0", color: "var(--muted)" }}>
+                        <div style={{ fontSize: "3rem", marginBottom: 12 }}>🎬</div>No movies found.
+                      </div>
+                    ) : movieView === "list" ? (
+                      /* List View: movie name, release date with edit button, actions */
+                      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+                          <thead>
+                            <tr style={{ background: "var(--bg3)", color: "var(--muted)", textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+                              {selectMode && <th style={{ padding: "12px 16px", width: 40 }}></th>}
+                              <th style={{ padding: "12px 20px", fontWeight: 700 }}>Movie Name</th>
+                              <th style={{ padding: "12px 20px", fontWeight: 700 }}>Release Date</th>
+                              <th style={{ padding: "12px 20px", textAlign: "right", fontWeight: 700 }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedMovies.map(m => {
+                              const isSel = selected.has(m._id);
+                              return (
+                                <tr
+                                  key={m._id}
+                                  style={{
+                                    borderBottom: "1px solid var(--border)",
+                                    background: isSel ? "rgba(201,151,58,0.08)" : "transparent",
+                                    transition: "background 0.15s"
+                                  }}
+                                >
+                                  {selectMode && (
+                                    <td style={{ padding: "12px 16px" }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isSel}
+                                        onChange={() => toggleSel(m._id)}
+                                        style={{ accentColor: "var(--gold)", cursor: "pointer", width: 16, height: 16 }}
+                                      />
+                                    </td>
+                                  )}
+                                  <td
+                                    style={{ padding: "14px 20px", fontWeight: 700, color: "var(--text)", cursor: "pointer" }}
+                                    onClick={() => selectMode ? toggleSel(m._id) : openMovieDetail(m)}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                      {m.posterUrl || m.thumbnailUrl ? (
+                                        <img src={m.posterUrl || m.thumbnailUrl} alt={m.title} style={{ width: 28, height: 40, objectFit: "cover", borderRadius: 4 }} onError={e => e.target.style.display = "none"} />
+                                      ) : (
+                                        <span style={{ fontSize: "1.2rem" }}>🎬</span>
+                                      )}
+                                      <div>
+                                        <span style={{ color: "var(--gold)" }}>{m.title}</span>
+                                        {m.verdict && m.verdict !== "Upcoming" && (
+                                          <span style={{ fontSize: "0.7rem", marginLeft: 8, color: verdictColor(m.verdict), background: "var(--bg3)", padding: "1px 6px", borderRadius: 8 }}>
+                                            {m.verdict}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "14px 20px" }}>
+                                    {editingDateId === m._id ? (
+                                      <div style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={e => e.stopPropagation()}>
+                                        <input
+                                          type="date"
+                                          className="form-input"
+                                          style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg1)", color: "var(--text)" }}
+                                          value={editingDateValue}
+                                          onChange={e => setEditingDateValue(e.target.value)}
+                                        />
+                                        <button
+                                          className="btn btn-gold btn-sm"
+                                          style={{ padding: "3px 10px", fontSize: "0.75rem", fontWeight: 700 }}
+                                          disabled={savingDate}
+                                          onClick={() => handleSaveReleaseDate(m._id)}
+                                        >
+                                          {savingDate ? "…" : "Save"}
+                                        </button>
+                                        <button
+                                          className="btn btn-ghost btn-sm"
+                                          style={{ padding: "3px 6px", fontSize: "0.75rem" }}
+                                          onClick={() => setEditingDateId(null)}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                        <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>{fmtDate(m.releaseDate)}</span>
+                                        {!selectMode && (
+                                          <button
+                                            className="btn btn-ghost btn-sm"
+                                            style={{ fontSize: "0.72rem", padding: "2px 8px", color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)" }}
+                                            title="Edit Release Date"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEditingDateId(m._id);
+                                              setEditingDateValue(m.releaseDate ? new Date(m.releaseDate).toISOString().split("T")[0] : "");
+                                            }}
+                                          >
+                                            ✏️ Edit Date
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                                    {!selectMode && (
+                                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                                        <button className="btn btn-ghost btn-sm" onClick={() => openMovieDetail(m)} style={{ color: "var(--gold)" }}>
+                                          Manage
+                                        </button>
+                                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit("movie", m)}>
+                                          Edit
+                                        </button>
+                                        <button className="btn btn-ghost btn-sm" onClick={() => handleDelete("movie", m._id, m.title)} style={{ color: "var(--red)" }}>
+                                          ✕
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      /* Grid View */
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 14 }}>
                         {pagedMovies.map(m => {
                           const img = m.posterUrl || m.thumbnailUrl;
                           const vc = verdictColor(m.verdict);
@@ -2920,8 +3456,11 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                             </div>
                           );
                         })}
-                      </div>}
-                    <Pagination page={moviePage} total={filteredMovies.length} perPage={PG.movies} onChange={setMoviePage} />
+                      </div>
+                    )}
+                    {!yearFilter && (
+                      <Pagination page={moviePage} total={filteredMovies.length} perPage={PG.movies} onChange={setMoviePage} />
+                    )}
                   </div>
                 );
               })()}
@@ -3391,6 +3930,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   <AnalyticsPanel onToast={onToast} />
                 </div>
               )}
+
+              {/* ── STAFF MANAGEMENT ── */}
+              {tab === "staff" && <StaffPanel onToast={onToast} />}
 
               {/* ── SETTINGS ── */}
               {tab === "settings" && <div style={{ padding: 28 }}><AdminSettings admin={admin} onToast={onToast} /></div>}

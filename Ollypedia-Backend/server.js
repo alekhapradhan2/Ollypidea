@@ -2811,6 +2811,16 @@ const AdminUserSchema = new mongoose.Schema({
 }, { timestamps: true });
 const AdminUser = mongoose.model("AdminUser", AdminUserSchema);
 
+// Staff User model (Staff Management module with module-level permissions)
+const StaffUserSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: { type: String, required: true },
+  permissions: [{ type: String }],
+  active: { type: Boolean, default: true },
+}, { timestamps: true });
+const StaffUser = mongoose.model("StaffUser", StaffUserSchema);
+
 // ── Contact / Enquiry ─────────────────────────────────────────────
 const ContactSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -3572,17 +3582,64 @@ app.post("/api/admin/register", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Admin login
+// Admin / Staff login
 app.post("/api/admin/login", async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username?.trim() || !password) return res.status(400).json({ error: "Username and password required" });
-    const admin = await AdminUser.findOne({ $or: [{ username: username.trim() }, { email: username.toLowerCase() }] });
-    if (!admin) return res.status(401).json({ error: "Invalid credentials" });
-    const ok = await bcrypt.compare(password, admin.password);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
-    const token = jwt.sign({ isAdmin: true, username: admin.username, adminId: admin._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, admin: { username: admin.username, email: admin.email, _id: admin._id } });
+    const cleanUser = username.trim();
+    const cleanEmail = cleanUser.toLowerCase();
+
+    // 1. Check Super Admin collection
+    const admin = await AdminUser.findOne({ $or: [{ username: cleanUser }, { email: cleanEmail }] });
+    if (admin) {
+      const ok = await bcrypt.compare(password, admin.password);
+      if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+      const token = jwt.sign({
+        isAdmin: true,
+        isSuperAdmin: true,
+        username: admin.username,
+        adminId: admin._id,
+        permissions: ["*"],
+      }, process.env.JWT_SECRET, { expiresIn: "7d" });
+      return res.json({
+        token,
+        admin: {
+          username: admin.username,
+          email: admin.email,
+          _id: admin._id,
+          isSuperAdmin: true,
+          permissions: ["*"],
+        },
+      });
+    }
+
+    // 2. Check Staff User collection
+    const staff = await StaffUser.findOne({ $or: [{ email: cleanEmail }, { name: cleanUser }] });
+    if (staff && staff.active !== false) {
+      const ok = await bcrypt.compare(password, staff.password);
+      if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+      const token = jwt.sign({
+        isAdmin: true,
+        isSuperAdmin: false,
+        username: staff.name,
+        adminId: staff._id,
+        permissions: staff.permissions || [],
+      }, process.env.JWT_SECRET, { expiresIn: "7d" });
+      return res.json({
+        token,
+        admin: {
+          username: staff.name,
+          name: staff.name,
+          email: staff.email,
+          _id: staff._id,
+          isSuperAdmin: false,
+          permissions: staff.permissions || [],
+        },
+      });
+    }
+
+    return res.status(401).json({ error: "Invalid credentials" });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3591,8 +3648,8 @@ app.post("/api/admin/change-password", adminAuth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters" });
-    const admin = await AdminUser.findById(req.admin.adminId);
-    if (!admin) return res.status(404).json({ error: "Admin not found" });
+    const admin = await AdminUser.findById(req.admin.adminId) || await StaffUser.findById(req.admin.adminId);
+    if (!admin) return res.status(404).json({ error: "User not found" });
     if (currentPassword) {
       const ok = await bcrypt.compare(currentPassword, admin.password);
       if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
@@ -3600,6 +3657,84 @@ app.post("/api/admin/change-password", adminAuth, async (req, res) => {
     admin.password = await bcrypt.hash(newPassword, 10);
     await admin.save();
     res.json({ message: "Password updated successfully" });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════
+// ADMIN — STAFF MANAGEMENT API
+// ════════════════════════════════════════════════════════════════
+app.get("/api/admin/staff", adminAuth, async (req, res) => {
+  try {
+    const list = await StaffUser.find().select("-password").sort({ createdAt: -1 }).lean();
+    res.json(list);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/admin/staff", adminAuth, async (req, res) => {
+  try {
+    const { name, email, password, permissions } = req.body;
+    if (!name?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ error: "Name, email and password are required" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const existingStaff = await StaffUser.findOne({ email: cleanEmail });
+    const existingAdmin = await AdminUser.findOne({ email: cleanEmail });
+    if (existingStaff || existingAdmin) {
+      return res.status(400).json({ error: "An account with this email already exists" });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const staff = await StaffUser.create({
+      name: name.trim(),
+      email: cleanEmail,
+      password: hashedPassword,
+      permissions: Array.isArray(permissions) ? permissions : [],
+    });
+    const result = staff.toObject();
+    delete result.password;
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/admin/staff/:id", adminAuth, async (req, res) => {
+  try {
+    const { name, email, password, permissions } = req.body;
+    const staff = await StaffUser.findById(req.params.id);
+    if (!staff) return res.status(404).json({ error: "Staff member not found" });
+
+    if (name?.trim()) staff.name = name.trim();
+    if (email?.trim()) {
+      const cleanEmail = email.trim().toLowerCase();
+      if (cleanEmail !== staff.email) {
+        const existingStaff = await StaffUser.findOne({ email: cleanEmail, _id: { $ne: staff._id } });
+        const existingAdmin = await AdminUser.findOne({ email: cleanEmail });
+        if (existingStaff || existingAdmin) {
+          return res.status(400).json({ error: "Email already taken by another user" });
+        }
+        staff.email = cleanEmail;
+      }
+    }
+    if (Array.isArray(permissions)) {
+      staff.permissions = permissions;
+    }
+    if (password && password.trim()) {
+      if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+      staff.password = await bcrypt.hash(password.trim(), 10);
+    }
+    await staff.save();
+    const result = staff.toObject();
+    delete result.password;
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/admin/staff/:id", adminAuth, async (req, res) => {
+  try {
+    const staff = await StaffUser.findByIdAndDelete(req.params.id);
+    if (!staff) return res.status(404).json({ error: "Staff member not found" });
+    res.json({ message: "Staff member deleted successfully", id: req.params.id });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

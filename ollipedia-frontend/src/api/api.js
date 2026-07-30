@@ -220,4 +220,10 @@ export const API = {
   modelBlogLogs:        (movieId) => get(`/admin/model-blog/logs/${movieId}`, _adminToken),
   modelBlogGetLog:      (logId)   => get(`/admin/model-blog/log/${logId}`, _adminToken),
   modelBlogMarkPublish: (logId, blogId) => req("PATCH", `/admin/model-blog/log/${logId}/publish`, { blogId }, _adminToken),
+
+  // ── Admin — Staff Management
+  adminGetStaff:    () => get("/admin/staff", _adminToken),
+  adminCreateStaff: (body) => post("/admin/staff", body, _adminToken),
+  adminUpdateStaff: (id, body) => req("PUT", `/admin/staff/${id}`, body, _adminToken),
+  adminDeleteStaff: (id) => del(`/admin/staff/${id}`, _adminToken),
 };
