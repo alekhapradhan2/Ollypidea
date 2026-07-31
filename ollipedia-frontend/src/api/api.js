@@ -57,14 +57,15 @@ export const setAdminToken = (t) => {
   _adminToken = t;
   try { t ? localStorage.setItem("admin_token", t) : localStorage.removeItem("admin_token"); } catch { }
 };
-export const getAdminToken = () => _adminToken;
+export const getAdminToken = () => _adminToken || (() => { try { return localStorage.getItem("admin_token"); } catch { return null; } })();
 
 const authHeader = (token) => token ? { Authorization: `Bearer ${token}` } : {};
 
 const req = async (method, path, body, token) => {
+  const activeToken = (typeof token === "string" && token) ? token : (getAdminToken() || getToken() || getCastToken());
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...authHeader(token) },
+    headers: { "Content-Type": "application/json", ...authHeader(activeToken) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json();

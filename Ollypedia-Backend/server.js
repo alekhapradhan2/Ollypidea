@@ -102,7 +102,8 @@ const isOid = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
 // Slugify a movie title + year into a clean URL-safe slug
 // e.g. "Bindusagar" 2026 → "bindusagar-2026"
 function makeMovieSlug(title, releaseDate) {
-  const year = releaseDate ? new Date(releaseDate).getFullYear() : "";
+  const m = releaseDate ? String(releaseDate).match(/^(\d{4})/) : null;
+  const year = m ? m[1] : (releaseDate && !isNaN(new Date(releaseDate).getFullYear()) ? new Date(releaseDate).getFullYear() : "");
   const base = String(title || "")
     .toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")   // strip accents
@@ -306,9 +307,11 @@ const MovieSchema = new mongoose.Schema({
   category: { type: String, default: "Feature Film" },
   genre: [{ type: String }],
   releaseDate: { type: String, default: "" },
+  releaseDatePrecision: { type: String, enum: ["full", "month", "year"], default: "full" },
   releaseTBA: { type: Boolean, default: false },
   isReRelease: { type: Boolean, default: false },
   reReleaseDate: { type: String, default: "" },
+  reReleaseDatePrecision: { type: String, enum: ["full", "month", "year"], default: "full" },
   director: { type: String, default: "" },
   producer: { type: String, default: "" },
   budget: { type: String, default: "" },
@@ -500,11 +503,28 @@ const CastMember = mongoose.model("CastMember", CastMemberSchema);
 // blogs whenever a movie is created/edited via the admin portal.
 // ════════════════════════════════════════════════════════════════
 
-/** Human-readable date — "15 August 2026". Returns "" for missing/invalid. */
-function formatHumanDate(d) {
+function formatHumanDate(d, precision) {
   if (!d) return "";
+  const s = String(d).trim();
+  if (!s || s.toUpperCase() === "TBA") return "TBA";
+
+  const prec = precision || (s.length === 4 ? "year" : s.length === 7 ? "month" : "full");
+  if (prec === "year" || /^\d{4}$/.test(s)) {
+    return s.slice(0, 4);
+  }
+  if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
+    const parts = s.split("-");
+    const y = parts[0];
+    const m = parseInt(parts[1], 10);
+    if (!isNaN(m) && m >= 1 && m <= 12) {
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      return `${monthNames[m - 1]} ${y}`;
+    }
+    return s;
+  }
+
   const dt = new Date(d);
-  if (isNaN(dt.getTime())) return String(d).trim() === "TBA" ? "TBA" : String(d);
+  if (isNaN(dt.getTime())) return s;
   return dt.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
 }
 
@@ -3305,9 +3325,11 @@ app.post("/api/movies", auth, async (req, res) => {
       category: String(b.category || "Feature Film"),
       genre: Array.isArray(b.genre) ? b.genre.map(String) : [],
       releaseDate: String(b.releaseDate || ""),
+      releaseDatePrecision: String(b.releaseDatePrecision || "full"),
       releaseTBA: !!b.releaseTBA,
       isReRelease: !!b.isReRelease,
       reReleaseDate: String(b.reReleaseDate || ""),
+      reReleaseDatePrecision: String(b.reReleaseDatePrecision || "full"),
       director, producer,
       budget: String(b.budget || ""),
       language: String(b.language || "Odia"),
@@ -3345,7 +3367,7 @@ app.patch("/api/movies/:id", auth, async (req, res) => {
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Not found" });
     if (!canEdit(movie, req.prodId)) return res.status(403).json({ error: "Forbidden" });
-    const allowed = ["title", "category", "genre", "releaseDate", "releaseTBA", "isReRelease", "reReleaseDate", "director", "producer", "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status", "streamingOn", "streamingUrl", "ottReleaseDate"];
+    const allowed = ["title", "category", "genre", "releaseDate", "releaseDatePrecision", "releaseTBA", "isReRelease", "reReleaseDate", "reReleaseDatePrecision", "director", "producer", "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status", "streamingOn", "streamingUrl", "ottReleaseDate"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
     if (req.body.verdict) update.status = req.body.verdict === "Upcoming" ? "Upcoming" : "Released";
@@ -3845,9 +3867,11 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       category: String(b.category || "Feature Film"),
       genre: Array.isArray(b.genre) ? b.genre.map(String) : [],
       releaseDate: String(b.releaseDate || ""),
+      releaseDatePrecision: String(b.releaseDatePrecision || "full"),
       releaseTBA: !!b.releaseTBA,
       isReRelease: !!b.isReRelease,
       reReleaseDate: String(b.reReleaseDate || ""),
+      reReleaseDatePrecision: String(b.reReleaseDatePrecision || "full"),
       director: String(b.director || ""),
       producer: String(b.producer || ""),
       budget: String(b.budget || ""),
@@ -3915,7 +3939,7 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     const update = {};
 
     // Scalar fields
-    const scalars = ["title", "category", "genre", "releaseDate", "releaseTBA", "isReRelease", "reReleaseDate", "director", "producer",
+    const scalars = ["title", "category", "genre", "releaseDate", "releaseDatePrecision", "releaseTBA", "isReRelease", "reReleaseDate", "reReleaseDatePrecision", "director", "producer",
       "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status",
       "imdbId", "imdbRating", "imdbVotes", "contentRating", "runtime", "bannerUrl",
       "streamingOn", "streamingUrl", "ottReleaseDate"];

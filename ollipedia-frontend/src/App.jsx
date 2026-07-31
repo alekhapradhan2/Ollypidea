@@ -116,6 +116,7 @@ function AppInner({
     setAdminToken(token);
     if (typeof window !== "undefined") {
       localStorage.setItem("admin_user", JSON.stringify(a));
+      localStorage.setItem("admin_token", token);
     }
   };
 

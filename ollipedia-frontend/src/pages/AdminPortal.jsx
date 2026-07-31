@@ -53,7 +53,29 @@ const extractYtId = (input) => {
   if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
   return "";
 };
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "TBA";
+const fmtDate = (d, precision) => {
+  if (!d) return "TBA";
+  const s = String(d).trim();
+  if (!s || s.toUpperCase() === "TBA") return "TBA";
+  const prec = precision || (s.length === 4 ? "year" : s.length === 7 ? "month" : "full");
+  if (prec === "year" || /^\d{4}$/.test(s)) return s.slice(0, 4);
+  if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
+    const parts = s.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts[1], 10);
+    return (!isNaN(m) && m >= 1 && m <= 12) ? `${months[m - 1]} ${parts[0]}` : s;
+  }
+  const cleanIso = s.split("T")[0];
+  const parts = cleanIso.split("-");
+  if (parts.length === 3) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(m) && m >= 1 && m <= 12 && !isNaN(day)) return `${day} ${months[m - 1]} ${parts[0]}`;
+  }
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
 const verdictColor = (v) => v === "Hit" || v === "Super Hit" || v === "Blockbuster" ? "#4caf82" : v === "Upcoming" ? "var(--gold)" : "var(--red)";
 
 // ════════════════════════════════════════════════════════════════
@@ -489,9 +511,11 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     category: initial?.category || "Feature Film",
     genre: initial?.genre || [],
     releaseDate: initial?.releaseDate || "",
+    releaseDatePrecision: initial?.releaseDatePrecision || (initial?.releaseDate?.length === 4 ? "year" : initial?.releaseDate?.length === 7 ? "month" : "full"),
     releaseTBA: initial?.releaseTBA || false,
     isReRelease: initial?.isReRelease || false,
     reReleaseDate: initial?.reReleaseDate || "",
+    reReleaseDatePrecision: initial?.reReleaseDatePrecision || (initial?.reReleaseDate?.length === 4 ? "year" : initial?.reReleaseDate?.length === 7 ? "month" : "full"),
     language: initial?.language || "Odia",
     budget: initial?.budget || "",
     synopsis: initial?.synopsis || "",
@@ -704,7 +728,27 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label">Release Date</label>
-              <input className="form-input" type="date" value={form.releaseDate} onChange={e => set("releaseDate", e.target.value)} disabled={form.releaseTBA} />
+              <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                <label style={{ fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  <input type="radio" name="adminReleaseDatePrecision" value="full" checked={form.releaseDatePrecision === "full"} onChange={() => set("releaseDatePrecision", "full")} disabled={form.releaseTBA} /> Full Date
+                </label>
+                <label style={{ fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  <input type="radio" name="adminReleaseDatePrecision" value="month" checked={form.releaseDatePrecision === "month"} onChange={() => set("releaseDatePrecision", "month")} disabled={form.releaseTBA} /> Month & Year
+                </label>
+                <label style={{ fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  <input type="radio" name="adminReleaseDatePrecision" value="year" checked={form.releaseDatePrecision === "year"} onChange={() => set("releaseDatePrecision", "year")} disabled={form.releaseTBA} /> Year Only
+                </label>
+              </div>
+              {form.releaseDatePrecision === "full" && (
+                <input className="form-input" type="date" value={form.releaseDate} onChange={e => set("releaseDate", e.target.value)} disabled={form.releaseTBA} />
+              )}
+              {form.releaseDatePrecision === "month" && (
+                <input className="form-input" type="month" value={form.releaseDate} onChange={e => set("releaseDate", e.target.value)} disabled={form.releaseTBA} />
+              )}
+              {form.releaseDatePrecision === "year" && (
+                <input className="form-input" type="number" min="1900" max="2100" placeholder="e.g. 2025" value={form.releaseDate} onChange={e => set("releaseDate", e.target.value)} disabled={form.releaseTBA} />
+              )}
+
               <label style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }}>
                 <input type="checkbox" checked={form.releaseTBA} onChange={e => set("releaseTBA", e.target.checked)} /> TBA
               </label>
@@ -712,7 +756,28 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
                 <input type="checkbox" checked={form.isReRelease} onChange={e => set("isReRelease", e.target.checked)} /> Mark as Re-Release
               </label>
               {form.isReRelease && (
-                <input className="form-input" type="date" style={{ marginTop: 6 }} value={form.reReleaseDate} onChange={e => set("reReleaseDate", e.target.value)} />
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                    <label style={{ fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                      <input type="radio" name="adminReReleaseDatePrecision" value="full" checked={form.reReleaseDatePrecision === "full"} onChange={() => set("reReleaseDatePrecision", "full")} /> Full Date
+                    </label>
+                    <label style={{ fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                      <input type="radio" name="adminReReleaseDatePrecision" value="month" checked={form.reReleaseDatePrecision === "month"} onChange={() => set("reReleaseDatePrecision", "month")} /> Month & Year
+                    </label>
+                    <label style={{ fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                      <input type="radio" name="adminReReleaseDatePrecision" value="year" checked={form.reReleaseDatePrecision === "year"} onChange={() => set("reReleaseDatePrecision", "year")} /> Year Only
+                    </label>
+                  </div>
+                  {form.reReleaseDatePrecision === "full" && (
+                    <input className="form-input" type="date" value={form.reReleaseDate} onChange={e => set("reReleaseDate", e.target.value)} />
+                  )}
+                  {form.reReleaseDatePrecision === "month" && (
+                    <input className="form-input" type="month" value={form.reReleaseDate} onChange={e => set("reReleaseDate", e.target.value)} />
+                  )}
+                  {form.reReleaseDatePrecision === "year" && (
+                    <input className="form-input" type="number" min="1900" max="2100" placeholder="e.g. 2025" value={form.reReleaseDate} onChange={e => set("reReleaseDate", e.target.value)} />
+                  )}
+                </div>
               )}
             </div>
             <div className="form-group">
@@ -2798,6 +2863,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const [yearFilter, setYearFilter] = useState("");   // "" for all years, or e.g. "2026"
   const [editingDateId, setEditingDateId] = useState(null);
   const [editingDateValue, setEditingDateValue] = useState("");
+  const [editingDatePrecision, setEditingDatePrecision] = useState("full");
   const [savingDate, setSavingDate] = useState(false);
   const setQ = (v) => { setSearch(v); resetPages(); };
 
@@ -2811,7 +2877,10 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const handleSaveReleaseDate = async (movieId) => {
     setSavingDate(true);
     try {
-      const updated = await API.adminUpdateMovie(movieId, { releaseDate: editingDateValue });
+      const updated = await API.adminUpdateMovie(movieId, {
+        releaseDate: editingDateValue,
+        releaseDatePrecision: editingDatePrecision,
+      });
       setMovies(prev => prev.map(m => m._id === movieId ? updated : m));
       onToast?.("Release date updated!");
       setEditingDateId(null);
@@ -2859,33 +2928,42 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   }, [admin, tab]);
 
   useEffect(() => {
-    if (admin) loadAll();
+    if (admin || getAdminToken()) loadAll();
   }, [admin]);
 
   const loadAll = async () => {
     setLoading(true);
     setLoadingSecondary(true);
-    try {
-      // Phase 1 — critical: movies + stats to render Dashboard immediately
-      const [m, s] = await Promise.all([
-        API.getMovies(),
-        API.adminStats(),
-      ]);
-      setMovies(m); setStats(s);
-      setLoading(false); // unblock UI as soon as movies + stats are ready
 
-      // Phase 2 — secondary data loaded silently in the background
+    try {
+      const [m, s] = await Promise.all([
+        API.getMovies().catch(err => { console.error("Error loading movies:", err); return []; }),
+        API.adminStats().catch(err => { console.error("Error loading admin stats:", err); return null; }),
+      ]);
+      setMovies(m || []);
+      setStats(s || null);
+    } catch (e) {
+      console.error("Dashboard primary load error:", e);
+      onToast?.(e?.message || "Failed to load dashboard data", "error");
+    } finally {
+      setLoading(false);
+    }
+
+    try {
       const [c, p, n, enq] = await Promise.all([
-        API.getCast(),
-        API.getProductions(),
-        API.adminGetAllNews(),
+        API.getCast().catch(() => []),
+        API.getProductions().catch(() => []),
+        API.adminGetAllNews().catch(() => []),
         API.adminGetEnquiries().catch(() => []),
       ]);
-      setCast(c); setProds(p); setNews(n); setEnquiries(enq);
-      setLoadingSecondary(false);
+      setCast(c || []);
+      setProds(p || []);
+      setNews(n || []);
+      setEnquiries(enq || []);
     } catch (e) {
-      onToast?.(e.message, "error");
-      setLoading(false);
+      console.error("Dashboard secondary load error:", e);
+    } finally {
+      setLoadingSecondary(false);
     }
   };
 
@@ -3342,33 +3420,70 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                   </td>
                                   <td style={{ padding: "14px 20px" }}>
                                     {editingDateId === m._id ? (
-                                      <div style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={e => e.stopPropagation()}>
-                                        <input
-                                          type="date"
-                                          className="form-input"
-                                          style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg1)", color: "var(--text)" }}
-                                          value={editingDateValue}
-                                          onChange={e => setEditingDateValue(e.target.value)}
-                                        />
-                                        <button
-                                          className="btn btn-gold btn-sm"
-                                          style={{ padding: "3px 10px", fontSize: "0.75rem", fontWeight: 700 }}
-                                          disabled={savingDate}
-                                          onClick={() => handleSaveReleaseDate(m._id)}
-                                        >
-                                          {savingDate ? "…" : "Save"}
-                                        </button>
-                                        <button
-                                          className="btn btn-ghost btn-sm"
-                                          style={{ padding: "3px 6px", fontSize: "0.75rem" }}
-                                          onClick={() => setEditingDateId(null)}
-                                        >
-                                          ✕
-                                        </button>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg1)", padding: 8, borderRadius: 8, border: "1px solid var(--border)" }} onClick={e => e.stopPropagation()}>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                          <label style={{ fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                                            <input type="radio" name={`prec-${m._id}`} value="full" checked={editingDatePrecision === "full"} onChange={() => setEditingDatePrecision("full")} /> Full
+                                          </label>
+                                          <label style={{ fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                                            <input type="radio" name={`prec-${m._id}`} value="month" checked={editingDatePrecision === "month"} onChange={() => setEditingDatePrecision("month")} /> Month
+                                          </label>
+                                          <label style={{ fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                                            <input type="radio" name={`prec-${m._id}`} value="year" checked={editingDatePrecision === "year"} onChange={() => setEditingDatePrecision("year")} /> Year
+                                          </label>
+                                        </div>
+
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                          {editingDatePrecision === "full" && (
+                                            <input
+                                              type="date"
+                                              className="form-input"
+                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg2)", color: "var(--text)" }}
+                                              value={editingDateValue}
+                                              onChange={e => setEditingDateValue(e.target.value)}
+                                            />
+                                          )}
+                                          {editingDatePrecision === "month" && (
+                                            <input
+                                              type="month"
+                                              className="form-input"
+                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg2)", color: "var(--text)" }}
+                                              value={editingDateValue}
+                                              onChange={e => setEditingDateValue(e.target.value)}
+                                            />
+                                          )}
+                                          {editingDatePrecision === "year" && (
+                                            <input
+                                              type="number"
+                                              min="1900"
+                                              max="2100"
+                                              placeholder="e.g. 2025"
+                                              className="form-input"
+                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "90px", background: "var(--bg2)", color: "var(--text)" }}
+                                              value={editingDateValue}
+                                              onChange={e => setEditingDateValue(e.target.value)}
+                                            />
+                                          )}
+                                          <button
+                                            className="btn btn-gold btn-sm"
+                                            style={{ padding: "3px 10px", fontSize: "0.75rem", fontWeight: 700 }}
+                                            disabled={savingDate}
+                                            onClick={() => handleSaveReleaseDate(m._id)}
+                                          >
+                                            {savingDate ? "…" : "Save"}
+                                          </button>
+                                          <button
+                                            className="btn btn-ghost btn-sm"
+                                            style={{ padding: "3px 6px", fontSize: "0.75rem" }}
+                                            onClick={() => setEditingDateId(null)}
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
                                       </div>
                                     ) : (
                                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                        <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>{fmtDate(m.releaseDate)}</span>
+                                        <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>{fmtDate(m.releaseDate, m.releaseDatePrecision)}</span>
                                         {!selectMode && (
                                           <button
                                             className="btn btn-ghost btn-sm"
@@ -3377,7 +3492,8 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               setEditingDateId(m._id);
-                                              setEditingDateValue(m.releaseDate ? new Date(m.releaseDate).toISOString().split("T")[0] : "");
+                                              setEditingDatePrecision(m.releaseDatePrecision || (m.releaseDate && m.releaseDate.length === 4 ? "year" : m.releaseDate && m.releaseDate.length === 7 ? "month" : "full"));
+                                              setEditingDateValue(m.releaseDate || "");
                                             }}
                                           >
                                             ✏️ Edit Date

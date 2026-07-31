@@ -42,7 +42,29 @@ const verdictClass = (v) => {
   return "verdict-upcoming";
 };
 const stars = (n) => "★".repeat(Math.round(n||0)) + "☆".repeat(5-Math.round(n||0));
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "";
+const fmtDate = (d, precision) => {
+  if (!d) return "";
+  const s = String(d).trim();
+  if (!s || s.toUpperCase() === "TBA") return "TBA";
+  const prec = precision || (s.length === 4 ? "year" : s.length === 7 ? "month" : "full");
+  if (prec === "year" || /^\d{4}$/.test(s)) return s.slice(0, 4);
+  if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
+    const parts = s.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts[1], 10);
+    return (!isNaN(m) && m >= 1 && m <= 12) ? `${months[m - 1]} ${parts[0]}` : s;
+  }
+  const cleanIso = s.split("T")[0];
+  const parts = cleanIso.split("-");
+  if (parts.length === 3) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(m) && m >= 1 && m <= 12 && !isNaN(day)) return `${day} ${months[m - 1]} ${parts[0]}`;
+  }
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
 
 const GENRES = ["Action","Drama","Romance","Comedy","Thriller","Family","Historical","Devotional","Horror"];
 const CATS   = ["Feature Film","Short Film","Web Series","Documentary"];
@@ -714,8 +736,8 @@ export default function MovieDetails({ production, onToast, portalMode }) {
     try {
       const up = await API.updateMovie(id,{
         title:editForm.title, category:editForm.category, genre:editForm.genre,
-        releaseDate:editForm.releaseDate, releaseTBA:editForm.releaseTBA,
-        isReRelease:editForm.isReRelease, reReleaseDate:editForm.reReleaseDate,
+        releaseDate:editForm.releaseDate, releaseDatePrecision:editForm.releaseDatePrecision||"full", releaseTBA:editForm.releaseTBA,
+        isReRelease:editForm.isReRelease, reReleaseDate:editForm.reReleaseDate, reReleaseDatePrecision:editForm.reReleaseDatePrecision||"full",
         director:editForm.director, producer:editForm.producer,
         budget:editForm.budget, language:editForm.language,
         synopsis:editForm.synopsis, posterUrl:editForm.posterUrl,
@@ -1411,7 +1433,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             {/* CTA buttons */}
             <div className="md-actions">
               {movie.media?.videos?.[0]?.ytId && (
-                <button className="md-btn-play" style={{...(isBlockbuster?{boxShadow:`0 0 0 0 ${verdictColor}`}:{})}} className={`md-btn-play${isBlockbuster?" verdict-blockbuster-pulse":""}`}
+                <button style={{...(isBlockbuster?{boxShadow:`0 0 0 0 ${verdictColor}`}:{})}} className={`md-btn-play${isBlockbuster?" verdict-blockbuster-pulse":""}`}
                   onClick={() => { setTab("overview"); setTimeout(() => trailerRef.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 200); }}>▶ Watch {movie.media?.videos?.[0]?.type || "Trailer"}</button>
               )}
               <button className="md-btn-outline" onClick={() => setTab("cast")}>👥 Cast</button>
@@ -1701,7 +1723,27 @@ export default function MovieDetails({ production, onToast, portalMode }) {
             <div className="form-grid">
               <div className="form-group"><label className="form-label">Category</label><select className="form-select" value={editForm.category||""} onChange={e=>setE("category",e.target.value)}>{CATS.map(c=><option key={c}>{c}</option>)}</select></div>
               <div className="form-group"><label className="form-label">Release Date</label>
-                <input className="form-input" type="date" value={editForm.releaseDate||""} onChange={e=>setE("releaseDate",e.target.value)} disabled={editForm.releaseTBA} />
+                <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                  <label style={{ fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                    <input type="radio" name="editReleaseDatePrecision" value="full" checked={(editForm.releaseDatePrecision || "full") === "full"} onChange={() => setE("releaseDatePrecision", "full")} disabled={editForm.releaseTBA} /> Full Date
+                  </label>
+                  <label style={{ fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                    <input type="radio" name="editReleaseDatePrecision" value="month" checked={editForm.releaseDatePrecision === "month"} onChange={() => setE("releaseDatePrecision", "month")} disabled={editForm.releaseTBA} /> Month & Year
+                  </label>
+                  <label style={{ fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                    <input type="radio" name="editReleaseDatePrecision" value="year" checked={editForm.releaseDatePrecision === "year"} onChange={() => setE("releaseDatePrecision", "year")} disabled={editForm.releaseTBA} /> Year Only
+                  </label>
+                </div>
+                {(editForm.releaseDatePrecision || "full") === "full" && (
+                  <input className="form-input" type="date" value={editForm.releaseDate||""} onChange={e=>setE("releaseDate",e.target.value)} disabled={editForm.releaseTBA} />
+                )}
+                {editForm.releaseDatePrecision === "month" && (
+                  <input className="form-input" type="month" value={editForm.releaseDate||""} onChange={e=>setE("releaseDate",e.target.value)} disabled={editForm.releaseTBA} />
+                )}
+                {editForm.releaseDatePrecision === "year" && (
+                  <input className="form-input" type="number" min="1900" max="2100" placeholder="e.g. 2025" value={editForm.releaseDate||""} onChange={e=>setE("releaseDate",e.target.value)} disabled={editForm.releaseTBA} />
+                )}
+
                 <label style={{marginTop:6,display:"flex",alignItems:"center",gap:6,fontSize:"0.8rem",color:"var(--muted)",cursor:"pointer"}}>
                   <input type="checkbox" checked={!!editForm.releaseTBA} onChange={e=>setE("releaseTBA",e.target.checked)} /> TBA
                 </label>
@@ -1709,7 +1751,28 @@ export default function MovieDetails({ production, onToast, portalMode }) {
                   <input type="checkbox" checked={!!editForm.isReRelease} onChange={e=>setE("isReRelease",e.target.checked)} /> Mark as Re-Release
                 </label>
                 {!!editForm.isReRelease && (
-                  <input className="form-input" type="date" style={{marginTop:6}} value={editForm.reReleaseDate||""} onChange={e=>setE("reReleaseDate",e.target.value)} />
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                      <label style={{ fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="radio" name="editReReleaseDatePrecision" value="full" checked={(editForm.reReleaseDatePrecision || "full") === "full"} onChange={() => setE("reReleaseDatePrecision", "full")} /> Full Date
+                      </label>
+                      <label style={{ fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="radio" name="editReReleaseDatePrecision" value="month" checked={editForm.reReleaseDatePrecision === "month"} onChange={() => setE("reReleaseDatePrecision", "month")} /> Month & Year
+                      </label>
+                      <label style={{ fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="radio" name="editReReleaseDatePrecision" value="year" checked={editForm.reReleaseDatePrecision === "year"} onChange={() => setE("reReleaseDatePrecision", "year")} /> Year Only
+                      </label>
+                    </div>
+                    {(editForm.reReleaseDatePrecision || "full") === "full" && (
+                      <input className="form-input" type="date" value={editForm.reReleaseDate||""} onChange={e=>setE("reReleaseDate",e.target.value)} />
+                    )}
+                    {editForm.reReleaseDatePrecision === "month" && (
+                      <input className="form-input" type="month" value={editForm.reReleaseDate||""} onChange={e=>setE("reReleaseDate",e.target.value)} />
+                    )}
+                    {editForm.reReleaseDatePrecision === "year" && (
+                      <input className="form-input" type="number" min="1900" max="2100" placeholder="e.g. 2025" value={editForm.reReleaseDate||""} onChange={e=>setE("reReleaseDate",e.target.value)} />
+                    )}
+                  </div>
                 )}
               </div>
             </div>

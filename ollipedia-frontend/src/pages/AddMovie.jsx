@@ -100,8 +100,8 @@ export default function AddMovie({ production, onToast }) {
 
   // ── Step 0: Basic ──
   const [form, setForm] = useState({
-    title:"", category:"Feature Film", genre:[], releaseDate:"",
-    releaseTBA:false, isReRelease:false, reReleaseDate:"", language:"Odia", budget:"", synopsis:"", posterUrl:"", thumbnailUrl:"",
+    title:"", category:"Feature Film", genre:[], releaseDate:"", releaseDatePrecision:"full",
+    releaseTBA:false, isReRelease:false, reReleaseDate:"", reReleaseDatePrecision:"full", language:"Odia", budget:"", synopsis:"", posterUrl:"", thumbnailUrl:"",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x=>x!==g) : [...form.genre, g]);
@@ -251,9 +251,11 @@ export default function AddMovie({ production, onToast }) {
         category:     String(form.category    || "Feature Film"),
         genre:        [...(form.genre         || [])],
         releaseDate:  form.releaseTBA ? "" : String(form.releaseDate || ""),
+        releaseDatePrecision: String(form.releaseDatePrecision || "full"),
         releaseTBA:   !!form.releaseTBA,
         isReRelease:  !!form.isReRelease,
         reReleaseDate:form.isReRelease ? String(form.reReleaseDate || "") : "",
+        reReleaseDatePrecision: String(form.reReleaseDatePrecision || "full"),
         language:     String(form.language    || "Odia"),
         budget:       String(form.budget      || ""),
         synopsis:     String(form.synopsis    || ""),
@@ -333,7 +335,27 @@ export default function AddMovie({ production, onToast }) {
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Release Date</label>
-                <input className="form-input" type="date" value={form.releaseDate} onChange={e=>set("releaseDate",e.target.value)} disabled={form.releaseTBA} />
+                <div style={{ display:"flex", gap:10, marginBottom:8, flexWrap:"wrap" }}>
+                  <label style={{ fontSize:"0.78rem", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                    <input type="radio" name="releaseDatePrecision" value="full" checked={form.releaseDatePrecision === "full"} onChange={() => set("releaseDatePrecision", "full")} disabled={form.releaseTBA} /> Full Date
+                  </label>
+                  <label style={{ fontSize:"0.78rem", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                    <input type="radio" name="releaseDatePrecision" value="month" checked={form.releaseDatePrecision === "month"} onChange={() => set("releaseDatePrecision", "month")} disabled={form.releaseTBA} /> Month & Year
+                  </label>
+                  <label style={{ fontSize:"0.78rem", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                    <input type="radio" name="releaseDatePrecision" value="year" checked={form.releaseDatePrecision === "year"} onChange={() => set("releaseDatePrecision", "year")} disabled={form.releaseTBA} /> Year Only
+                  </label>
+                </div>
+                {form.releaseDatePrecision === "full" && (
+                  <input className="form-input" type="date" value={form.releaseDate} onChange={e=>set("releaseDate",e.target.value)} disabled={form.releaseTBA} />
+                )}
+                {form.releaseDatePrecision === "month" && (
+                  <input className="form-input" type="month" value={form.releaseDate} onChange={e=>set("releaseDate",e.target.value)} disabled={form.releaseTBA} />
+                )}
+                {form.releaseDatePrecision === "year" && (
+                  <input className="form-input" type="number" min="1900" max="2100" placeholder="e.g. 2025" value={form.releaseDate} onChange={e=>set("releaseDate",e.target.value)} disabled={form.releaseTBA} />
+                )}
+
                 <label style={{ marginTop:6, display:"flex", alignItems:"center", gap:6, fontSize:"0.8rem", color:"var(--muted)", cursor:"pointer" }}>
                   <input type="checkbox" checked={form.releaseTBA} onChange={e=>set("releaseTBA",e.target.checked)} /> TBA
                 </label>
@@ -341,7 +363,28 @@ export default function AddMovie({ production, onToast }) {
                   <input type="checkbox" checked={form.isReRelease} onChange={e=>set("isReRelease",e.target.checked)} /> Mark as Re-Release
                 </label>
                 {form.isReRelease && (
-                  <input className="form-input" type="date" style={{ marginTop:6 }} value={form.reReleaseDate} onChange={e=>set("reReleaseDate",e.target.value)} />
+                  <div style={{ marginTop:6 }}>
+                    <div style={{ display:"flex", gap:10, marginBottom:6, flexWrap:"wrap" }}>
+                      <label style={{ fontSize:"0.75rem", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                        <input type="radio" name="reReleaseDatePrecision" value="full" checked={form.reReleaseDatePrecision === "full"} onChange={() => set("reReleaseDatePrecision", "full")} /> Full Date
+                      </label>
+                      <label style={{ fontSize:"0.75rem", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                        <input type="radio" name="reReleaseDatePrecision" value="month" checked={form.reReleaseDatePrecision === "month"} onChange={() => set("reReleaseDatePrecision", "month")} /> Month & Year
+                      </label>
+                      <label style={{ fontSize:"0.75rem", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                        <input type="radio" name="reReleaseDatePrecision" value="year" checked={form.reReleaseDatePrecision === "year"} onChange={() => set("reReleaseDatePrecision", "year")} /> Year Only
+                      </label>
+                    </div>
+                    {form.reReleaseDatePrecision === "full" && (
+                      <input className="form-input" type="date" value={form.reReleaseDate} onChange={e=>set("reReleaseDate",e.target.value)} />
+                    )}
+                    {form.reReleaseDatePrecision === "month" && (
+                      <input className="form-input" type="month" value={form.reReleaseDate} onChange={e=>set("reReleaseDate",e.target.value)} />
+                    )}
+                    {form.reReleaseDatePrecision === "year" && (
+                      <input className="form-input" type="number" min="1900" max="2100" placeholder="e.g. 2025" value={form.reReleaseDate} onChange={e=>set("reReleaseDate",e.target.value)} />
+                    )}
+                  </div>
                 )}
               </div>
               <div className="form-group">

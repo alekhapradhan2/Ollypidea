@@ -1,6 +1,6 @@
 import { jsxs, Fragment, jsx } from "react/jsx-runtime";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { I as ImageUploadInput, g as getAdminToken } from "../entry-server.js";
+import { g as getAdminToken, I as ImageUploadInput } from "../entry-server.js";
 import "react-dom/server";
 import "react-router-dom/server.mjs";
 import "react-helmet-async";

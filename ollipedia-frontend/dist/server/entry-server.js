@@ -49,12 +49,19 @@ const setAdminToken = (t) => {
   } catch {
   }
 };
-const getAdminToken = () => _adminToken;
+const getAdminToken = () => _adminToken || (() => {
+  try {
+    return localStorage.getItem("admin_token");
+  } catch {
+    return null;
+  }
+})();
 const authHeader = (token) => token ? { Authorization: `Bearer ${token}` } : {};
 const req = async (method, path, body, token) => {
+  const activeToken = typeof token === "string" && token ? token : getAdminToken() || getToken() || getCastToken();
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: { "Content-Type": "application/json", ...authHeader(token) },
+    headers: { "Content-Type": "application/json", ...authHeader(activeToken) },
     body: body !== void 0 ? JSON.stringify(body) : void 0
   });
   const data = await res.json();
@@ -2912,7 +2919,21 @@ const VERDICT_COLOR = {
   "Disaster": "#e59595",
   "Upcoming": "#7aaae8"
 };
-const fmtDate$5 = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+const fmtDate$5 = (d, precision) => {
+  if (!d) return "";
+  const s = String(d).trim();
+  if (!s || s.toUpperCase() === "TBA") return "TBA";
+  const prec = s.length === 4 ? "year" : s.length === 7 ? "month" : "full";
+  if (prec === "year" || /^\d{4}$/.test(s)) return s.slice(0, 4);
+  if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
+    const parts = s.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts[1], 10);
+    return !isNaN(m) && m >= 1 && m <= 12 ? `${months[m - 1]} ${parts[0]}` : s;
+  }
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
 const GENRES$2 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
 const CATS$2 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const VDICT = ["Upcoming", "Average", "Hit", "Super Hit", "Blockbuster", "Flop", "Disaster"];
@@ -3630,9 +3651,11 @@ function MovieDetails({ production, onToast, portalMode }) {
         category: editForm.category,
         genre: editForm.genre,
         releaseDate: editForm.releaseDate,
+        releaseDatePrecision: editForm.releaseDatePrecision || "full",
         releaseTBA: editForm.releaseTBA,
         isReRelease: editForm.isReRelease,
         reReleaseDate: editForm.reReleaseDate,
+        reReleaseDatePrecision: editForm.reReleaseDatePrecision || "full",
         director: editForm.director,
         producer: editForm.producer,
         budget: editForm.budget,
@@ -4344,7 +4367,6 @@ function MovieDetails({ production, onToast, portalMode }) {
             ((_v = (_u = (_t = movie.media) == null ? void 0 : _t.videos) == null ? void 0 : _u[0]) == null ? void 0 : _v.ytId) && /* @__PURE__ */ jsxs(
               "button",
               {
-                className: "md-btn-play",
                 style: { ...isBlockbuster ? { boxShadow: `0 0 0 0 ${verdictColor2}` } : {} },
                 className: `md-btn-play${isBlockbuster ? " verdict-blockbuster-pulse" : ""}`,
                 onClick: () => {
@@ -4619,7 +4641,23 @@ function MovieDetails({ production, onToast, portalMode }) {
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Release Date" }),
-            /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: editForm.releaseDate || "", onChange: (e) => setE("releaseDate", e.target.value), disabled: editForm.releaseTBA }),
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "editReleaseDatePrecision", value: "full", checked: (editForm.releaseDatePrecision || "full") === "full", onChange: () => setE("releaseDatePrecision", "full"), disabled: editForm.releaseTBA }),
+                " Full Date"
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "editReleaseDatePrecision", value: "month", checked: editForm.releaseDatePrecision === "month", onChange: () => setE("releaseDatePrecision", "month"), disabled: editForm.releaseTBA }),
+                " Month & Year"
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "editReleaseDatePrecision", value: "year", checked: editForm.releaseDatePrecision === "year", onChange: () => setE("releaseDatePrecision", "year"), disabled: editForm.releaseTBA }),
+                " Year Only"
+              ] })
+            ] }),
+            (editForm.releaseDatePrecision || "full") === "full" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: editForm.releaseDate || "", onChange: (e) => setE("releaseDate", e.target.value), disabled: editForm.releaseTBA }),
+            editForm.releaseDatePrecision === "month" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "month", value: editForm.releaseDate || "", onChange: (e) => setE("releaseDate", e.target.value), disabled: editForm.releaseTBA }),
+            editForm.releaseDatePrecision === "year" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "number", min: "1900", max: "2100", placeholder: "e.g. 2025", value: editForm.releaseDate || "", onChange: (e) => setE("releaseDate", e.target.value), disabled: editForm.releaseTBA }),
             /* @__PURE__ */ jsxs("label", { style: { marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }, children: [
               /* @__PURE__ */ jsx("input", { type: "checkbox", checked: !!editForm.releaseTBA, onChange: (e) => setE("releaseTBA", e.target.checked) }),
               " TBA"
@@ -4628,7 +4666,25 @@ function MovieDetails({ production, onToast, portalMode }) {
               /* @__PURE__ */ jsx("input", { type: "checkbox", checked: !!editForm.isReRelease, onChange: (e) => setE("isReRelease", e.target.checked) }),
               " Mark as Re-Release"
             ] }),
-            !!editForm.isReRelease && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", style: { marginTop: 6 }, value: editForm.reReleaseDate || "", onChange: (e) => setE("reReleaseDate", e.target.value) })
+            !!editForm.isReRelease && /* @__PURE__ */ jsxs("div", { style: { marginTop: 6 }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }, children: [
+                /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                  /* @__PURE__ */ jsx("input", { type: "radio", name: "editReReleaseDatePrecision", value: "full", checked: (editForm.reReleaseDatePrecision || "full") === "full", onChange: () => setE("reReleaseDatePrecision", "full") }),
+                  " Full Date"
+                ] }),
+                /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                  /* @__PURE__ */ jsx("input", { type: "radio", name: "editReReleaseDatePrecision", value: "month", checked: editForm.reReleaseDatePrecision === "month", onChange: () => setE("reReleaseDatePrecision", "month") }),
+                  " Month & Year"
+                ] }),
+                /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                  /* @__PURE__ */ jsx("input", { type: "radio", name: "editReReleaseDatePrecision", value: "year", checked: editForm.reReleaseDatePrecision === "year", onChange: () => setE("reReleaseDatePrecision", "year") }),
+                  " Year Only"
+                ] })
+              ] }),
+              (editForm.reReleaseDatePrecision || "full") === "full" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: editForm.reReleaseDate || "", onChange: (e) => setE("reReleaseDate", e.target.value) }),
+              editForm.reReleaseDatePrecision === "month" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "month", value: editForm.reReleaseDate || "", onChange: (e) => setE("reReleaseDate", e.target.value) }),
+              editForm.reReleaseDatePrecision === "year" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "number", min: "1900", max: "2100", placeholder: "e.g. 2025", value: editForm.reReleaseDate || "", onChange: (e) => setE("reReleaseDate", e.target.value) })
+            ] })
           ] })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
@@ -10954,9 +11010,11 @@ function AddMovie({ production, onToast }) {
     category: "Feature Film",
     genre: [],
     releaseDate: "",
+    releaseDatePrecision: "full",
     releaseTBA: false,
     isReRelease: false,
     reReleaseDate: "",
+    reReleaseDatePrecision: "full",
     language: "Odia",
     budget: "",
     synopsis: "",
@@ -11096,9 +11154,11 @@ function AddMovie({ production, onToast }) {
         category: String(form.category || "Feature Film"),
         genre: [...form.genre || []],
         releaseDate: form.releaseTBA ? "" : String(form.releaseDate || ""),
+        releaseDatePrecision: String(form.releaseDatePrecision || "full"),
         releaseTBA: !!form.releaseTBA,
         isReRelease: !!form.isReRelease,
         reReleaseDate: form.isReRelease ? String(form.reReleaseDate || "") : "",
+        reReleaseDatePrecision: String(form.reReleaseDatePrecision || "full"),
         language: String(form.language || "Odia"),
         budget: String(form.budget || ""),
         synopsis: String(form.synopsis || ""),
@@ -11161,7 +11221,23 @@ function AddMovie({ production, onToast }) {
         /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Release Date" }),
-            /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "releaseDatePrecision", value: "full", checked: form.releaseDatePrecision === "full", onChange: () => set("releaseDatePrecision", "full"), disabled: form.releaseTBA }),
+                " Full Date"
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "releaseDatePrecision", value: "month", checked: form.releaseDatePrecision === "month", onChange: () => set("releaseDatePrecision", "month"), disabled: form.releaseTBA }),
+                " Month & Year"
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "releaseDatePrecision", value: "year", checked: form.releaseDatePrecision === "year", onChange: () => set("releaseDatePrecision", "year"), disabled: form.releaseTBA }),
+                " Year Only"
+              ] })
+            ] }),
+            form.releaseDatePrecision === "full" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
+            form.releaseDatePrecision === "month" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "month", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
+            form.releaseDatePrecision === "year" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "number", min: "1900", max: "2100", placeholder: "e.g. 2025", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
             /* @__PURE__ */ jsxs("label", { style: { marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }, children: [
               /* @__PURE__ */ jsx("input", { type: "checkbox", checked: form.releaseTBA, onChange: (e) => set("releaseTBA", e.target.checked) }),
               " TBA"
@@ -11170,7 +11246,25 @@ function AddMovie({ production, onToast }) {
               /* @__PURE__ */ jsx("input", { type: "checkbox", checked: form.isReRelease, onChange: (e) => set("isReRelease", e.target.checked) }),
               " Mark as Re-Release"
             ] }),
-            form.isReRelease && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", style: { marginTop: 6 }, value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) })
+            form.isReRelease && /* @__PURE__ */ jsxs("div", { style: { marginTop: 6 }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }, children: [
+                /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                  /* @__PURE__ */ jsx("input", { type: "radio", name: "reReleaseDatePrecision", value: "full", checked: form.reReleaseDatePrecision === "full", onChange: () => set("reReleaseDatePrecision", "full") }),
+                  " Full Date"
+                ] }),
+                /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                  /* @__PURE__ */ jsx("input", { type: "radio", name: "reReleaseDatePrecision", value: "month", checked: form.reReleaseDatePrecision === "month", onChange: () => set("reReleaseDatePrecision", "month") }),
+                  " Month & Year"
+                ] }),
+                /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                  /* @__PURE__ */ jsx("input", { type: "radio", name: "reReleaseDatePrecision", value: "year", checked: form.reReleaseDatePrecision === "year", onChange: () => set("reReleaseDatePrecision", "year") }),
+                  " Year Only"
+                ] })
+              ] }),
+              form.reReleaseDatePrecision === "full" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) }),
+              form.reReleaseDatePrecision === "month" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "month", value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) }),
+              form.reReleaseDatePrecision === "year" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "number", min: "1900", max: "2100", placeholder: "e.g. 2025", value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) })
+            ] })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Budget" }),
@@ -12163,7 +12257,7 @@ function PortalCastProfile({ production }) {
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
   ] });
 }
-const BlogGenerator = lazy(() => import("./assets/BlogGenerator-BtI6aa0w.js"));
+const BlogGenerator = lazy(() => import("./assets/BlogGenerator-CHNRwoEZ.js"));
 const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-BbwazB-8.js"));
 const BMSTrackerPanel = lazy(() => import("./assets/BMSTrackerPanel-BvRme0rO.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
@@ -12219,7 +12313,21 @@ const extractYtId = (input) => {
   if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
   return "";
 };
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "TBA";
+const fmtDate = (d, precision) => {
+  if (!d) return "TBA";
+  const s = String(d).trim();
+  if (!s || s.toUpperCase() === "TBA") return "TBA";
+  const prec = precision || (s.length === 4 ? "year" : s.length === 7 ? "month" : "full");
+  if (prec === "year" || /^\d{4}$/.test(s)) return s.slice(0, 4);
+  if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
+    const parts = s.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts[1], 10);
+    return !isNaN(m) && m >= 1 && m <= 12 ? `${months[m - 1]} ${parts[0]}` : s;
+  }
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+};
 const verdictColor = (v) => v === "Hit" || v === "Super Hit" || v === "Blockbuster" ? "#4caf82" : v === "Upcoming" ? "var(--gold)" : "var(--red)";
 function Spinner() {
   return /* @__PURE__ */ jsx("div", { style: { textAlign: "center", padding: 60, color: "var(--muted)", fontSize: "2rem" }, children: "⏳" });
@@ -12614,16 +12722,18 @@ function PersonPicker({ label, icon, castType, value, refs, onChange }) {
 }
 const MOVIE_STEPS = ["Basic Info", "Cast & Crew", "Media", "Review & Submit"];
 function MovieForm({ initial, onSave, onCancel, saving }) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     title: (initial == null ? void 0 : initial.title) || "",
     category: (initial == null ? void 0 : initial.category) || "Feature Film",
     genre: (initial == null ? void 0 : initial.genre) || [],
     releaseDate: (initial == null ? void 0 : initial.releaseDate) || "",
+    releaseDatePrecision: (initial == null ? void 0 : initial.releaseDatePrecision) || (((_a = initial == null ? void 0 : initial.releaseDate) == null ? void 0 : _a.length) === 4 ? "year" : ((_b = initial == null ? void 0 : initial.releaseDate) == null ? void 0 : _b.length) === 7 ? "month" : "full"),
     releaseTBA: (initial == null ? void 0 : initial.releaseTBA) || false,
     isReRelease: (initial == null ? void 0 : initial.isReRelease) || false,
     reReleaseDate: (initial == null ? void 0 : initial.reReleaseDate) || "",
+    reReleaseDatePrecision: (initial == null ? void 0 : initial.reReleaseDatePrecision) || (((_c = initial == null ? void 0 : initial.reReleaseDate) == null ? void 0 : _c.length) === 4 ? "year" : ((_d = initial == null ? void 0 : initial.reReleaseDate) == null ? void 0 : _d.length) === 7 ? "month" : "full"),
     language: (initial == null ? void 0 : initial.language) || "Odia",
     budget: (initial == null ? void 0 : initial.budget) || "",
     synopsis: (initial == null ? void 0 : initial.synopsis) || "",
@@ -12638,9 +12748,9 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     bannerUrl: (initial == null ? void 0 : initial.bannerUrl) || "",
     boxOffice: (initial == null ? void 0 : initial.boxOffice) || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
     trivia: (initial == null ? void 0 : initial.trivia) || [],
-    streamingOn: (initial == null ? void 0 : initial.streamingOn) || ((_a = initial == null ? void 0 : initial.ott) == null ? void 0 : _a.platform) || "",
-    streamingUrl: (initial == null ? void 0 : initial.streamingUrl) || ((_b = initial == null ? void 0 : initial.ott) == null ? void 0 : _b.watchUrl) || "",
-    ottReleaseDate: (initial == null ? void 0 : initial.ottReleaseDate) || ((_c = initial == null ? void 0 : initial.ott) == null ? void 0 : _c.releaseDate) || "",
+    streamingOn: (initial == null ? void 0 : initial.streamingOn) || ((_e = initial == null ? void 0 : initial.ott) == null ? void 0 : _e.platform) || "",
+    streamingUrl: (initial == null ? void 0 : initial.streamingUrl) || ((_f = initial == null ? void 0 : initial.ott) == null ? void 0 : _f.watchUrl) || "",
+    ottReleaseDate: (initial == null ? void 0 : initial.ottReleaseDate) || ((_g = initial == null ? void 0 : initial.ott) == null ? void 0 : _g.releaseDate) || "",
     ott: (initial == null ? void 0 : initial.ott) || {
       platform: "",
       releaseDate: "",
@@ -12695,10 +12805,10 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       };
     })
   );
-  const [videos, setVideos] = useState(((_d = initial == null ? void 0 : initial.media) == null ? void 0 : _d.videos) || []);
+  const [videos, setVideos] = useState(((_h = initial == null ? void 0 : initial.media) == null ? void 0 : _h.videos) || []);
   const EMPTY_VF = { url: "", type: "Trailer" };
   const [vf, setVf] = useState(EMPTY_VF);
-  const [songs, setSongs] = useState(((_e = initial == null ? void 0 : initial.media) == null ? void 0 : _e.songs) || []);
+  const [songs, setSongs] = useState(((_i = initial == null ? void 0 : initial.media) == null ? void 0 : _i.songs) || []);
   const EMPTY_SF = { url: "", title: "", singer: "", singerRef: [], musicDirector: "", musicDirectorRef: [], lyricist: "", lyricistRef: [], description: "", lyrics: "" };
   const [sf, setSf] = useState(EMPTY_SF);
   const handleSongAdd = () => {
@@ -12833,7 +12943,23 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Release Date" }),
-          /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }, children: [
+            /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+              /* @__PURE__ */ jsx("input", { type: "radio", name: "adminReleaseDatePrecision", value: "full", checked: form.releaseDatePrecision === "full", onChange: () => set("releaseDatePrecision", "full"), disabled: form.releaseTBA }),
+              " Full Date"
+            ] }),
+            /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+              /* @__PURE__ */ jsx("input", { type: "radio", name: "adminReleaseDatePrecision", value: "month", checked: form.releaseDatePrecision === "month", onChange: () => set("releaseDatePrecision", "month"), disabled: form.releaseTBA }),
+              " Month & Year"
+            ] }),
+            /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+              /* @__PURE__ */ jsx("input", { type: "radio", name: "adminReleaseDatePrecision", value: "year", checked: form.releaseDatePrecision === "year", onChange: () => set("releaseDatePrecision", "year"), disabled: form.releaseTBA }),
+              " Year Only"
+            ] })
+          ] }),
+          form.releaseDatePrecision === "full" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
+          form.releaseDatePrecision === "month" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "month", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
+          form.releaseDatePrecision === "year" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "number", min: "1900", max: "2100", placeholder: "e.g. 2025", value: form.releaseDate, onChange: (e) => set("releaseDate", e.target.value), disabled: form.releaseTBA }),
           /* @__PURE__ */ jsxs("label", { style: { marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "var(--muted)", cursor: "pointer" }, children: [
             /* @__PURE__ */ jsx("input", { type: "checkbox", checked: form.releaseTBA, onChange: (e) => set("releaseTBA", e.target.checked) }),
             " TBA"
@@ -12842,7 +12968,25 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
             /* @__PURE__ */ jsx("input", { type: "checkbox", checked: form.isReRelease, onChange: (e) => set("isReRelease", e.target.checked) }),
             " Mark as Re-Release"
           ] }),
-          form.isReRelease && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", style: { marginTop: 6 }, value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) })
+          form.isReRelease && /* @__PURE__ */ jsxs("div", { style: { marginTop: 6 }, children: [
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10, marginBottom: 6, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "adminReReleaseDatePrecision", value: "full", checked: form.reReleaseDatePrecision === "full", onChange: () => set("reReleaseDatePrecision", "full") }),
+                " Full Date"
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "adminReReleaseDatePrecision", value: "month", checked: form.reReleaseDatePrecision === "month", onChange: () => set("reReleaseDatePrecision", "month") }),
+                " Month & Year"
+              ] }),
+              /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.75rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }, children: [
+                /* @__PURE__ */ jsx("input", { type: "radio", name: "adminReReleaseDatePrecision", value: "year", checked: form.reReleaseDatePrecision === "year", onChange: () => set("reReleaseDatePrecision", "year") }),
+                " Year Only"
+              ] })
+            ] }),
+            form.reReleaseDatePrecision === "full" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "date", value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) }),
+            form.reReleaseDatePrecision === "month" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "month", value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) }),
+            form.reReleaseDatePrecision === "year" && /* @__PURE__ */ jsx("input", { className: "form-input", type: "number", min: "1900", max: "2100", placeholder: "e.g. 2025", value: form.reReleaseDate, onChange: (e) => set("reReleaseDate", e.target.value) })
+          ] })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Budget" }),
@@ -13060,22 +13204,22 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
               "Streaming Languages ",
               /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(comma separated)" })
             ] }),
-            /* @__PURE__ */ jsx("input", { className: "form-input", value: typeof ((_f = form.ott) == null ? void 0 : _f.languages) === "string" ? form.ott.languages : (((_g = form.ott) == null ? void 0 : _g.languages) || []).join(", "), onChange: (e) => set("ott", { ...form.ott, languages: e.target.value }), placeholder: "Odia, Hindi" })
+            /* @__PURE__ */ jsx("input", { className: "form-input", value: typeof ((_j = form.ott) == null ? void 0 : _j.languages) === "string" ? form.ott.languages : (((_k = form.ott) == null ? void 0 : _k.languages) || []).join(", "), onChange: (e) => set("ott", { ...form.ott, languages: e.target.value }), placeholder: "Odia, Hindi" })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsxs("label", { className: "form-label", children: [
               "Subtitles ",
               /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(comma separated)" })
             ] }),
-            /* @__PURE__ */ jsx("input", { className: "form-input", value: typeof ((_h = form.ott) == null ? void 0 : _h.subtitles) === "string" ? form.ott.subtitles : (((_i = form.ott) == null ? void 0 : _i.subtitles) || []).join(", "), onChange: (e) => set("ott", { ...form.ott, subtitles: e.target.value }), placeholder: "English, Odia" })
+            /* @__PURE__ */ jsx("input", { className: "form-input", value: typeof ((_l = form.ott) == null ? void 0 : _l.subtitles) === "string" ? form.ott.subtitles : (((_m = form.ott) == null ? void 0 : _m.subtitles) || []).join(", "), onChange: (e) => set("ott", { ...form.ott, subtitles: e.target.value }), placeholder: "English, Odia" })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "OTT Runtime" }),
-            /* @__PURE__ */ jsx("input", { className: "form-input", value: ((_j = form.ott) == null ? void 0 : _j.runtime) || "", onChange: (e) => set("ott", { ...form.ott, runtime: e.target.value }), placeholder: "142 min" })
+            /* @__PURE__ */ jsx("input", { className: "form-input", value: ((_n = form.ott) == null ? void 0 : _n.runtime) || "", onChange: (e) => set("ott", { ...form.ott, runtime: e.target.value }), placeholder: "142 min" })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Video Quality" }),
-            /* @__PURE__ */ jsx("input", { className: "form-input", value: ((_k = form.ott) == null ? void 0 : _k.quality) || "", onChange: (e) => set("ott", { ...form.ott, quality: e.target.value }), placeholder: "4K HDR, 1080p" })
+            /* @__PURE__ */ jsx("input", { className: "form-input", value: ((_o = form.ott) == null ? void 0 : _o.quality) || "", onChange: (e) => set("ott", { ...form.ott, quality: e.target.value }), placeholder: "4K HDR, 1080p" })
           ] })
         ] })
       ] })
@@ -14841,6 +14985,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
   const [yearFilter, setYearFilter] = useState("");
   const [editingDateId, setEditingDateId] = useState(null);
   const [editingDateValue, setEditingDateValue] = useState("");
+  const [editingDatePrecision, setEditingDatePrecision] = useState("full");
   const [savingDate, setSavingDate] = useState(false);
   const setQ = (v) => {
     setSearch(v);
@@ -14854,7 +14999,10 @@ function AdminPortal({ admin, onLogout, onToast }) {
   const handleSaveReleaseDate = async (movieId) => {
     setSavingDate(true);
     try {
-      const updated = await API.adminUpdateMovie(movieId, { releaseDate: editingDateValue });
+      const updated = await API.adminUpdateMovie(movieId, {
+        releaseDate: editingDateValue,
+        releaseDatePrecision: editingDatePrecision
+      });
       setMovies((prev) => prev.map((m) => m._id === movieId ? updated : m));
       onToast == null ? void 0 : onToast("Release date updated!");
       setEditingDateId(null);
@@ -14898,33 +15046,45 @@ function AdminPortal({ admin, onLogout, onToast }) {
     }
   }, [admin, tab]);
   useEffect(() => {
-    if (admin) loadAll();
+    if (admin || getAdminToken()) loadAll();
   }, [admin]);
   const loadAll = async () => {
     setLoading(true);
     setLoadingSecondary(true);
     try {
       const [m, s] = await Promise.all([
-        API.getMovies(),
-        API.adminStats()
+        API.getMovies().catch((err) => {
+          console.error("Error loading movies:", err);
+          return [];
+        }),
+        API.adminStats().catch((err) => {
+          console.error("Error loading admin stats:", err);
+          return null;
+        })
       ]);
-      setMovies(m);
-      setStats(s);
+      setMovies(m || []);
+      setStats(s || null);
+    } catch (e) {
+      console.error("Dashboard primary load error:", e);
+      onToast == null ? void 0 : onToast((e == null ? void 0 : e.message) || "Failed to load dashboard data", "error");
+    } finally {
       setLoading(false);
+    }
+    try {
       const [c, p, n, enq] = await Promise.all([
-        API.getCast(),
-        API.getProductions(),
-        API.adminGetAllNews(),
+        API.getCast().catch(() => []),
+        API.getProductions().catch(() => []),
+        API.adminGetAllNews().catch(() => []),
         API.adminGetEnquiries().catch(() => [])
       ]);
-      setCast(c);
-      setProds(p);
-      setNews(n);
-      setEnquiries(enq);
-      setLoadingSecondary(false);
+      setCast(c || []);
+      setProds(p || []);
+      setNews(n || []);
+      setEnquiries(enq || []);
     } catch (e) {
-      onToast == null ? void 0 : onToast(e.message, "error");
-      setLoading(false);
+      console.error("Dashboard secondary load error:", e);
+    } finally {
+      setLoadingSecondary(false);
     }
   };
   const openCreate = (type) => setModal({ type, mode: "create", data: null });
@@ -15404,38 +15564,77 @@ function AdminPortal({ admin, onLogout, onToast }) {
                             ] })
                           }
                         ),
-                        /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px" }, children: editingDateId === m._id ? /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, onClick: (e) => e.stopPropagation(), children: [
-                          /* @__PURE__ */ jsx(
-                            "input",
-                            {
-                              type: "date",
-                              className: "form-input",
-                              style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg1)", color: "var(--text)" },
-                              value: editingDateValue,
-                              onChange: (e) => setEditingDateValue(e.target.value)
-                            }
-                          ),
-                          /* @__PURE__ */ jsx(
-                            "button",
-                            {
-                              className: "btn btn-gold btn-sm",
-                              style: { padding: "3px 10px", fontSize: "0.75rem", fontWeight: 700 },
-                              disabled: savingDate,
-                              onClick: () => handleSaveReleaseDate(m._id),
-                              children: savingDate ? "…" : "Save"
-                            }
-                          ),
-                          /* @__PURE__ */ jsx(
-                            "button",
-                            {
-                              className: "btn btn-ghost btn-sm",
-                              style: { padding: "3px 6px", fontSize: "0.75rem" },
-                              onClick: () => setEditingDateId(null),
-                              children: "✕"
-                            }
-                          )
+                        /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px" }, children: editingDateId === m._id ? /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, background: "var(--bg1)", padding: 8, borderRadius: 8, border: "1px solid var(--border)" }, onClick: (e) => e.stopPropagation(), children: [
+                          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+                            /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }, children: [
+                              /* @__PURE__ */ jsx("input", { type: "radio", name: `prec-${m._id}`, value: "full", checked: editingDatePrecision === "full", onChange: () => setEditingDatePrecision("full") }),
+                              " Full"
+                            ] }),
+                            /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }, children: [
+                              /* @__PURE__ */ jsx("input", { type: "radio", name: `prec-${m._id}`, value: "month", checked: editingDatePrecision === "month", onChange: () => setEditingDatePrecision("month") }),
+                              " Month"
+                            ] }),
+                            /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }, children: [
+                              /* @__PURE__ */ jsx("input", { type: "radio", name: `prec-${m._id}`, value: "year", checked: editingDatePrecision === "year", onChange: () => setEditingDatePrecision("year") }),
+                              " Year"
+                            ] })
+                          ] }),
+                          /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+                            editingDatePrecision === "full" && /* @__PURE__ */ jsx(
+                              "input",
+                              {
+                                type: "date",
+                                className: "form-input",
+                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg2)", color: "var(--text)" },
+                                value: editingDateValue,
+                                onChange: (e) => setEditingDateValue(e.target.value)
+                              }
+                            ),
+                            editingDatePrecision === "month" && /* @__PURE__ */ jsx(
+                              "input",
+                              {
+                                type: "month",
+                                className: "form-input",
+                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg2)", color: "var(--text)" },
+                                value: editingDateValue,
+                                onChange: (e) => setEditingDateValue(e.target.value)
+                              }
+                            ),
+                            editingDatePrecision === "year" && /* @__PURE__ */ jsx(
+                              "input",
+                              {
+                                type: "number",
+                                min: "1900",
+                                max: "2100",
+                                placeholder: "e.g. 2025",
+                                className: "form-input",
+                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "90px", background: "var(--bg2)", color: "var(--text)" },
+                                value: editingDateValue,
+                                onChange: (e) => setEditingDateValue(e.target.value)
+                              }
+                            ),
+                            /* @__PURE__ */ jsx(
+                              "button",
+                              {
+                                className: "btn btn-gold btn-sm",
+                                style: { padding: "3px 10px", fontSize: "0.75rem", fontWeight: 700 },
+                                disabled: savingDate,
+                                onClick: () => handleSaveReleaseDate(m._id),
+                                children: savingDate ? "…" : "Save"
+                              }
+                            ),
+                            /* @__PURE__ */ jsx(
+                              "button",
+                              {
+                                className: "btn btn-ghost btn-sm",
+                                style: { padding: "3px 6px", fontSize: "0.75rem" },
+                                onClick: () => setEditingDateId(null),
+                                children: "✕"
+                              }
+                            )
+                          ] })
                         ] }) : /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
-                          /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontSize: "0.85rem" }, children: fmtDate(m.releaseDate) }),
+                          /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontSize: "0.85rem" }, children: fmtDate(m.releaseDate, m.releaseDatePrecision) }),
                           !selectMode && /* @__PURE__ */ jsx(
                             "button",
                             {
@@ -15445,7 +15644,8 @@ function AdminPortal({ admin, onLogout, onToast }) {
                               onClick: (e) => {
                                 e.stopPropagation();
                                 setEditingDateId(m._id);
-                                setEditingDateValue(m.releaseDate ? new Date(m.releaseDate).toISOString().split("T")[0] : "");
+                                setEditingDatePrecision(m.releaseDatePrecision || (m.releaseDate && m.releaseDate.length === 4 ? "year" : m.releaseDate && m.releaseDate.length === 7 ? "month" : "full"));
+                                setEditingDateValue(m.releaseDate || "");
                               },
                               children: "✏️ Edit Date"
                             }
@@ -16334,6 +16534,7 @@ function AppInner({
     setAdminToken(token);
     if (typeof window !== "undefined") {
       localStorage.setItem("admin_user", JSON.stringify(a));
+      localStorage.setItem("admin_token", token);
     }
   };
   const handleAdminLogout = () => {
