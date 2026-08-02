@@ -492,6 +492,16 @@ MovieSchema.pre("findOneAndUpdate", async function (next) {
   next();
 });
 
+// ── Performance indexes ──────────────────────────────────────────
+// Added to eliminate full-collection scans on admin portal load.
+MovieSchema.index({ createdAt: -1 });
+MovieSchema.index({ title: 1 });
+MovieSchema.index({ verdict: 1 });
+MovieSchema.index({ releaseDate: -1 });
+CastSchema.index({ name: 1 });
+NewsSchema.index({ createdAt: -1 });
+NewsSchema.index({ published: 1, createdAt: -1 });
+
 const Movie = mongoose.model("Movie", MovieSchema);
 const Cast = mongoose.model("Cast", CastSchema);
 const News = mongoose.model("News", NewsSchema);
@@ -3111,7 +3121,15 @@ app.get("/api/productions/:id", async (req, res) => {
 
 app.get("/api/movies", async (req, res) => {
   try {
-    const movies = await Movie.find({}, "-reviews").populate("productionId", "name logo").populate("collaborators", "name logo").lean();
+    // Projection excludes large embedded arrays that are not needed for list/card views.
+    // Full arrays (songs, videos, box-office days) are still available via GET /api/movies/:id.
+    const MOVIE_LIST_PROJECTION = "-reviews -media.songs -media.videos -boxOfficeDays -reReleaseBoxOfficeDays";
+    const movies = await Movie.find({}, MOVIE_LIST_PROJECTION)
+      .populate("productionId", "name logo")
+      .populate("collaborators", "name logo")
+      .sort({ createdAt: -1 })
+      .lean();
+    res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
     res.json(movies);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3171,8 +3189,12 @@ app.get("/api/cast/:id", async (req, res) => {
 });
 
 app.get("/api/cast", async (req, res) => {
-  try { res.json(await Cast.find().lean()); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    // Only return fields needed for admin list — bio is fetched on demand via /cast/:id
+    const cast = await Cast.find({}, "name type photo slug").sort({ name: 1 }).lean();
+    res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+    res.json(cast);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get("/api/news", async (req, res) => {
@@ -3769,9 +3791,48 @@ app.get("/api/admin/stats", adminAuth, async (req, res) => {
       Movie.countDocuments(), Cast.countDocuments(),
       Production.countDocuments(), News.countDocuments(),
     ]);
-    const recentMovies = await Movie.find().sort({ createdAt: -1 }).limit(5)
+    const recentMovies = await Movie.find({}, "title posterUrl releaseDate verdict createdAt productionId")
+      .sort({ createdAt: -1 }).limit(5)
       .populate("productionId", "name").lean();
     res.json({ movies, cast, productions, news, recentMovies });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Paginated, searchable movie list (lightweight — no embedded arrays) ──
+// GET /api/admin/movies-list?page=1&limit=50&search=keyword&verdict=Hit&year=2025
+app.get("/api/admin/movies-list", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || "50", 10)));
+    const skip = (page - 1) * limit;
+    const search = (req.query.search || "").trim();
+    const verdict = (req.query.verdict || "").trim();
+    const year = (req.query.year || "").trim();
+
+    const filter = {};
+    if (search) filter.title = { $regex: search, $options: "i" };
+    if (verdict) filter.verdict = verdict;
+    if (year) filter.releaseDate = { $regex: `^${year}` };
+
+    const PROJECTION = "-reviews -media.songs -media.videos -boxOfficeDays -reReleaseBoxOfficeDays";
+    const [total, movies] = await Promise.all([
+      Movie.countDocuments(filter),
+      Movie.find(filter, PROJECTION)
+        .populate("productionId", "name logo")
+        .populate("collaborators", "name logo")
+        .sort({ createdAt: -1 })
+        .skip(skip).limit(limit)
+        .lean(),
+    ]);
+    res.json({ movies, total, page, limit, pages: Math.ceil(total / limit) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Full cast list (includes bio — used by Cast management tab) ──
+app.get("/api/admin/cast-list", adminAuth, async (req, res) => {
+  try {
+    const cast = await Cast.find({}).sort({ name: 1 }).lean();
+    res.json(cast);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

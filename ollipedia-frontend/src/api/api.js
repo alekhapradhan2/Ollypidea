@@ -227,4 +227,10 @@ export const API = {
   adminCreateStaff: (body) => post("/admin/staff", body, _adminToken),
   adminUpdateStaff: (id, body) => req("PUT", `/admin/staff/${id}`, body, _adminToken),
   adminDeleteStaff: (id) => del(`/admin/staff/${id}`, _adminToken),
+
+  // ── Admin — Optimized list endpoints (paginated / lightweight) ──
+  // Use these in the admin portal instead of the full getMovies / getCast calls.
+  adminGetMoviesList: (page = 1, limit = 50, search = "", verdict = "", year = "") =>
+    get(`/admin/movies-list?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&verdict=${encodeURIComponent(verdict)}&year=${encodeURIComponent(year)}`, _adminToken),
+  adminGetCastList: () => get("/admin/cast-list", _adminToken),
 };

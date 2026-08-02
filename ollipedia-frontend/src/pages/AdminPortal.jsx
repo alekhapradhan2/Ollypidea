@@ -2927,20 +2927,34 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
     }
   }, [admin, tab]);
 
+  // Track which tabs have already had their data fetched
+  const loadedTabs = useRef(new Set());
+
   useEffect(() => {
-    if (admin || getAdminToken()) loadAll();
+    if (admin || getAdminToken()) loadPrimary();
   }, [admin]);
 
-  const loadAll = async () => {
-    setLoading(true);
-    setLoadingSecondary(true);
+  // When tab changes, lazy-load secondary data if not yet fetched
+  useEffect(() => {
+    lazyLoadTab(tab);
+  }, [tab]);
 
+  // ── Phase 1: Fast initial load — movies + stats only ──────────────
+  const loadPrimary = async () => {
+    setLoading(true);
+    setLoadingSecondary(false); // secondary data is now lazy — not loading yet
     try {
       const [m, s] = await Promise.all([
-        API.getMovies().catch(err => { console.error("Error loading movies:", err); return []; }),
+        API.adminGetMoviesList(1, 200).catch(err => {
+          console.error("Error loading movies:", err);
+          // Fallback to public endpoint if admin endpoint fails
+          return API.getMovies().catch(() => ({ movies: [], total: 0 }));
+        }),
         API.adminStats().catch(err => { console.error("Error loading admin stats:", err); return null; }),
       ]);
-      setMovies(m || []);
+      // adminGetMoviesList returns { movies, total, page, limit, pages }
+      // getMovies (fallback) returns plain array
+      setMovies(Array.isArray(m) ? m : (m?.movies || []));
       setStats(s || null);
     } catch (e) {
       console.error("Dashboard primary load error:", e);
@@ -2948,23 +2962,60 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
     } finally {
       setLoading(false);
     }
+  };
 
-    try {
-      const [c, p, n, enq] = await Promise.all([
-        API.getCast().catch(() => []),
-        API.getProductions().catch(() => []),
-        API.adminGetAllNews().catch(() => []),
-        API.adminGetEnquiries().catch(() => []),
-      ]);
-      setCast(c || []);
-      setProds(p || []);
-      setNews(n || []);
-      setEnquiries(enq || []);
-    } catch (e) {
-      console.error("Dashboard secondary load error:", e);
-    } finally {
+  // ── Phase 2: Lazy per-tab data loading ──────────────────────────────
+  const lazyLoadTab = async (tabKey) => {
+    // Cast is needed for movies tab (for cast edit picker) + cast tab
+    const needsCast = ["movies", "cast", "add-movie"].includes(tabKey);
+    const needsProds = ["movies", "productions", "add-movie"].includes(tabKey);
+    const needsNews = ["news"].includes(tabKey);
+    const needsEnquiries = ["enquiries"].includes(tabKey);
+
+    const fetches = [];
+
+    if (needsCast && !loadedTabs.current.has("cast")) {
+      loadedTabs.current.add("cast");
+      fetches.push(
+        API.adminGetCastList().catch(() => API.getCast().catch(() => []))
+          .then(c => setCast(c || []))
+      );
+    }
+    if (needsProds && !loadedTabs.current.has("prods")) {
+      loadedTabs.current.add("prods");
+      fetches.push(
+        API.getProductions().catch(() => [])
+          .then(p => setProds(p || []))
+      );
+    }
+    if (needsNews && !loadedTabs.current.has("news")) {
+      loadedTabs.current.add("news");
+      setLoadingSecondary(true);
+      fetches.push(
+        API.adminGetAllNews().catch(() => [])
+          .then(n => setNews(n || []))
+      );
+    }
+    if (needsEnquiries && !loadedTabs.current.has("enquiries")) {
+      loadedTabs.current.add("enquiries");
+      setLoadingSecondary(true);
+      fetches.push(
+        API.adminGetEnquiries().catch(() => [])
+          .then(enq => setEnquiries(enq || []))
+      );
+    }
+
+    if (fetches.length > 0) {
+      await Promise.all(fetches);
       setLoadingSecondary(false);
     }
+  };
+
+  // Kept for backward-compat (manual refresh button if any)
+  const loadAll = async () => {
+    loadedTabs.current.clear();
+    await loadPrimary();
+    await lazyLoadTab(tab);
   };
 
   const openCreate = (type) => setModal({ type, mode: "create", data: null });
