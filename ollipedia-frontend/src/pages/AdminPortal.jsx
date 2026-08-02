@@ -2945,16 +2945,12 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
     setLoadingSecondary(false); // secondary data is now lazy — not loading yet
     try {
       const [m, s] = await Promise.all([
-        API.adminGetMoviesList(1, 200).catch(err => {
-          console.error("Error loading movies:", err);
-          // Fallback to public endpoint if admin endpoint fails
-          return API.getMovies().catch(() => ({ movies: [], total: 0 }));
-        }),
+        // Use getMovies() — returns ALL movies (no limit) with the projection fix applied
+        // (media.songs, media.videos, boxOfficeDays excluded for fast loading)
+        API.getMovies().catch(err => { console.error("Error loading movies:", err); return []; }),
         API.adminStats().catch(err => { console.error("Error loading admin stats:", err); return null; }),
       ]);
-      // adminGetMoviesList returns { movies, total, page, limit, pages }
-      // getMovies (fallback) returns plain array
-      setMovies(Array.isArray(m) ? m : (m?.movies || []));
+      setMovies(Array.isArray(m) ? m : []);
       setStats(s || null);
     } catch (e) {
       console.error("Dashboard primary load error:", e);
@@ -3163,14 +3159,16 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
   const q = search.toLowerCase();
 
-  // Extract distinct release years
+  // Extract distinct release years — parse safely (handles "YYYY", "YYYY-MM", "YYYY-MM-DD", ISO)
   const availableYears = Array.from(new Set(
     movies
       .map(m => {
         if (!m.releaseDate) return null;
-        const d = new Date(m.releaseDate);
-        const y = d.getFullYear();
-        return isNaN(y) ? null : String(y);
+        const s = String(m.releaseDate).trim();
+        if (!s || s.toUpperCase() === "TBA") return null;
+        // Extract the first 4 characters — works for all date formats
+        const y = s.slice(0, 4);
+        return /^\d{4}$/.test(y) ? y : null;
       })
       .filter(Boolean)
   )).sort((a, b) => b - a);
@@ -3178,9 +3176,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const filteredMovies = movies
     .filter(m => {
       const matchSearch = !q || m.title?.toLowerCase().includes(q);
-      const mYear = m.releaseDate && !isNaN(new Date(m.releaseDate).getFullYear())
-        ? String(new Date(m.releaseDate).getFullYear())
-        : "";
+      // Use string slice for year — consistent with availableYears extraction
+      const s = String(m.releaseDate || "").trim();
+      const mYear = s && s.toUpperCase() !== "TBA" && /^\d{4}/.test(s) ? s.slice(0, 4) : "";
       const matchYear = !yearFilter || mYear === yearFilter;
       return matchSearch && matchYear;
     })
