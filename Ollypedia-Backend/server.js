@@ -33,50 +33,57 @@ app.use(express.json({ limit: "10mb" }));
 
 // ── Passive visitor tracking middleware ──────────────────────────────────────
 // Fires on every public GET /api/* — silently logs IP, device, page, location
+// IMPORTANT: next() is called immediately so the request is never blocked.
+// All tracking (geo lookup + DB write) happens fully in the background.
 const TRACK_SKIP = ["/api/admin", "/api/auth", "/api/cast-auth", "/api/ping", "/blog-uploads"];
 
-app.use(async (req, _res, next) => {
-  try {
-    if (req.method !== "GET") return next();
-    if (TRACK_SKIP.some(p => req.path.startsWith(p))) return next();
-    if (!req.path.startsWith("/api/")) return next();
-
-    const ua = req.headers["user-agent"] || "";
-    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-      || req.socket?.remoteAddress || "";
-    const ref = req.headers["referer"] || req.headers["referrer"] || "";
-
-    const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-    const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
-    const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
-
-    const os = /Windows/i.test(ua) ? "Windows"
-      : /Android/i.test(ua) ? "Android"
-        : /iPhone|iPad/i.test(ua) ? "iOS"
-          : /Mac/i.test(ua) ? "macOS"
-            : /Linux/i.test(ua) ? "Linux" : "Other";
-
-    const browser = /Edg\//i.test(ua) ? "Edge"
-      : /OPR\//i.test(ua) ? "Opera"
-        : /Chrome/i.test(ua) ? "Chrome"
-          : /Firefox/i.test(ua) ? "Firefox"
-            : /Safari/i.test(ua) ? "Safari" : "Other";
-
-    const page = req.path.replace(/^\/api/, "") || "/";
-
-    let country = "", city = "";
-    if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
-      try {
-        const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
-        const gd = await geo.json();
-        if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
-      } catch { /* geo timeout — visit still logged */ }
-    }
-
-    // fire-and-forget — never block the request
-    VisitorLog.create({ ip, country, city, device, os, browser, page, referrer: ref, visitedAt: new Date() }).catch(() => { });
-  } catch { /* never block */ }
+app.use((req, _res, next) => {
+  // Call next() first — request is NEVER blocked by tracking
   next();
+
+  // Skip non-GET and non-API paths
+  if (req.method !== "GET") return;
+  if (TRACK_SKIP.some(p => req.path.startsWith(p))) return;
+  if (!req.path.startsWith("/api/")) return;
+
+  // Run everything asynchronously — response already sent to client
+  (async () => {
+    try {
+      const ua = req.headers["user-agent"] || "";
+      const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
+        || req.socket?.remoteAddress || "";
+      const ref = req.headers["referer"] || req.headers["referrer"] || "";
+
+      const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
+      const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
+
+      const os = /Windows/i.test(ua) ? "Windows"
+        : /Android/i.test(ua) ? "Android"
+          : /iPhone|iPad/i.test(ua) ? "iOS"
+            : /Mac/i.test(ua) ? "macOS"
+              : /Linux/i.test(ua) ? "Linux" : "Other";
+
+      const browser = /Edg\//i.test(ua) ? "Edge"
+        : /OPR\//i.test(ua) ? "Opera"
+          : /Chrome/i.test(ua) ? "Chrome"
+            : /Firefox/i.test(ua) ? "Firefox"
+              : /Safari/i.test(ua) ? "Safari" : "Other";
+
+      const page = req.path.replace(/^\/api/, "") || "/";
+
+      let country = "", city = "";
+      if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
+        try {
+          const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
+          const gd = await geo.json();
+          if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
+        } catch { /* geo timeout — visit still logged without location */ }
+      }
+
+      VisitorLog.create({ ip, country, city, device, os, browser, page, referrer: ref, visitedAt: new Date() }).catch(() => {});
+    } catch { /* never throw */ }
+  })();
 });
 
 // Serve uploaded blog images publicly
@@ -503,6 +510,9 @@ MovieSchema.index({ releaseDate: -1 });
 CastSchema.index({ name: 1 });
 NewsSchema.index({ createdAt: -1 });
 NewsSchema.index({ published: 1, createdAt: -1 });
+BlogSchema.index({ createdAt: -1 });
+BlogSchema.index({ published: 1, createdAt: -1 });
+BlogSchema.index({ slug: 1 });
 
 const Movie = mongoose.model("Movie", MovieSchema);
 const Cast = mongoose.model("Cast", CastSchema);
@@ -3123,9 +3133,9 @@ app.get("/api/productions/:id", async (req, res) => {
 
 app.get("/api/movies", async (req, res) => {
   try {
-    // Projection excludes large embedded arrays that are not needed for list/card views.
-    // Full arrays (songs, videos, box-office days) are still available via GET /api/movies/:id.
-    const MOVIE_LIST_PROJECTION = "-reviews -media.songs -media.videos -boxOfficeDays -reReleaseBoxOfficeDays";
+    // Exclude reviews and box-office day arrays (large, not needed for list/card views).
+    // Songs and videos are KEPT — needed by admin portal movie detail view.
+    const MOVIE_LIST_PROJECTION = "-reviews -boxOfficeDays -reReleaseBoxOfficeDays";
     const movies = await Movie.find({}, MOVIE_LIST_PROJECTION)
       .populate("productionId", "name logo")
       .populate("collaborators", "name logo")
@@ -4464,7 +4474,10 @@ app.post("/api/blog/:slug/view", async (req, res) => {
 // GET /api/admin/blog
 app.get("/api/admin/blog", adminAuth, async (req, res) => {
   try {
-    const posts = await Blog.find().sort({ createdAt: -1 }).lean();
+    // Exclude full `content` HTML from list — can be MBs per post.
+    // Full content is fetched individually when editing a specific post.
+    const posts = await Blog.find({}, "-content -reviews")
+      .sort({ createdAt: -1 }).lean();
     res.json(posts);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

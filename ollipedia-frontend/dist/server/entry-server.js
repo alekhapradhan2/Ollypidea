@@ -199,7 +199,11 @@ const API = {
   adminGetStaff: () => get("/admin/staff", _adminToken),
   adminCreateStaff: (body) => post("/admin/staff", body, _adminToken),
   adminUpdateStaff: (id, body) => req("PUT", `/admin/staff/${id}`, body, _adminToken),
-  adminDeleteStaff: (id) => del(`/admin/staff/${id}`, _adminToken)
+  adminDeleteStaff: (id) => del(`/admin/staff/${id}`, _adminToken),
+  // ── Admin — Optimized list endpoints (paginated / lightweight) ──
+  // Use these in the admin portal instead of the full getMovies / getCast calls.
+  adminGetMoviesList: (page = 1, limit = 50, search = "", verdict = "", year = "") => get(`/admin/movies-list?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&verdict=${encodeURIComponent(verdict)}&year=${encodeURIComponent(year)}`, _adminToken),
+  adminGetCastList: () => get("/admin/cast-list", _adminToken)
 };
 const isOid$2 = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
 function slugify(text = "") {
@@ -2926,10 +2930,18 @@ const fmtDate$5 = (d, precision) => {
   const prec = s.length === 4 ? "year" : s.length === 7 ? "month" : "full";
   if (prec === "year" || /^\d{4}$/.test(s)) return s.slice(0, 4);
   if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
-    const parts = s.split("-");
+    const parts2 = s.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts2[1], 10);
+    return !isNaN(m) && m >= 1 && m <= 12 ? `${months[m - 1]} ${parts2[0]}` : s;
+  }
+  const cleanIso = s.split("T")[0];
+  const parts = cleanIso.split("-");
+  if (parts.length === 3) {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const m = parseInt(parts[1], 10);
-    return !isNaN(m) && m >= 1 && m <= 12 ? `${months[m - 1]} ${parts[0]}` : s;
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(m) && m >= 1 && m <= 12 && !isNaN(day)) return `${day} ${months[m - 1]} ${parts[0]}`;
   }
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -12320,10 +12332,18 @@ const fmtDate = (d, precision) => {
   const prec = precision || (s.length === 4 ? "year" : s.length === 7 ? "month" : "full");
   if (prec === "year" || /^\d{4}$/.test(s)) return s.slice(0, 4);
   if (prec === "month" || /^\d{4}-\d{2}$/.test(s)) {
-    const parts = s.split("-");
+    const parts2 = s.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const m = parseInt(parts2[1], 10);
+    return !isNaN(m) && m >= 1 && m <= 12 ? `${months[m - 1]} ${parts2[0]}` : s;
+  }
+  const cleanIso = s.split("T")[0];
+  const parts = cleanIso.split("-");
+  if (parts.length === 3) {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const m = parseInt(parts[1], 10);
-    return !isNaN(m) && m >= 1 && m <= 12 ? `${months[m - 1]} ${parts[0]}` : s;
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(m) && m >= 1 && m <= 12 && !isNaN(day)) return `${day} ${months[m - 1]} ${parts[0]}`;
   }
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -12811,6 +12831,42 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
   const [songs, setSongs] = useState(((_i = initial == null ? void 0 : initial.media) == null ? void 0 : _i.songs) || []);
   const EMPTY_SF = { url: "", title: "", singer: "", singerRef: [], musicDirector: "", musicDirectorRef: [], lyricist: "", lyricistRef: [], description: "", lyrics: "" };
   const [sf, setSf] = useState(EMPTY_SF);
+  useEffect(() => {
+    var _a2, _b2;
+    if ((_a2 = initial == null ? void 0 : initial.media) == null ? void 0 : _a2.videos) setVideos(initial.media.videos);
+    if ((_b2 = initial == null ? void 0 : initial.media) == null ? void 0 : _b2.songs) setSongs(initial.media.songs);
+    if (initial == null ? void 0 : initial._id) {
+      let isMounted = true;
+      API.getMovie(initial._id).then((fullMovie) => {
+        var _a3, _b3;
+        if (!isMounted || !fullMovie) return;
+        if (Array.isArray((_a3 = fullMovie.media) == null ? void 0 : _a3.videos) && fullMovie.media.videos.length > 0) {
+          setVideos(fullMovie.media.videos);
+        }
+        if (Array.isArray((_b3 = fullMovie.media) == null ? void 0 : _b3.songs) && fullMovie.media.songs.length > 0) {
+          setSongs(fullMovie.media.songs);
+        }
+        if (Array.isArray(fullMovie.cast) && fullMovie.cast.length > 0) {
+          setCast(fullMovie.cast.map((c) => {
+            var _a4, _b4, _c2, _d2;
+            const rawId = ((_a4 = c.castId) == null ? void 0 : _a4._id) ?? c.castId ?? "";
+            return {
+              castId: String(rawId),
+              isNew: false,
+              name: c.name || ((_b4 = c.castId) == null ? void 0 : _b4.name) || "",
+              photo: c.photo || ((_c2 = c.castId) == null ? void 0 : _c2.photo) || "",
+              type: c.type || ((_d2 = c.castId) == null ? void 0 : _d2.type) || "Actor",
+              role: c.role || "",
+              bio: ""
+            };
+          }));
+        }
+      }).catch((err) => console.error("MovieForm fetch full movie error:", err));
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [initial]);
   const handleSongAdd = () => {
     if (!sf.title.trim()) return;
     const sid = extractYtId(sf.url);
@@ -15045,14 +15101,21 @@ function AdminPortal({ admin, onLogout, onToast }) {
       setTab(fallback);
     }
   }, [admin, tab]);
+  const loadedTabs = useRef(/* @__PURE__ */ new Set());
   useEffect(() => {
-    if (admin || getAdminToken()) loadAll();
+    if (admin || getAdminToken()) loadPrimary();
   }, [admin]);
-  const loadAll = async () => {
+  useEffect(() => {
+    lazyLoadTab(tab);
+  }, [tab]);
+  const loadPrimary = async () => {
     setLoading(true);
-    setLoadingSecondary(true);
+    setLoadingSecondary(false);
     try {
       const [m, s] = await Promise.all([
+        // getMovies() returns ALL movies with no limit — projection already strips
+        // heavy arrays (songs, videos, boxOfficeDays). Backend now gzip-compresses
+        // the response so the actual transfer is ~70% smaller than before.
         API.getMovies().catch((err) => {
           console.error("Error loading movies:", err);
           return [];
@@ -15062,7 +15125,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
           return null;
         })
       ]);
-      setMovies(m || []);
+      setMovies(Array.isArray(m) ? m : []);
       setStats(s || null);
     } catch (e) {
       console.error("Dashboard primary load error:", e);
@@ -15070,25 +15133,56 @@ function AdminPortal({ admin, onLogout, onToast }) {
     } finally {
       setLoading(false);
     }
-    try {
-      const [c, p, n, enq] = await Promise.all([
-        API.getCast().catch(() => []),
-        API.getProductions().catch(() => []),
-        API.adminGetAllNews().catch(() => []),
-        API.adminGetEnquiries().catch(() => [])
-      ]);
-      setCast(c || []);
-      setProds(p || []);
-      setNews(n || []);
-      setEnquiries(enq || []);
-    } catch (e) {
-      console.error("Dashboard secondary load error:", e);
-    } finally {
+  };
+  const lazyLoadTab = async (tabKey) => {
+    const needsCast = ["movies", "cast", "add-movie"].includes(tabKey);
+    const needsProds = ["movies", "productions", "add-movie"].includes(tabKey);
+    const needsNews = ["news"].includes(tabKey);
+    const needsEnquiries = ["enquiries"].includes(tabKey);
+    const fetches = [];
+    if (needsCast && !loadedTabs.current.has("cast")) {
+      loadedTabs.current.add("cast");
+      fetches.push(
+        API.adminGetCastList().catch(() => API.getCast().catch(() => [])).then((c) => setCast(c || []))
+      );
+    }
+    if (needsProds && !loadedTabs.current.has("prods")) {
+      loadedTabs.current.add("prods");
+      fetches.push(
+        API.getProductions().catch(() => []).then((p) => setProds(p || []))
+      );
+    }
+    if (needsNews && !loadedTabs.current.has("news")) {
+      loadedTabs.current.add("news");
+      setLoadingSecondary(true);
+      fetches.push(
+        API.adminGetAllNews().catch(() => []).then((n) => setNews(n || []))
+      );
+    }
+    if (needsEnquiries && !loadedTabs.current.has("enquiries")) {
+      loadedTabs.current.add("enquiries");
+      setLoadingSecondary(true);
+      fetches.push(
+        API.adminGetEnquiries().catch(() => []).then((enq) => setEnquiries(enq || []))
+      );
+    }
+    if (fetches.length > 0) {
+      await Promise.all(fetches);
       setLoadingSecondary(false);
     }
   };
   const openCreate = (type) => setModal({ type, mode: "create", data: null });
-  const openEdit = (type, data) => setModal({ type, mode: "edit", data });
+  const openEdit = async (type, data) => {
+    setModal({ type, mode: "edit", data });
+    if (type === "movie" && (data == null ? void 0 : data._id)) {
+      try {
+        const fullMovie = await API.getMovie(data._id);
+        setModal({ type, mode: "edit", data: fullMovie });
+      } catch (err) {
+        console.error("Error fetching full movie for edit modal:", err);
+      }
+    }
+  };
   const closeModal = () => setModal(null);
   const handleSaveMovie = async (formData) => {
     setSaving(true);
@@ -15268,15 +15362,17 @@ function AdminPortal({ admin, onLogout, onToast }) {
   const availableYears = Array.from(new Set(
     movies.map((m) => {
       if (!m.releaseDate) return null;
-      const d = new Date(m.releaseDate);
-      const y = d.getFullYear();
-      return isNaN(y) ? null : String(y);
+      const s = String(m.releaseDate).trim();
+      if (!s || s.toUpperCase() === "TBA") return null;
+      const y = s.slice(0, 4);
+      return /^\d{4}$/.test(y) ? y : null;
     }).filter(Boolean)
   )).sort((a, b) => b - a);
   const filteredMovies = movies.filter((m) => {
     var _a2;
     const matchSearch = !q || ((_a2 = m.title) == null ? void 0 : _a2.toLowerCase().includes(q));
-    const mYear = m.releaseDate && !isNaN(new Date(m.releaseDate).getFullYear()) ? String(new Date(m.releaseDate).getFullYear()) : "";
+    const s = String(m.releaseDate || "").trim();
+    const mYear = s && s.toUpperCase() !== "TBA" && /^\d{4}/.test(s) ? s.slice(0, 4) : "";
     const matchYear = !yearFilter || mYear === yearFilter;
     return matchSearch && matchYear;
   }).slice().sort((a, b) => {

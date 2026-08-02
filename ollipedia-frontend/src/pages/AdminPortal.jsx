@@ -594,6 +594,40 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
   const EMPTY_SF = { url: "", title: "", singer: "", singerRef: [], musicDirector: "", musicDirectorRef: [], lyricist: "", lyricistRef: [], description: "", lyrics: "" };
   const [sf, setSf] = useState(EMPTY_SF);
 
+  // Sync state if initial prop updates or if initial is loaded from a summary object without media
+  useEffect(() => {
+    if (initial?.media?.videos) setVideos(initial.media.videos);
+    if (initial?.media?.songs) setSongs(initial.media.songs);
+
+    if (initial?._id) {
+      let isMounted = true;
+      API.getMovie(initial._id).then(fullMovie => {
+        if (!isMounted || !fullMovie) return;
+        if (Array.isArray(fullMovie.media?.videos) && fullMovie.media.videos.length > 0) {
+          setVideos(fullMovie.media.videos);
+        }
+        if (Array.isArray(fullMovie.media?.songs) && fullMovie.media.songs.length > 0) {
+          setSongs(fullMovie.media.songs);
+        }
+        if (Array.isArray(fullMovie.cast) && fullMovie.cast.length > 0) {
+          setCast(fullMovie.cast.map(c => {
+            const rawId = c.castId?._id ?? c.castId ?? "";
+            return {
+              castId: String(rawId),
+              isNew: false,
+              name: c.name || c.castId?.name || "",
+              photo: c.photo || c.castId?.photo || "",
+              type: c.type || c.castId?.type || "Actor",
+              role: c.role || "",
+              bio: "",
+            };
+          }));
+        }
+      }).catch(err => console.error("MovieForm fetch full movie error:", err));
+      return () => { isMounted = false; };
+    }
+  }, [initial]);
+
 
   const handleSongAdd = () => {
     if (!sf.title.trim()) return;
@@ -3016,7 +3050,17 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   };
 
   const openCreate = (type) => setModal({ type, mode: "create", data: null });
-  const openEdit = (type, data) => setModal({ type, mode: "edit", data });
+  const openEdit = async (type, data) => {
+    setModal({ type, mode: "edit", data });
+    if (type === "movie" && data?._id) {
+      try {
+        const fullMovie = await API.getMovie(data._id);
+        setModal({ type, mode: "edit", data: fullMovie });
+      } catch (err) {
+        console.error("Error fetching full movie for edit modal:", err);
+      }
+    }
+  };
   const closeModal = () => setModal(null);
 
   // ── Movie save ──
