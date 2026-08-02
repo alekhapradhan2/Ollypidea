@@ -2942,15 +2942,19 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   // ── Phase 1: Fast initial load — movies + stats only ──────────────
   const loadPrimary = async () => {
     setLoading(true);
-    setLoadingSecondary(false); // secondary data is now lazy — not loading yet
+    setLoadingSecondary(false);
     try {
       const [m, s] = await Promise.all([
-        // Use getMovies() — returns ALL movies (no limit) with the projection fix applied
-        // (media.songs, media.videos, boxOfficeDays excluded for fast loading)
-        API.getMovies().catch(err => { console.error("Error loading movies:", err); return []; }),
+        // adminGetMoviesList uses indexes + projection (no songs/videos/boxOfficeDays)
+        // limit=5000 ensures all movies load; response is gzip-compressed by backend
+        API.adminGetMoviesList(1, 5000).catch(err => {
+          console.warn("Admin movies endpoint failed, falling back:", err.message);
+          return API.getMovies().catch(() => []);
+        }),
         API.adminStats().catch(err => { console.error("Error loading admin stats:", err); return null; }),
       ]);
-      setMovies(Array.isArray(m) ? m : []);
+      // adminGetMoviesList returns { movies, total, ... }; fallback returns plain array
+      setMovies(Array.isArray(m) ? m : (m?.movies || []));
       setStats(s || null);
     } catch (e) {
       console.error("Dashboard primary load error:", e);

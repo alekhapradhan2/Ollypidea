@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const compression = require("compression"); // gzip all responses
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
@@ -26,6 +27,7 @@ const blogImageUpload = multer({
 });
 
 const app = express();
+app.use(compression()); // gzip — reduces JSON payload by ~70-80%
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 
