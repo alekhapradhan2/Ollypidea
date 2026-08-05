@@ -668,7 +668,15 @@ export default function SacnilkScraperPanel({ movies = [], onToast: parentToast 
   const openHistory = async (movie) => {
     const mid = String(movie._id);
     if (!logs[mid]) await loadLogs(mid);
-    setHistoryMovie(movie);
+    
+    // Fetch boxOfficeDays since they are excluded in the generic movie list API
+    try {
+      const days = await API.getMovieBoxOfficeDays(mid);
+      setHistoryMovie({ ...movie, boxOfficeDays: days });
+    } catch (e) {
+      console.error("Failed to load box office days:", e);
+      setHistoryMovie(movie); // fallback to original
+    }
   };
 
   // ── Loading ──────────────────────────────────────────

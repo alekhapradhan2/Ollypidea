@@ -1096,6 +1096,20 @@ function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
   const [saving,         setSaving]         = useState(false);
   const contentRef = useRef(null);
 
+  React.useEffect(() => {
+    if (article?.slug && !article.content) {
+      import("../api/api").then(({ API }) => {
+        API.getBlogPost(article.slug).then(full => {
+          if (full) {
+            setContent(full.content || "");
+            if (full.excerpt && !article.excerpt) setExcerpt(full.excerpt);
+            if (full.tags && !article.tags) setBlogTags(Array.isArray(full.tags) ? full.tags.join(", ") : full.tags);
+          }
+        }).catch(err => console.error("Failed to fetch full blog:", err));
+      });
+    }
+  }, [article]);
+
   // ── Link type: "none" | "movie" | "cast"
   const initLinkType = article.castId || article.castName ? "cast" : article.movieId || article.movieTitle ? "movie" : "none";
   const [linkType, setLinkType] = useState(initLinkType);
@@ -2093,7 +2107,7 @@ function MoviePanel({ movie, movies=[], cast=[], onToast }) {
         <GenPanel key={activeType} movie={movie} type={activeType} onPublished={handlePublished} onToast={onToast} />
       )}
       {editTarget && (
-        <EditModal article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+        <EditModal key={editTarget._id || "new"} article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
       )}
     </div>
   );
@@ -2238,7 +2252,7 @@ function CastPanel({ castMember, movies=[], cast=[], onToast }) {
       )}
 
       {editTarget && (
-        <EditModal article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+        <EditModal key={editTarget._id || "new"} article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
       )}
     </div>
   );
@@ -2354,7 +2368,7 @@ function UncategorizedSection({ onToast, count, onCountChange, movies=[], cast=[
         ))}
       </div>
       {editTarget && (
-        <EditModal article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
+        <EditModal key={editTarget._id || "new"} article={editTarget} movies={movies} cast={cast} onClose={()=>setEditTarget(null)} onSaved={handleSaved} onToast={onToast} />
       )}
     </div>
   );

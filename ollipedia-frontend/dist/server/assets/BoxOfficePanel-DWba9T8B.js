@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from "react/jsx-runtime";
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { A as API, g as getAdminToken } from "../entry-server.js";
 import "react-dom/server";
 import "react-router-dom/server.mjs";
@@ -1335,13 +1335,18 @@ const lbl = {
 function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast, trackType = "normal" }) {
   const year = getYear(movie.releaseDate);
   const nextDay = allDays.length ? Math.max(...allDays.map((d) => d.day)) + 1 : 1;
-  const [form, setForm] = useState({
-    day: String((dayData == null ? void 0 : dayData.day) ?? nextDay),
-    net: String((dayData == null ? void 0 : dayData.net) ?? ""),
-    gross: String((dayData == null ? void 0 : dayData.gross) ?? ""),
-    date: String((dayData == null ? void 0 : dayData.date) ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)),
-    note: String((dayData == null ? void 0 : dayData.note) ?? "")
+  const getForm = (d) => ({
+    day: String((d == null ? void 0 : d.day) ?? nextDay),
+    net: String((d == null ? void 0 : d.net) ?? ""),
+    gross: String((d == null ? void 0 : d.gross) ?? ""),
+    date: String((d == null ? void 0 : d.date) ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)),
+    note: String((d == null ? void 0 : d.note) ?? "")
   });
+  const [form, setForm] = useState(getForm(dayData));
+  React.useEffect(() => {
+    setForm(getForm(dayData));
+    if (dayData == null ? void 0 : dayData.gross) setGrossManual(true);
+  }, [dayData, nextDay]);
   const [showAi, setShowAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiText, setAiText] = useState("");

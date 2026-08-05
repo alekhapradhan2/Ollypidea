@@ -11089,7 +11089,205 @@ app.patch("/api/admin/model-blog/log/:logId/publish", adminAuth, async (req, res
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// END MODEL BLOG ROUTES
+// DAILY BLOG SUGGESTION MODULE ROUTES & CRON
+// ════════════════════════════════════════════════════════════════════════════
+const {
+  BlogSuggestion,
+  BlogSuggestionLog,
+  runBlogSuggestionEngine
+} = require("./blogSuggestionEngine");
+
+// GET /api/blog-suggestions — List suggestions with filter & pagination
+app.get("/api/blog-suggestions", adminAuth, async (req, res) => {
+  try {
+    const { status, category, sourceType, search, page = 1, limit = 20 } = req.query;
+    const query = {};
+    if (status && status !== "all") query.status = status;
+    if (category && category !== "all") query.category = category;
+    if (sourceType && sourceType !== "all") query.sourceType = sourceType;
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { synopsis: { $regex: search, $options: "i" } },
+        { keywords: { $regex: search, $options: "i" } }
+      ];
+    }
+
+    const total = await BlogSuggestion.countDocuments(query);
+    const suggestions = await BlogSuggestion.find(query)
+      .sort({ createdAt: -1 })
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit))
+      .lean();
+
+    res.json({ suggestions, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/blog-suggestions/generate — Trigger generator manually on demand
+app.post("/api/blog-suggestions/generate", adminAuth, async (req, res) => {
+  try {
+    const result = await runBlogSuggestionEngine({ force: true });
+    res.json({ success: true, count: result.count, suggestions: result.suggestions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/blog-suggestions/:id — Update suggestion status (e.g. approve, dismiss)
+app.patch("/api/blog-suggestions/:id", adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!isOid(id)) return res.status(400).json({ error: "Invalid suggestion ID" });
+    if (!["pending", "approved", "converted", "dismissed"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    const updated = await BlogSuggestion.findByIdAndUpdate(id, { status }, { new: true }).lean();
+    if (!updated) return res.status(404).json({ error: "Blog suggestion not found" });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/blog-suggestions/:id/convert — Convert suggestion into a draft Blog document
+app.post("/api/blog-suggestions/:id/convert", adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isOid(id)) return res.status(400).json({ error: "Invalid suggestion ID" });
+
+    const suggestion = await BlogSuggestion.findById(id);
+    if (!suggestion) return res.status(404).json({ error: "Blog suggestion not found" });
+
+    // Construct draft blog content HTML
+    const outlineHtml = (suggestion.outline || [])
+      .map(item => `<li><strong>${item}</strong></li>`)
+      .join("");
+    const keyPointsHtml = (suggestion.keyPoints || [])
+      .map(item => `<li>${item}</li>`)
+      .join("");
+
+    const draftContent = `
+<article>
+  <p class="lead"><em>${suggestion.synopsis || suggestion.reason || ""}</em></p>
+  
+  <h2>Article Overview & Objectives</h2>
+  <p>Target Audience: <strong>${suggestion.targetAudience}</strong></p>
+
+  <h2>Key Information & Facts</h2>
+  <ul>
+    ${keyPointsHtml}
+  </ul>
+
+  <h2>Recommended Section Structure</h2>
+  <ol>
+    ${outlineHtml}
+  </ol>
+
+  <h2>Draft Content & Analysis</h2>
+  <p>Write your detailed body paragraph here covering the latest updates in Odia cinema...</p>
+</article>
+`.trim();
+
+    // Create draft blog in Blog collection
+    const newBlog = await Blog.create({
+      title: suggestion.title,
+      content: draftContent,
+      category: suggestion.category,
+      tags: suggestion.keywords || [],
+      published: false, // Save as draft first
+      readTime: Math.max(2, Math.ceil((draftContent.split(/\s+/).length) / 200)),
+      metaDescription: (suggestion.synopsis || "").slice(0, 160),
+      author: "Ollypedia AI Editor",
+    });
+
+    // Update suggestion status
+    suggestion.status = "converted";
+    suggestion.generatedBlogId = newBlog._id;
+    await suggestion.save();
+
+    res.json({ success: true, blog: newBlog, suggestion });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/blog-suggestions/bulk-delete — Delete multiple suggestions at once
+app.post("/api/blog-suggestions/bulk-delete", adminAuth, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Array of suggestion IDs is required" });
+    }
+    const validIds = ids.filter(id => isOid(id));
+    const result = await BlogSuggestion.deleteMany({ _id: { $in: validIds } });
+    res.json({ success: true, count: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/blog-suggestions/instagram-post — Ingest Instagram Post URL/Caption & generate grounded blog ideas
+app.post("/api/blog-suggestions/instagram-post", adminAuth, async (req, res) => {
+  try {
+    const { caption, postUrl, handle } = req.body;
+    if (!caption && !postUrl) {
+      return res.status(400).json({ error: "Instagram caption text or post URL is required" });
+    }
+
+    const { generateIdeasFromInstagramPost } = require("./blogSuggestionEngine");
+    const ideas = await generateIdeasFromInstagramPost(caption || postUrl, postUrl || "", handle || "ollypedia");
+
+    if (ideas.length === 0) {
+      return res.status(400).json({ error: "Failed to parse blog ideas from Instagram post" });
+    }
+
+    const insertedDocs = await BlogSuggestion.insertMany(ideas);
+    res.json({ success: true, count: insertedDocs.length, suggestions: insertedDocs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/blog-suggestions/:id — Delete suggestion
+app.delete("/api/blog-suggestions/:id", adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isOid(id)) return res.status(400).json({ error: "Invalid suggestion ID" });
+    await BlogSuggestion.findByIdAndDelete(id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/blog-suggestions/cron-status — Get cron schedule status and stats
+app.get("/api/blog-suggestions/cron-status", adminAuth, async (req, res) => {
+  try {
+    const totalPending = await BlogSuggestion.countDocuments({ status: "pending" });
+    const totalApproved = await BlogSuggestion.countDocuments({ status: "approved" });
+    const totalConverted = await BlogSuggestion.countDocuments({ status: "converted" });
+    const totalDismissed = await BlogSuggestion.countDocuments({ status: "dismissed" });
+    const total = await BlogSuggestion.countDocuments({});
+
+    const lastLog = await BlogSuggestionLog.findOne().sort({ createdAt: -1 }).lean();
+
+    res.json({
+      active: true,
+      schedule: "Every day at 08:00 AM IST (0 8 * * *)",
+      lastRunAt: lastLog ? lastLog.createdAt : null,
+      lastRunStatus: lastLog ? lastLog.status : "Never",
+      lastRunCount: lastLog ? lastLog.generatedCount : 0,
+      stats: { total, pending: totalPending, approved: totalApproved, converted: totalConverted, dismissed: totalDismissed }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
@@ -11114,6 +11312,16 @@ const { runTmdbOdiaScraper } = require("./scrape_tmdb_odia");
 cron.schedule("0 3 * * *", async () => {
   console.log("Cron: Starting daily TMDB Odia Movie Scraper...");
   await runTmdbOdiaScraper(autoGenerateMovieDetailsBlog);
+}, { timezone: "Asia/Kolkata" });
+
+// ── Daily Odia Film & Actor Blog Suggestion Generator Cron (08:00 AM IST daily)
+cron.schedule("0 8 * * *", async () => {
+  console.log("Cron: Starting Daily Odia Film & Actor Blog Suggestion Engine...");
+  try {
+    await runBlogSuggestionEngine();
+  } catch (e) {
+    console.error("Cron Error in Blog Suggestion Engine:", e.message);
+  }
 }, { timezone: "Asia/Kolkata" });
 // ─────────────────────────────────────────────────────────────────────────────
 

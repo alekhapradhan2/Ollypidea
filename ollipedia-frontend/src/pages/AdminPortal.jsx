@@ -12,6 +12,7 @@ const AutoIndexPanel = lazy(() => import("./AutoIndexPanel"));
 const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
 const PosterGeneratorPanel = lazy(() => import("./PosterGeneratorPanel"));
 const ModelBlogPanel = lazy(() => import("./ModelBlogPanel"));
+const BlogSuggestionsPanel = lazy(() => import("./BlogSuggestionsPanel"));
 
 
 
@@ -2571,6 +2572,7 @@ const ALL_MODULES = [
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
   { key: "blog", icon: "✍️", label: "Blog" },
+  { key: "blogsuggestions", icon: "💡", label: "Blog Ideas (Daily)" },
   { key: "modelblog", icon: "🤖", label: "Model Blog" },
   { key: "boxoffice", icon: "📊", label: "Box Office" },
   { key: "tracker", icon: "🎟", label: "BMS Tracker" },
@@ -3007,6 +3009,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
     if (needsCast && !loadedTabs.current.has("cast")) {
       loadedTabs.current.add("cast");
+      setLoadingSecondary(true);
       fetches.push(
         API.adminGetCastList().catch(() => API.getCast().catch(() => []))
           .then(c => setCast(c || []))
@@ -3014,6 +3017,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
     }
     if (needsProds && !loadedTabs.current.has("prods")) {
       loadedTabs.current.add("prods");
+      setLoadingSecondary(true);
       fetches.push(
         API.getProductions().catch(() => [])
           .then(p => setProds(p || []))
@@ -4073,6 +4077,12 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   <BlogGenerator movies={movies} cast={cast} onToast={onToast} />
                 </Suspense>
               )}
+              {/* ── BLOG SUGGESTIONS ── */}
+              {tab === "blogsuggestions" && (
+                <Suspense fallback={<Spinner />}>
+                  <BlogSuggestionsPanel onNavigateToBlog={() => handleTabChange("blog")} />
+                </Suspense>
+              )}
               {/* ── MODEL BLOG ── */}
               {tab === "modelblog" && (
                 <Suspense fallback={<Spinner />}>
@@ -4166,12 +4176,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div style={{ padding: "20px 0 4px" }}>
-              {modal.type === "movie" && <MovieForm initial={modal.data} onSave={handleSaveMovie} onCancel={closeModal} saving={saving} />}
-              {modal.type === "cast" && <CastForm initial={modal.data} onSave={handleSaveCast} onCancel={closeModal} saving={saving} />}
-              {modal.type === "production" && <ProductionForm initial={modal.data} onSave={handleSaveProd} onCancel={closeModal} saving={saving} />}
-              {modal.type === "news" && <NewsForm initial={modal.data} onSave={handleSaveNews} onCancel={closeModal} saving={saving} movies={movies} />}
+              {modal.type === "movie" && <MovieForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveMovie} onCancel={closeModal} saving={saving} />}
+              {modal.type === "cast" && <CastForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveCast} onCancel={closeModal} saving={saving} />}
+              {modal.type === "production" && <ProductionForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveProd} onCancel={closeModal} saving={saving} />}
+              {modal.type === "news" && <NewsForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveNews} onCancel={closeModal} saving={saving} movies={movies} />}
               {modal.type === "song" && (
                 <SongForm
+                  key={modal.data ? JSON.stringify(modal.data) : "new"}
                   onSave={handleSaveSong}
                   onCancel={closeModal}
                   saving={saving}

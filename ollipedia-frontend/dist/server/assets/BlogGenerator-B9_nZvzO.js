@@ -1,5 +1,5 @@
 import { jsxs, Fragment, jsx } from "react/jsx-runtime";
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { g as getAdminToken, I as ImageUploadInput } from "../entry-server.js";
 import "react-dom/server";
 import "react-router-dom/server.mjs";
@@ -1016,6 +1016,19 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
   const [youtubeVideoId, setYoutubeVideoId] = useState(article.youtubeVideoId || "");
   const [saving, setSaving] = useState(false);
   const contentRef = useRef(null);
+  React.useEffect(() => {
+    if ((article == null ? void 0 : article.slug) && !article.content) {
+      import("../entry-server.js").then((n) => n.a).then(({ API }) => {
+        API.getBlogPost(article.slug).then((full) => {
+          if (full) {
+            setContent(full.content || "");
+            if (full.excerpt && !article.excerpt) setExcerpt(full.excerpt);
+            if (full.tags && !article.tags) setBlogTags(Array.isArray(full.tags) ? full.tags.join(", ") : full.tags);
+          }
+        }).catch((err) => console.error("Failed to fetch full blog:", err));
+      });
+    }
+  }, [article]);
   const initLinkType = article.castId || article.castName ? "cast" : article.movieId || article.movieTitle ? "movie" : "none";
   const [linkType, setLinkType] = useState(initLinkType);
   const [linkedMovie, setLinkedMovie] = useState(
@@ -2079,7 +2092,7 @@ function MoviePanel({ movie, movies = [], cast = [], onToast }) {
       t.id
     )) }),
     activeType && /* @__PURE__ */ jsx(GenPanel, { movie, type: activeType, onPublished: handlePublished, onToast }, activeType),
-    editTarget && /* @__PURE__ */ jsx(EditModal, { article: editTarget, movies, cast, onClose: () => setEditTarget(null), onSaved: handleSaved, onToast })
+    editTarget && /* @__PURE__ */ jsx(EditModal, { article: editTarget, movies, cast, onClose: () => setEditTarget(null), onSaved: handleSaved, onToast }, editTarget._id || "new")
   ] });
 }
 function CastPanel({ castMember, movies = [], cast = [], onToast }) {
@@ -2243,7 +2256,7 @@ function CastPanel({ castMember, movies = [], cast = [], onToast }) {
       ] }),
       genContent && /* @__PURE__ */ jsx("div", { style: { marginTop: 10 }, children: /* @__PURE__ */ jsx(YoutubePicker, { value: ytId, onChange: setYtId }) })
     ] }),
-    editTarget && /* @__PURE__ */ jsx(EditModal, { article: editTarget, movies, cast, onClose: () => setEditTarget(null), onSaved: handleSaved, onToast })
+    editTarget && /* @__PURE__ */ jsx(EditModal, { article: editTarget, movies, cast, onClose: () => setEditTarget(null), onSaved: handleSaved, onToast }, editTarget._id || "new")
   ] });
 }
 function CastRow({ castMember, artCount, onToast, movies = [], cast = [] }) {
@@ -2346,7 +2359,7 @@ function UncategorizedSection({ onToast, count, onCountChange, movies = [], cast
         /* @__PURE__ */ jsx("button", { className: "bg-art-btn del", onClick: () => handleDelete(art._id), children: "🗑" })
       ] })
     ] }, art._id)) }),
-    editTarget && /* @__PURE__ */ jsx(EditModal, { article: editTarget, movies, cast, onClose: () => setEditTarget(null), onSaved: handleSaved, onToast })
+    editTarget && /* @__PURE__ */ jsx(EditModal, { article: editTarget, movies, cast, onClose: () => setEditTarget(null), onSaved: handleSaved, onToast }, editTarget._id || "new")
   ] });
 }
 function MovieRow({ movie, artCount, onToast, movies = [], cast = [] }) {

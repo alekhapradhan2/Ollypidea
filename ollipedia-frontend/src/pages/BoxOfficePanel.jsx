@@ -1570,13 +1570,19 @@ function DayModal({ movie, isEdit, dayData, allDays, onClose, onSaved, onToast, 
   const year    = getYear(movie.releaseDate);
   const nextDay = allDays.length ? Math.max(...allDays.map((d) => d.day)) + 1 : 1;
 
-  const [form, setForm] = useState({
-    day:   String(dayData?.day ?? nextDay),
-    net:   String(dayData?.net   ?? ""),
-    gross: String(dayData?.gross ?? ""),
-    date:  String(dayData?.date  ?? new Date().toISOString().slice(0, 10)),
-    note:  String(dayData?.note  ?? ""),
+  const getForm = (d) => ({
+    day:   String(d?.day ?? nextDay),
+    net:   String(d?.net   ?? ""),
+    gross: String(d?.gross ?? ""),
+    date:  String(d?.date  ?? new Date().toISOString().slice(0, 10)),
+    note:  String(d?.note  ?? ""),
   });
+
+  const [form, setForm] = useState(getForm(dayData));
+  React.useEffect(() => {
+    setForm(getForm(dayData));
+    if (dayData?.gross) setGrossManual(true);
+  }, [dayData, nextDay]);
 
   const [showAi,     setShowAi]    = useState(false);
   const [aiPrompt,   setAiPrompt]  = useState("");

@@ -651,7 +651,13 @@ This will create a comprehensive SEO-optimized article using the complete day-wi
   const openHistory = async (movie) => {
     const mid = String(movie._id);
     if (!logs[mid]) await loadLogs(mid);
-    setHistoryMovie(movie);
+    try {
+      const days = await API.getMovieBoxOfficeDays(mid);
+      setHistoryMovie({ ...movie, boxOfficeDays: days });
+    } catch (e) {
+      console.error("Failed to load box office days:", e);
+      setHistoryMovie(movie);
+    }
   };
   if (loading) {
     return /* @__PURE__ */ jsxs("div", { style: { padding: 60, textAlign: "center", color: "var(--muted)" }, children: [

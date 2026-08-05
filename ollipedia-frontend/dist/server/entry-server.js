@@ -205,6 +205,16 @@ const API = {
   adminGetMoviesList: (page = 1, limit = 50, search = "", verdict = "", year = "") => get(`/admin/movies-list?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&verdict=${encodeURIComponent(verdict)}&year=${encodeURIComponent(year)}`, _adminToken),
   adminGetCastList: () => get("/admin/cast-list", _adminToken)
 };
+const api = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  API,
+  getAdminToken,
+  getCastToken,
+  getToken,
+  setAdminToken,
+  setCastToken,
+  setToken
+}, Symbol.toStringTag, { value: "Module" }));
 const isOid$2 = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s.trim());
 function slugify(text = "") {
   return String(text).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
@@ -12269,14 +12279,15 @@ function PortalCastProfile({ production }) {
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
   ] });
 }
-const BlogGenerator = lazy(() => import("./assets/BlogGenerator-CHNRwoEZ.js"));
-const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-BbwazB-8.js"));
+const BlogGenerator = lazy(() => import("./assets/BlogGenerator-B9_nZvzO.js"));
+const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-DWba9T8B.js"));
 const BMSTrackerPanel = lazy(() => import("./assets/BMSTrackerPanel-BvRme0rO.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
 const AutoIndexPanel = lazy(() => import("./assets/AutoIndexPanel-ChvN1ZMV.js"));
-const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CizHzpQf.js"));
+const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBhCj4H.js"));
 const PosterGeneratorPanel = lazy(() => import("./assets/PosterGeneratorPanel-C8rzoByl.js"));
 const ModelBlogPanel = lazy(() => import("./assets/ModelBlogPanel-BCcctcEN.js"));
+const BlogSuggestionsPanel = lazy(() => import("./assets/BlogSuggestionsPanel-BXKyQEqd.js"));
 const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
 const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES = [
@@ -14803,6 +14814,7 @@ const ALL_MODULES = [
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
   { key: "blog", icon: "✍️", label: "Blog" },
+  { key: "blogsuggestions", icon: "💡", label: "Blog Ideas (Daily)" },
   { key: "modelblog", icon: "🤖", label: "Model Blog" },
   { key: "boxoffice", icon: "📊", label: "Box Office" },
   { key: "tracker", icon: "🎟", label: "BMS Tracker" },
@@ -15142,12 +15154,14 @@ function AdminPortal({ admin, onLogout, onToast }) {
     const fetches = [];
     if (needsCast && !loadedTabs.current.has("cast")) {
       loadedTabs.current.add("cast");
+      setLoadingSecondary(true);
       fetches.push(
         API.adminGetCastList().catch(() => API.getCast().catch(() => [])).then((c) => setCast(c || []))
       );
     }
     if (needsProds && !loadedTabs.current.has("prods")) {
       loadedTabs.current.add("prods");
+      setLoadingSecondary(true);
       fetches.push(
         API.getProductions().catch(() => []).then((p) => setProds(p || []))
       );
@@ -16330,6 +16344,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
           ] });
         })()),
         tab === "blog" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BlogGenerator, { movies, cast, onToast }) }),
+        tab === "blogsuggestions" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BlogSuggestionsPanel, { onNavigateToBlog: () => handleTabChange("blog") }) }),
         tab === "modelblog" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(ModelBlogPanel, { movies, onToast }) }),
         tab === "boxoffice" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BoxOfficePanel, { movies, onToast }) }),
         tab === "tracker" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BMSTrackerPanel, { movies, onToast }) }),
@@ -16357,10 +16372,10 @@ function AdminPortal({ admin, onLogout, onToast }) {
         /* @__PURE__ */ jsx("button", { className: "modal-close", onClick: closeModal, children: "×" })
       ] }),
       /* @__PURE__ */ jsxs("div", { style: { padding: "20px 0 4px" }, children: [
-        modal.type === "movie" && /* @__PURE__ */ jsx(MovieForm, { initial: modal.data, onSave: handleSaveMovie, onCancel: closeModal, saving }),
-        modal.type === "cast" && /* @__PURE__ */ jsx(CastForm, { initial: modal.data, onSave: handleSaveCast, onCancel: closeModal, saving }),
-        modal.type === "production" && /* @__PURE__ */ jsx(ProductionForm, { initial: modal.data, onSave: handleSaveProd, onCancel: closeModal, saving }),
-        modal.type === "news" && /* @__PURE__ */ jsx(NewsForm, { initial: modal.data, onSave: handleSaveNews, onCancel: closeModal, saving, movies }),
+        modal.type === "movie" && /* @__PURE__ */ jsx(MovieForm, { initial: modal.data, onSave: handleSaveMovie, onCancel: closeModal, saving }, modal.data ? JSON.stringify(modal.data) : "new"),
+        modal.type === "cast" && /* @__PURE__ */ jsx(CastForm, { initial: modal.data, onSave: handleSaveCast, onCancel: closeModal, saving }, modal.data ? JSON.stringify(modal.data) : "new"),
+        modal.type === "production" && /* @__PURE__ */ jsx(ProductionForm, { initial: modal.data, onSave: handleSaveProd, onCancel: closeModal, saving }, modal.data ? JSON.stringify(modal.data) : "new"),
+        modal.type === "news" && /* @__PURE__ */ jsx(NewsForm, { initial: modal.data, onSave: handleSaveNews, onCancel: closeModal, saving, movies }, modal.data ? JSON.stringify(modal.data) : "new"),
         modal.type === "song" && /* @__PURE__ */ jsx(
           SongForm,
           {
@@ -16372,7 +16387,8 @@ function AdminPortal({ admin, onLogout, onToast }) {
             initial: modal.mode === "edit" ? modal.data : null,
             isEdit: modal.mode === "edit",
             songIndex: modal.mode === "edit" ? modal.songIndex : void 0
-          }
+          },
+          modal.data ? JSON.stringify(modal.data) : "new"
         )
       ] })
     ] }) }),
@@ -16875,6 +16891,7 @@ function render(url, helmetContext) {
 export {
   API as A,
   ImageUploadInput as I,
+  api as a,
   getAdminToken as g,
   render
 };
