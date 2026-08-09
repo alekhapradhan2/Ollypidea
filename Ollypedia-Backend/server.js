@@ -1440,21 +1440,9 @@ ${BLOG_RESPONSIVE_STYLES}
  * "Movie Details" blog. Creates a new Blog if movie.detailBlogId is empty,
  * otherwise updates the existing one. Never throws — caller fire-and-forgets.
  */
-/** Build a URL-safe slug from the full SEO title — preserves key words for SEO.
- *  Legacy helper, still used as a final fallback for slug collisions. */
-function titleToSlug(title) {
-  return String(title || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim()
-    .slice(0, 120); // max 120 chars to keep URLs manageable
-}
-
-/** Trim a hyphenated slug down to maxLen WITHOUT cutting a word in half —
- *  drops whole trailing segments instead of leaving a truncated half-word. */
-function trimSlugToLength(slug, maxLen) {
+/** Trim a hyphenated slug down to maxLen WITHOUT cutting a word in half */
+function trimSlugToLength(slug, maxLen = 90) {
+  if (!slug) return "";
   if (slug.length <= maxLen) return slug;
   const parts = slug.split("-");
   let out = "";
@@ -1466,62 +1454,415 @@ function trimSlugToLength(slug, maxLen) {
   return out || slug.slice(0, maxLen);
 }
 
-/** SEO FIX: short, clean, keyword-rich slug for the Movie Details blog —
- *  "bindusagar-2026-movie-details" instead of the full ~120-char SEO-title
- *  slug. Capped at 60 chars per Google's URL-length guidance. */
-function buildMovieDetailsSlug(movie) {
-  const base = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 45);
-  return trimSlugToLength(`${base}-movie-details`, 60);
+/** Build dynamic URL slug from article title — strips Odia parenthetical subtitles */
+function buildSlugFromTitle(title, fallbackPrefix = "blog") {
+  if (!title) return `${fallbackPrefix}-${Date.now()}`;
+  const cleanTitle = String(title).replace(/\([\s\S]*?\)/g, "").trim();
+  const slug = cleanTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .trim();
+  return trimSlugToLength(slug || fallbackPrefix, 90);
 }
 
-/** SEO FIX: short OTT-release slug that does NOT embed the release date
- *  (a date-bearing slug goes stale the moment the film actually releases).
- *  "bindusagar-2026-ott-release-tarang-plus" — platform name included for
- *  keyword relevance, capped at 60 chars. */
-function buildOttSlug(movie) {
-  const base = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 35);
-  const platform = trimSlugToLength(
-    String(movie.streamingOn || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim(),
-    15
-  );
-  return trimSlugToLength(`${base}-ott-release${platform ? `-${platform}` : ""}`, 60);
+function titleToSlug(title) {
+  return buildSlugFromTitle(title, "blog");
 }
 
-/** SEO FIX: short "now streaming" slug — distinct from buildOttSlug so the
- *  two OTT pages never collide, and short enough to stay memorable. */
-function buildOttLiveSlug(movie) {
-  const base = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 30);
+function buildMovieDetailsSlug(movie, title = "") {
+  if (title) return buildSlugFromTitle(title, "movie-details");
+  const base = trimSlugToLength(makeMovieSlug(movie?.title || "movie", movie?.releaseDate), 45);
+  return trimSlugToLength(`${base}-movie-details`, 75);
+}
+
+function buildMovieDetailsTitle(movie) {
+  const year = movie?.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  return `${movie?.title || "Movie"}${year ? ` (${year})` : ""} Movie Details, Cast, Story & Release Date (${movie?.title || "Movie"} ସିନେମା ସମ୍ପୂର୍ଣ୍ଣ ବିବରଣୀ)`;
+}
+
+function buildOttSlug(movie, title = "") {
+  if (title) return buildSlugFromTitle(title, "ott-release");
+  const base = trimSlugToLength(makeMovieSlug(movie?.title || "movie", movie?.releaseDate), 35);
   const platform = trimSlugToLength(
-    String(movie.streamingOn || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim(),
+    String(movie?.streamingOn || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim(),
     15
   );
-  return trimSlugToLength(`${base}-streaming-now${platform ? `-${platform}` : ""}`, 60);
+  return trimSlugToLength(`${base}-ott-release${platform ? `-${platform}` : ""}`, 75);
 }
+
+function buildOttTitle(movie, cc = {}) {
+  return `${movie?.title || "Movie"} OTT Release Date Announced: Premieres on ${movie?.streamingOn || "OTT"} (${movie?.title || "Movie"} ଓଟିଟି ରିଲିଜ୍ ତାରିଖ)`;
+}
+
+function buildOttLiveSlug(movie, title = "") {
+  if (title) return buildSlugFromTitle(title, "ott-streaming");
+  const base = trimSlugToLength(makeMovieSlug(movie?.title || "movie", movie?.releaseDate), 30);
+  const platform = trimSlugToLength(
+    String(movie?.streamingOn || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim(),
+    15
+  );
+  return trimSlugToLength(`${base}-streaming-now${platform ? `-${platform}` : ""}`, 75);
+}
+
+/**
+ * Safely replaces the FIRST unlinked occurrence of `entityName` in `html`
+ * with a styled anchor tag `<a href="...">`, while STRICTLY EXCLUDING:
+ * 1. Existing anchor tags `<a>...</a>`
+ * 2. Any section heading tags `<h1>`, `<h2>`, `<h3>`, `<h4>`, `<h5>`, `<h6>`
+ * 3. Media/Metadata containers like `<figure>`, `<figcaption>`, `<title>`, `<script>`, `<style>`
+ */
+function replaceTextOutsideHeadingsAndLinks(html, entityName, href, linkedTracker = new Set(), trackerKey = "") {
+  if (!html || !entityName) return html || "";
+  if (trackerKey && linkedTracker.has(trackerKey)) return html;
+
+  const escName = entityName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const regex = new RegExp(`(^|[\\s\\W])(${escName})(?=[\\s\\W]|$)`, 'i');
+
+  const parts = String(html).split(/(<[^>]*>)/g);
+  let tagStack = [];
+  let replaced = false;
+
+  const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+  const excludedContainers = ['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'title', 'script', 'style', 'figure', 'figcaption', 'summary'];
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part) continue;
+
+    if (part.startsWith('</')) {
+      const match = part.match(/^<\/\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        const idx = tagStack.lastIndexOf(tagName);
+        if (idx !== -1) tagStack.splice(idx, 1);
+      }
+    } else if (part.startsWith('<')) {
+      const match = part.match(/^<\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
+          tagStack.push(tagName);
+        }
+      }
+    } else if (part.trim().length > 0) {
+      // Check if current text block is inside any excluded container
+      const isExcluded = tagStack.some(t => excludedContainers.includes(t.toLowerCase()));
+
+      if (!isExcluded && !replaced) {
+        if (regex.test(part)) {
+          parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+            if (!replaced) {
+              replaced = true;
+              return `${prefix}<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+            }
+            return fullMatch;
+          });
+          if (replaced) {
+            if (trackerKey) linkedTracker.add(trackerKey);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return parts.join('');
+}
+
+function injectRichBlogLinks(text, movie, cc = {}, enableLinks = true, linkedTracker = new Set()) {
+  if (!text || !enableLinks) return String(text || "");
+  let out = String(text);
+
+  // Link movie title if present and not already linked in this article
+  if (movie?.title && movie?.slug && !linkedTracker.has("movie")) {
+    out = replaceTextOutsideHeadingsAndLinks(out, movie.title, `/movie/${movie.slug}`, linkedTracker, "movie");
+  }
+
+  // Link cast members at most once per article
+  const castList = cc.ottCast || cc.leadCast || cc.fullCast || [];
+  for (const c of castList) {
+    if (c?.name && c.name.length > 2 && !linkedTracker.has(`cast-${c.name}`)) {
+      const url = castProfileUrl(c);
+      if (url) {
+        out = replaceTextOutsideHeadingsAndLinks(out, c.name, url, linkedTracker, `cast-${c.name}`);
+      }
+    }
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  RICH DUAL-LANGUAGE EDITORIAL BLOG BUILDER
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildRichEditorialHtml({
+  seoTitle,
+  metaDescription,
+  introEn,
+  introOr,
+  detailsEn,
+  detailsOr,
+  sections = [],
+  conclusionEn,
+  conclusionOr,
+  poster,
+  movie,
+  cc = {},
+  blogSlug,
+  datePublished,
+  dateModified,
+  category = "OTT Release",
+  enableLinks = true
+}) {
+  const movieUrl = movie?.slug ? `/movie/${movie.slug}` : "/movies";
+  const posterImg = poster || movie?.posterUrl || movie?.thumbnailUrl || movie?.bannerUrl || "";
+  const dp = datePublished || new Date().toISOString();
+  const dm = dateModified || dp;
+  const linkedTracker = new Set();
+
+  const introEnHtml = injectRichBlogLinks(introEn, movie, cc, enableLinks, linkedTracker);
+  const detailsEnHtml = injectRichBlogLinks(detailsEn, movie, cc, enableLinks, linkedTracker);
+  const conclusionEnHtml = injectRichBlogLinks(conclusionEn, movie, cc, enableLinks, linkedTracker);
+
+  const sectionsHtml = (sections || []).map(sec => {
+    if (!sec || (!sec.headingEn && !sec.contentEn)) return "";
+    const headingText = sec.headingOr ? `<h2>${sec.headingEn} (${sec.headingOr})</h2>` : `<h2>${sec.headingEn}</h2>`;
+    const contentEnHtml = injectRichBlogLinks(sec.contentEn, movie, cc, enableLinks, linkedTracker);
+    const contentOrHtml = sec.contentOr ? `<p><em>(${sec.contentOr})</em></p>` : "";
+    return `
+<hr style="border: 0; border-top: 1px solid #2a2a2a; margin: 24px 0;" />
+${headingText}
+
+<p>${contentEnHtml}</p>
+${contentOrHtml}`;
+  }).join("\n");
+
+  const figureHtml = posterImg ? `
+<figure style="margin: 15px auto; text-align: center; max-width: 100%;">
+  <img src="${posterImg}" alt="${movie?.title || "Movie"} Poster" style="max-width: 100%; height: auto; border-radius: 6px;" />
+</figure>` : "";
+
+  // ── OTT & Movie Details Table ──────────────────────────────────────────────
+  const isDateAvailable = isRealDate(movie?.ottReleaseDate || movie?.ott?.releaseDate);
+  const ottDateFmt = isDateAvailable ? formatHumanDate(movie?.ottReleaseDate || movie?.ott?.releaseDate) : "Release Date Not Announced";
+  const platform = movie?.streamingOn || movie?.ott?.platform || "";
+  const ottStatus = movie?.ott?.status || (isDateAvailable ? "Streaming" : "Upcoming");
+  const leadCast = cc.ottCast || cc.leadCast || [];
+  const leadNames = leadCast.map(c => c.name).filter(Boolean).join(", ");
+  const genreStr = (movie?.genre || []).join(", ") || "Odia";
+
+  const detailsTableHtml = `
+<section style="background:#181818;border:1px solid #242424;border-radius:14px;padding:22px 26px;margin:22px 0;">
+  <h2 style="font-size:1.05rem;font-weight:800;color:#7ec8e3;border-left:4px solid #7ec8e3;padding-left:12px;margin:0 0 18px;line-height:1.3;">
+    Movie & OTT Details (${movie?.title || "Overview"})
+  </h2>
+  <table style="width:100%;border-collapse:collapse;font-size:0.87rem;">
+    <tbody>
+      <tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;width:38%;">Movie Title</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${movie?.title || "N/A"}</td></tr>
+      ${platform ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">OTT Platform</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#7ec8e3;font-weight:700;">📺 ${platform}</td></tr>` : ""}
+      <tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">OTT Release Date</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#e8c87a;font-weight:600;">📅 ${ottDateFmt}</td></tr>
+      <tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Streaming Status</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${ottStatus === "Streaming" ? "🔴 Now Streaming" : "⏳ Upcoming"}</td></tr>
+      ${movie?.releaseDate ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Theatrical Release</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${formatHumanDate(movie.releaseDate)}</td></tr>` : ""}
+      ${genreStr ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Genre</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${genreStr}</td></tr>` : ""}
+      ${cc.director ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Director</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${cc.director}</td></tr>` : ""}
+      ${cc.producer ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Producer</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${cc.producer}</td></tr>` : ""}
+      ${leadNames ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Starring Cast</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${leadNames}</td></tr>` : ""}
+      ${cc.musicDirector ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Music Director</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${cc.musicDirector}</td></tr>` : ""}
+      ${movie?.runtime ? `<tr><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;">Runtime</td><td style="padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-weight:600;">${movie.runtime}</td></tr>` : ""}
+    </tbody>
+  </table>
+</section>`;
+
+  return `<!-- ════════════════════════════════════════════════════════════════
+  OLLYPEDIA DUAL-LANGUAGE EDITORIAL ARTICLE
+  title:       ${seoTitle}
+  description: ${metaDescription}
+  canonical:   ${SITE_URL}/blog/${blogSlug}
+════════════════════════════════════════════════════════════════ -->
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "NewsArticle",
+      "headline": ${JSON.stringify(seoTitle)},
+      "description": ${JSON.stringify(metaDescription)},
+      "image": ${JSON.stringify(posterImg || `${SITE_URL}/logo.png`)},
+      "datePublished": "${dp}",
+      "dateModified": "${dm}",
+      "inLanguage": "en",
+      "author": { "@type": "Organization", "name": "Ollypedia Team", "url": "${SITE_URL}" },
+      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
+    }
+  ]
+}
+</script>
+
+<h2>${seoTitle}</h2>
+
+<p>${introEnHtml}</p>
+${introOr ? `<p><em>(${introOr})</em></p>` : ""}
+
+${figureHtml}
+
+${detailsEnHtml ? `<p>${detailsEnHtml}</p>` : ""}
+${detailsOr ? `<p><em>(${detailsOr})</em></p>` : ""}
+
+${detailsTableHtml}
+
+${sectionsHtml}
+
+<hr style="border: 0; border-top: 1px solid #2a2a2a; margin: 24px 0;" />
+
+<h2>Conclusion (ଉପସଂହାର)</h2>
+<p>${conclusionEnHtml}</p>
+${conclusionOr ? `<p><em>(${conclusionOr})</em></p>` : ""}
+
+<p>For all latest updates, trailer breakdowns, and behind-the-scenes stories on <em><a href="${movieUrl}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${movie?.title || "Ollywood"}</a></em>, keep your browsers locked right here on <a href="https://www.ollypedia.in" style="color: #e50914; font-weight: bold; text-decoration: none;">www.ollypedia.in</a> — your ultimate, trusted Odia film encyclopedia.</p>
+<p><em>(ସମସ୍ତ ସର୍ବଶେଷ ଅପଡେଟ୍, ଟ୍ରେଲର୍ ବିଶ୍ଳେଷଣ ଏବଂ ପଛର କାହାଣୀ ପାଇଁ ସର୍ବଦା <a href="https://www.ollypedia.in" style="color: #e50914; font-weight: bold; text-decoration: none;">www.ollypedia.in</a> ସହିତ ଯୋଡି ହୋଇ ରୁହନ୍ତୁ - ଏହା ଆପଣଙ୍କର ସବୁଠାରୁ ବିଶ୍ୱସ୍ତ ଓଡ଼ିଆ ଚଳଚ୍ଚିତ୍ର ଜ୍ଞାନକୋଷ।)</em></p>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  MOVIE DETAILS BLOG
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generateMovieDetailsAiSections(movie, cc) {
+  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
+  const genreStr = (movie.genre || []).join(", ") || "Odia";
+  const leadNames = (cc.leadCast || []).map(c => c.name).filter(Boolean).join(", ");
+  const hasSongs = Array.isArray(movie.media?.songs) && movie.media.songs.length > 0;
+  const songNames = hasSongs ? movie.media.songs.map(s => s.title).filter(Boolean).join(", ") : "";
+
+  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | Genre: ${genreStr} | Language: ${movie.language || "Odia"} | Director: ${cc.director || "N/A"} | Producer: ${cc.producer || "N/A"} | Lead Cast: ${leadNames || "N/A"} | Music Director: ${cc.musicDirector || "N/A"} | Release Date: ${movie.releaseDate ? formatHumanDate(movie.releaseDate) : "TBA"} | Synopsis: ${movie.synopsis || "N/A"}`;
+
+  const userPrompt = `Write deeply detailed, dual-language (English + Odia translation) JSON content for a Movie Details article on Ollypedia (Odia cinema website) about "${movie.title}".
+Write in a rich, journalistic film review style. Each section MUST have a unique dynamic heading in English with Odia translation in parentheses.
+
+Context:
+${ctx}
+
+Return ONLY a valid JSON object with these keys (plain text only, NO markdown):
+- seoTitle: Full article title in English with Odia translation in parentheses, e.g. "${movie.title} (${year || "2026"}) Movie Details, Cast, Story & Release Date (${movie.title} ସିନେମା ସମ୍ପୂର୍ଣ୍ଣ ବିବରଣୀ)"
+- metaDescription: 150-160 char SEO snippet.
+- introEn: Detailed English intro paragraph (200-300 words) introducing the film, genre, and hype.
+- introOr: Odia translation of introEn in Odia script.
+- detailsEn: Detailed English paragraph (200-280 words) covering release date, director ${cc.director || ""}, producer ${cc.producer || ""}, and lead cast ${leadNames || ""}.
+- detailsOr: Odia translation of detailsEn in Odia script.
+- sec1TitleEn: Specific dynamic heading for Story World & Premise (e.g. "Story World & Emotional Arc: ${movie.title}")
+- sec1TitleOr: Odia translation of sec1TitleEn
+- sec1ContentEn: English analysis of story setup, genre tropes, and character conflicts (200-280 words).
+- sec1ContentOr: Odia translation of sec1ContentEn.
+- sec2TitleEn: Dynamic heading for Lead Star Cast & Characters
+- sec2TitleOr: Odia translation of sec2TitleEn
+- sec2ContentEn: English editorial on cast performances, chemistry, and talent profile (200-280 words).
+- sec2ContentOr: Odia translation of sec2ContentEn.
+- sec3TitleEn: Dynamic heading for Director's Vision & Production Craft
+- sec3TitleOr: Odia translation of sec3TitleEn
+- sec3ContentEn: English editorial on direction, technical values, and cinematography (200-280 words).
+- sec3ContentOr: Odia translation of sec3ContentEn.
+- sec4TitleEn: Dynamic heading for Music & Soundtrack
+- sec4TitleOr: Odia translation of sec4TitleEn
+- sec4ContentEn: English commentary on musical score and songs ${songNames ? `(${songNames})` : ""} (180-250 words).
+- sec4ContentOr: Odia translation of sec4ContentEn.
+- conclusionEn: English conclusion on box office expectations and overall verdict (150-220 words).
+- conclusionOr: Odia translation of conclusionEn.`;
+
+  const fallbacks = {
+    seoTitle: `${movie.title}${year ? ` (${year})` : ""} Movie Details, Cast, Story & Release Date (${movie.title} ସିନେମା ସମ୍ପୂର୍ଣ୍ଣ ବିବରଣୀ)`,
+    metaDescription: `${movie.title}${year ? ` (${year})` : ""}: full cast, crew, story and release date. Read full details on Ollypedia.`,
+    introEn: `${movie.title}${year ? ` (${year})` : ""} is one of the most anticipated ${genreStr} films in Odia cinema, bringing together top Ollywood talent under the direction of ${cc.director || "acclaimed creators"}.`,
+    introOr: `${movie.title} ଓଡ଼ିଆ ସିନେମାର ଏକ ବହୁ ପ୍ରତୀକ୍ଷିତ ${genreStr} ଚଳଚ୍ଚିତ୍ର ଅଟେ, ଯାହା ଶ୍ରେଷ୍ଠ କଳାକାରମାନଙ୍କୁ ଏକାଠି ଆଣିଛି।`,
+    detailsEn: `Slated for release in ${year || "cinemas"}, ${movie.title} features starring performances from ${leadNames || "a stellar cast"}. The film promises strong production values and culturally rich Odia storytelling.`,
+    detailsOr: `${movie.title} ମୁଖ୍ୟ ଅଭିନେତା ${leadNames || "କଳାକାର"} ଙ୍କ ଦମଦାର ଅଭିନୟରେ ଗଢ଼ା ଏକ ମନୋରଞ୍ଜନଧର୍ମୀ ସିନେମା।`,
+    sec1TitleEn: `Story Premise & Cultural Context`,
+    sec1TitleOr: `କାହାଣୀ ଏବଂ ସଂସ୍କୃତି`,
+    sec1ContentEn: `${movie.title} weaves a story rooted in Odia society, exploring emotional conflict and family relationships within a ${genreStr} framework.`,
+    sec1ContentOr: `ଏହି ସିନେମାଟି ଓଡ଼ିଆ ସମାଜ ଏବଂ ପାରିବାରିକ ସମ୍ପର୍କକୁ ନେଇ ଗଢ଼ା ଏକ ସୁନ୍ଦର କାହାଣୀ।`,
+    sec2TitleEn: `Cast Highlights & Performances`,
+    sec2TitleOr: `ମୁଖ୍ୟ କଳାକାର ଏବଂ ଅଭିନୟ`,
+    sec2ContentEn: `${leadNames || "The lead actors"} bring nuanced character portrayals and impressive screen chemistry to the film.`,
+    sec2ContentOr: `ମୁଖ୍ୟ କଳାକାରମାନଙ୍କର ଅଭିନୟ ଏବଂ ପରଦା ଉପରେ କେମିଷ୍ଟ୍ରି ଅତ୍ୟନ୍ତ ଆକର୍ଷଣୀୟ।`,
+    sec3TitleEn: `Direction & Cinematic Execution`,
+    sec3TitleOr: `ନିର୍ଦ୍ଦେଶନା ଏବଂ ସିନେମାଟୋଗ୍ରାଫି`,
+    sec3ContentEn: `Director ${cc.director || "the creative team"} has crafted rich visuals and realistic dialogues to elevate the theatrical experience.`,
+    sec3ContentOr: `ନିର୍ଦ୍ଦେଶକ ${cc.director || "ଟିମ୍"} ସିନେମାର ସୁଟିଂ ଏବଂ ଦୃଶ୍ୟାୟନକୁ ବହୁତ ଆକର୍ଷଣୀୟ କରିଛନ୍ତି।`,
+    sec4TitleEn: `Music & Soundtrack`,
+    sec4TitleOr: `ସଙ୍ଗୀତ ଏବଂ ଆବହ ସଙ୍ଗୀତ`,
+    sec4ContentEn: `The soundtrack${cc.musicDirector ? ` composed by ${cc.musicDirector}` : ""} perfectly complements the film's emotional tone.`,
+    sec4ContentOr: `ସିନେମାର ସଙ୍ଗୀତ ପ୍ରତ୍ୟେକ ଦୃଶ୍ୟର ଭାବନାକୁ ଅଧିକ ଜୀବନ୍ତ କରେ।`,
+    conclusionEn: `${movie.title} is set to be a standout release for Odia cinema fans. Stay tuned to Ollypedia for all latest updates!`,
+    conclusionOr: `${movie.title} ଓଡ଼ିଆ ସିନେମା ପ୍ରେମୀଙ୍କ ପାଇଁ ଏକ ଦର୍ଶନୀୟ ଚଳଚ୍ଚିତ୍ର!`,
+  };
+
+  return callGroqStructured(
+    "You are a senior Odia cinema (Ollywood) journalist writing dual-language (English + Odia) editorial articles for Ollypedia. Return ONLY a valid JSON object.",
+    userPrompt,
+    [
+      "seoTitle", "metaDescription", "introEn", "introOr", "detailsEn", "detailsOr",
+      "sec1TitleEn", "sec1TitleOr", "sec1ContentEn", "sec1ContentOr",
+      "sec2TitleEn", "sec2TitleOr", "sec2ContentEn", "sec2ContentOr",
+      "sec3TitleEn", "sec3TitleOr", "sec3ContentEn", "sec3ContentOr",
+      "sec4TitleEn", "sec4TitleOr", "sec4ContentEn", "sec4ContentOr",
+      "conclusionEn", "conclusionOr"
+    ],
+    fallbacks,
+    4500
+  );
+}
+
+function buildMovieDetailsBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = []) {
+  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
+  const sections = [
+    { headingEn: ai.sec1TitleEn, headingOr: ai.sec1TitleOr, contentEn: ai.sec1ContentEn, contentOr: ai.sec1ContentOr },
+    { headingEn: ai.sec2TitleEn, headingOr: ai.sec2TitleOr, contentEn: ai.sec2ContentEn, contentOr: ai.sec2ContentOr },
+    { headingEn: ai.sec3TitleEn, headingOr: ai.sec3TitleOr, contentEn: ai.sec3ContentEn, contentOr: ai.sec3ContentOr },
+    { headingEn: ai.sec4TitleEn, headingOr: ai.sec4TitleOr, contentEn: ai.sec4ContentEn, contentOr: ai.sec4ContentOr },
+  ];
+
+  return buildRichEditorialHtml({
+    seoTitle: ai.seoTitle || seoTitle,
+    metaDescription: ai.metaDescription,
+    introEn: ai.introEn,
+    introOr: ai.introOr,
+    detailsEn: ai.detailsEn,
+    detailsOr: ai.detailsOr,
+    sections,
+    conclusionEn: ai.conclusionEn,
+    conclusionOr: ai.conclusionOr,
+    poster,
+    movie,
+    cc,
+    blogSlug,
+    datePublished,
+    dateModified,
+    category: "Movie Update"
+  });
+}
+
+const AUTO_BLOG_ENABLED = false;
 
 async function autoGenerateMovieDetailsBlog(movie) {
+  if (!AUTO_BLOG_ENABLED) return null;
   try {
     const cc = extractMovieCastCrew(movie);
     const ai = await generateMovieDetailsAiSections(movie, cc);
-    const seoTitle = buildMovieDetailsTitle(movie);
-    // SEO FIX: short, clean slug (≤60 chars) instead of the full ~120-char
-    // SEO-title slug — e.g. "bindusagar-2026-movie-details".
-    const baseSlug = buildMovieDetailsSlug(movie);
-    // SEO FIX: related movies for internal linking (closes the "content
-    // island" gap flagged in the audit's contextual-information section).
+    const seoTitle = ai.seoTitle || buildMovieDetailsTitle(movie);
+    const baseSlug = buildSlugFromTitle(seoTitle, "movie-details");
     const relatedMovies = await fetchRelatedMovies(movie);
 
     let blog = movie.detailBlogId ? await Blog.findById(movie.detailBlogId) : null;
-    if (!blog) blog = await Blog.findOne({ slug: baseSlug }); // catch orphaned/duplicate slug instead of crashing
-    const slug = blog ? blog.slug : baseSlug;
-    // dateModified should reflect the real last-edit time, not "now" on every
-    // regeneration — pass the existing blog's updatedAt through (createdAt for
-    // brand-new posts so datePublished === dateModified on first publish).
+    if (!blog) blog = await Blog.findOne({ slug: baseSlug });
+    const slug = blog ? (blog.slug || baseSlug) : baseSlug;
     const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : new Date().toISOString();
     const dateModified = new Date().toISOString();
     const html = buildMovieDetailsBlogHTML(movie, cc, ai, slug, seoTitle, datePublished, dateModified, relatedMovies);
 
     const fields = {
-      title: seoTitle,
+      title: ai.seoTitle || seoTitle,
       excerpt: ai.metaDescription,
       content: html,
       category: "Movie Update",
@@ -1532,15 +1873,16 @@ async function autoGenerateMovieDetailsBlog(movie) {
       author: "Ollypedia Team",
       published: true,
       readTime: Math.max(1, Math.ceil(html.split(/\s+/).length / 200)),
-      seoTitle: seoTitle,
+      seoTitle: ai.seoTitle || seoTitle,
       seoDesc: ai.metaDescription,
     };
 
     if (blog) {
       Object.assign(blog, fields);
+      blog.slug = baseSlug;
       await blog.save();
     } else {
-      blog = await Blog.create({ ...fields, slug });
+      blog = await Blog.create({ ...fields, slug: baseSlug });
       await Movie.findByIdAndUpdate(movie._id, { detailBlogId: blog._id });
     }
     console.log(`✅ Auto-published Movie Details blog for "${movie.title}" → /blog/${blog.slug}`);
@@ -1551,454 +1893,164 @@ async function autoGenerateMovieDetailsBlog(movie) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  SONG BLOG GENERATOR
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  SONG FIRST DROP BLOG
-// ─────────────────────────────────────────────────────────────────────────────
-/**
- * cleanSongTitle — strips YouTube video title noise after the first " | "
- * e.g. "Megha Kadamba | Full Video Song | Rakta Golapa | ..."  →  "Megha Kadamba"
- * Safe for plain song titles that have no pipe — returns as-is.
- */
 function cleanSongTitle(raw) {
   return String(raw || "").split("|")[0].trim();
 }
 
-/**
- * buildSongSlug — "[song-title]-[drop-name]-from-[movie-slug]-song-details"
- * Max 100 chars, URL-safe.
- */
-function buildSongSlug(songTitle, movie, dropSlug, hasLyrics) {
+function buildSongSlug(songTitle, movie, dropSlug, hasLyrics, customTitle = "") {
+  if (customTitle) return buildSlugFromTitle(customTitle, "song-details");
   const clean = cleanSongTitle(songTitle);
-  // Allow all unicode letters and numbers
   const st = trimSlugToLength(
     clean.toLowerCase()
-      .replace(/[^\p{L}\p{N}\s-]/gu, "")
+      .replace(/[^a-z0-9\s-]/g, "")
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "") // remove leading/trailing hyphens
+      .replace(/^-+|-+$/g, "")
       .trim(),
     40
   );
-  const ms = trimSlugToLength(makeMovieSlug(movie.title, movie.releaseDate), 30);
+  const ms = trimSlugToLength(makeMovieSlug(movie?.title || "movie", movie?.releaseDate), 30);
   const drop = dropSlug || "first-drop";
   const slugPrefix = st ? `${st}-` : "";
-
   if (hasLyrics) {
-    return trimSlugToLength(`${slugPrefix}${drop}-lyrics-from-${ms}`, 100);
+    return trimSlugToLength(`${slugPrefix}${drop}-lyrics-from-${ms}`, 90);
   }
-  return trimSlugToLength(`${slugPrefix}${drop}-from-${ms}-song-details`, 100);
+  return trimSlugToLength(`${slugPrefix}${drop}-from-${ms}-song-details`, 90);
 }
 
-/**
- * buildSongTitle — SEO title for the song blog. Capped at 130 chars (user requested longer, detailed titles).
- * Uses cleanSongTitle() to strip YouTube video title noise.
- */
 function buildSongTitle(songTitle, movie, dropLabel, hasLyrics, singer, md) {
   const clean = cleanSongTitle(songTitle);
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const movieStr = `${movie.title}${year ? ` (${year})` : ""}`;
-  const dLabel = dropLabel || "First Drop";
-  const sng = singer ? `, ${singer}` : "";
-  const mus = md ? `, ${md}` : "";
-
-  let full;
-  if (hasLyrics) {
-    full = `${clean} ${dLabel} Lyrics from ${movieStr} – Full Lyrics${sng}${mus} & Song Details`;
-  } else {
-    full = `${clean} ${dLabel} from ${movieStr} – Release${sng}${mus} & Full Details`;
-  }
-
-  // Increased limit from 70 to 130 so the rich user-requested template doesn't fallback incorrectly
-  if (full.length <= 130) return full;
-
-  // Shorter fallback pattern
-  const short = hasLyrics
-    ? `${clean} ${dLabel} Lyrics | ${movieStr} | Ollypedia`
-    : `${clean} ${dLabel} | ${movieStr} | Ollypedia`;
-
-  if (short.length <= 130) return short;
-  return short.slice(0, 127) + "...";
+  return `${clean} Song Released from ${movieStr}: Full Song Details & Lyrics (${clean} ସଙ୍ଗ୍ ରିଲିଜ୍)`;
 }
 
-/**
- * buildSongSeoDesc — meta description for the song blog.
- * Uses cleanSongTitle() to strip YouTube noise from song.title.
- */
 function buildSongSeoDesc(song, movie) {
   const clean = cleanSongTitle(song.title);
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const singer = song.singer || "";
   const md = song.musicDirector || "";
-  return [
-    `Listen to "${clean}" — the latest song from ${movie.title}${year ? ` (${year})` : ""} Odia film.`,
-    singer ? `Sung by ${singer}.` : "",
-    md ? `Music by ${md}.` : "",
-    `Watch the official video, read lyrics, and get full song details on Ollypedia.`,
-  ].filter(Boolean).join(" ").slice(0, 160);
+  return `Listen to "${clean}" — latest Odia song from ${movie.title}${year ? ` (${year})` : ""}. ${singer ? `Singer: ${singer}.` : ""} ${md ? `Music: ${md}.` : ""} Full video, lyrics & details on Ollypedia.`.slice(0, 160);
 }
 
-/**
- * generateSongAiSections — Groq-powered editorial content for the song blog.
- * Returns { intro, aboutSong, lyricsNote, verdict, metaDescription }
- *
- * When song.description is provided it is used as the PRIMARY source of truth —
- * the AI must rewrite it into a rich, human-like multi-paragraph editorial.
- * Raw description text must NEVER be copied verbatim into the output.
- */
 async function generateSongAiSections(song, movie, cc) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const singer = song.singer || "the vocalist";
   const md = song.musicDirector || cc.musicDirector || "the music director";
   const lyricist = song.lyricist || "";
-  const genre = (movie.genre || []).join(", ") || "Odia";
-  const hasDesc = !!(song.description || "").trim();
-  const hasLyrics = !!(song.lyrics || "").trim();
+  const genreStr = (movie.genre || []).join(", ") || "Odia";
+  const cleanTitle = cleanSongTitle(song.title);
+
+  const ctx = `Song Title: "${cleanTitle}" | Movie: "${movie.title}"${year ? ` (${year})` : ""} | Singer: ${singer} | Music Director: ${md} | Lyricist: ${lyricist || "N/A"} | Genre: ${genreStr}`;
+
+  const userPrompt = `Write deeply detailed, dual-language (English + Odia translation) JSON content for a Song Feature article on Ollypedia about "${cleanTitle}" from the Odia movie "${movie.title}".
+Write in an expressive, rich music review style. Each section MUST have a unique dynamic heading in English with Odia translation in parentheses.
+
+Context:
+${ctx}
+
+Return ONLY a valid JSON object with these keys (plain text only, NO markdown):
+- seoTitle: Full article title in English with Odia translation in parentheses, e.g. "${cleanTitle} Song Out Now: A Musical Highlight from ${movie.title} (${cleanTitle} ସଙ୍ଗ୍ ରିଲିଜ୍)"
+- metaDescription: 150-160 char SEO snippet.
+- introEn: Detailed English intro paragraph (200-300 words) introducing the song release and its role in ${movie.title}.
+- introOr: Odia translation of introEn in Odia script.
+- detailsEn: Detailed English paragraph (200-280 words) covering singers ${singer}, music director ${md}, lyricist ${lyricist || ""}.
+- detailsOr: Odia translation of detailsEn in Odia script.
+- sec1TitleEn: Dynamic heading for Vocals & Melodic Craft (e.g. "Vocal Magic: ${singer}'s Performance")
+- sec1TitleOr: Odia translation of sec1TitleEn
+- sec1ContentEn: English editorial on singing style, pitch, and vocal emotion (200-280 words).
+- sec1ContentOr: Odia translation of sec1ContentEn.
+- sec2TitleEn: Dynamic heading for Musical Composition & Beats (e.g. "Musical Genius: ${md}'s Composition Breakdown")
+- sec2TitleOr: Odia translation of sec2TitleEn
+- sec2ContentEn: English editorial on composition, instruments, tempo, and rhythm (200-280 words).
+- sec2ContentOr: Odia translation of sec2ContentEn.
+- sec3TitleEn: Dynamic heading for Lyrics & Emotional Connect
+- sec3TitleOr: Odia translation of sec3TitleEn
+- sec3ContentEn: English editorial on lyrical themes and Odia cultural expression (200-280 words).
+- sec3ContentOr: Odia translation of sec3ContentEn.
+- conclusionEn: English verdict recommending listeners to watch/listen on Ollypedia (150-220 words).
+- conclusionOr: Odia translation of conclusionEn.`;
 
   const fallbacks = {
-    intro: `${song.title} is the latest song from the Odia film ${movie.title}${year ? ` (${year})` : ""}. Sung by ${singer} with music by ${md}, this track is poised to become a defining highlight of the film's soundtrack.`,
-    aboutSong: hasDesc
-      ? `${song.title} captures the emotional essence of ${movie.title} in a way that only a song crafted with this much care can. ${singer}'s voice carries the melody with effortless grace, while ${md}'s composition creates a sonic landscape that lingers long after the music ends. Every element — from the arrangement to the production — speaks to the ambition behind this release, making it one of the standout tracks of the Ollywood season.`
-      : `The song showcases the vocal brilliance of ${singer} and the musical craftsmanship of ${md}. It perfectly captures the emotional mood of the ${genre} film and is expected to resonate deeply with Ollywood audiences. The composition strikes a careful balance between melody and feeling, making it a track that will stay with listeners well beyond their first listen.`,
-    lyricsNote: hasLyrics
-      ? `The lyrics of ${song.title} are steeped in Odia cultural expression, giving voice to emotions that feel both personal and universal. Reading through the full lyrics below reveals the depth of craft behind the song's story, adding a new layer of appreciation beyond the melody itself.`
-      : `The lyrics of ${song.title} are poetic and deeply rooted in Odia cultural sensibility, weaving themes of emotion and lived experience that fans of ${movie.title} will immediately connect with.`,
-    verdict: `${song.title} is a soulful and memorable addition to the ${movie.title} soundtrack — the kind of song that earns repeat listens. With ${singer}'s heartfelt delivery and ${md}'s evocative composition, this is Ollywood music at its finest. Watch the full video on Ollypedia.`,
-    metaDescription: buildSongSeoDesc(song, movie),
-    audioCredits: [],
-    videoCredits: [],
+    seoTitle: `${cleanTitle} Song Released from ${movie.title} (${cleanTitle} ସଙ୍ଗ୍ ରିଲିଜ୍)`,
+    metaDescription: `Listen to "${cleanTitle}" from ${movie.title}. Singer: ${singer}, Music: ${md}. Full details & lyrics on Ollypedia.`,
+    introEn: `Odia film music lovers have reason to celebrate as "${cleanTitle}", the latest track from ${movie.title}, is officially released. Sung by ${singer} with music by ${md}, this song is set to top regional music charts.`,
+    introOr: `${movie.title} ସିନେମାର ନୂଆ ଗୀତ "${cleanTitle}" ବର୍ତ୍ତମାନ ରିଲିଜ୍ ହୋଇସାରିଛି। ଗାୟକ ${singer} ଙ୍କ ଗାୟକୀ ଏବଂ ${md} ଙ୍କ ସଙ୍ଗୀତ ଗୀତଟିକୁ ଅତ୍ୟନ୍ତ ସୁନ୍ଦର କରିଛି।`,
+    detailsEn: `Featuring soulful vocals by ${singer} and music direction by ${md}${lyricist ? `, with lyrics penned by ${lyricist}` : ""}, "${cleanTitle}" captures the emotional atmosphere of ${movie.title} perfectly.`,
+    detailsOr: `${singer} ଙ୍କ କଣ୍ଠରେ ଏବଂ ${md} ଙ୍କ ସଙ୍ଗୀତ ନିର୍ଦ୍ଦେଶନାରେ ଗଢ଼ା ଏହି ଗୀତଟି ଦର୍ଶକଙ୍କ ମନ ଛୁଇଁବ।`,
+    sec1TitleEn: `Melodic Craft & Vocal Performance`,
+    sec1TitleOr: `ଗାୟକୀ ଏବଂ ସଙ୍ଗୀତ ଶୈଳୀ`,
+    sec1ContentEn: `${singer} brings effortless emotion to "${cleanTitle}", weaving melodic depth into every verse.`,
+    sec1ContentOr: `ଗାୟକ ${singer} ନିଜର ସୁମଧୁର ସ୍ୱର ମାଧ୍ୟମରେ ଗୀତଟିକୁ ଜୀବନ୍ତ କରିଛନ୍ତି।`,
+    sec2TitleEn: `Composition & Sound Design`,
+    sec2TitleOr: `ସଙ୍ଗୀତ ରଚନା ଏବଂ ତାଳ`,
+    sec2ContentEn: `Music Director ${md} has crafted a rich arrangement blending traditional Odia musical roots with contemporary rhythms.`,
+    sec2ContentOr: `ସଙ୍ଗୀତ ନିର୍ଦ୍ଦେଶକ ${md} ଓଡ଼ିଆ ସଂସ୍କୃତି ଏବଂ ଆଧୁନିକ ସଙ୍ଗୀତର ଏକ ସୁନ୍ଦର ମିଶ୍ରଣ କରିଛନ୍ତି।`,
+    sec3TitleEn: `Lyrical Essence & Theme`,
+    sec3TitleOr: `ଗୀତର ଭାବନା`,
+    sec3ContentEn: `The lyrics of "${cleanTitle}" carry poetic beauty and emotional resonance that connected instantly with Odia audiences.`,
+    sec3ContentOr: `ଏହି ଗୀତର ପଦଗୁଡ଼ିକ ଅତ୍ୟନ୍ତ ଭାବପୂର୍ଣ୍ଣ ଏବଂ ସୁନ୍ଦର।`,
+    conclusionEn: `"${cleanTitle}" is a must-listen musical release for Ollywood fans. Watch the video on Ollypedia!`,
+    conclusionOr: `"${cleanTitle}" ପ୍ରତ୍ୟେକ ଓଡ଼ିଆ ସଙ୍ଗୀତ ପ୍ରେମୀଙ୍କ ପାଇଁ ଏକ ଅବଶ୍ୟ ଶୁଣିବା ଭଳି ଗୀତ।`,
   };
 
-  // Build the description context block for the prompt
-  const descContext = hasDesc
-    ? `\n\nSong Description provided by creators (CRITICAL: Extract ALL audio & video credits if mentioned. Also use this to write the aboutSong editorial):\n"""\n${song.description}\n"""`
-    : "";
-
-  const aboutSongInstruction = hasDesc
-    ? `- aboutSong (5-6 long, highly detailed paragraphs): A deeply human, engaging editorial review of the song. You MUST incorporate every detail, fact, name, or context mentioned in the "Song Description" above. Discuss emotional tone, artists' performances, production nuances. Write in a warm, enthusiastic, and sophisticated journalistic voice (300-400 words).\n- audioCredits: Extract a JSON array of objects with keys "role" and "name" for all audio-related credits (Singer, Music Director, Lyricist, etc.) from the description.\n- videoCredits: Extract a JSON array of objects with keys "role" and "name" for all video-related credits (Director, Choreographer, Editor, etc.) from the description.`
-    : `- aboutSong (3-4 paragraphs, each 4-5 sentences): A human-like editorial about the song — musical style, emotional mood, the artist's delivery, and what makes this track special for ${genre} fans.\n- audioCredits: []\n- videoCredits: []`;
-
   return callGroqStructured(
-    `You are a seasoned Odia film music journalist writing long-form, deeply expressive, and human-like editorial articles for Ollypedia.in.
-Write in fluent, highly engaging, and descriptive English. Be specific and enthusiastic. Avoid sounding robotic.
-Never copy source text verbatim — always rewrite into uniquely phrased, original editorial prose.
-Return ONLY a valid JSON object with exactly these keys: intro, aboutSong, lyricsNote, verdict, metaDescription, audioCredits, videoCredits.
-For credits, return a JSON array of objects with "role" and "name" keys. If none exist, return an empty array [].`,
-    `Write a full, rich song feature article for the Ollywood song:
-Song title: "${song.title}"
-Movie: "${movie.title}" (${year || "upcoming"})
-Genre: ${genre}
-Singer: ${singer}
-Music Director: ${md}${lyricist ? `\nLyricist: ${lyricist}` : ""}
-${hasLyrics ? "Lyrics: PROVIDED (full lyrics are displayed on this page — mention naturally in lyricsNote)" : "Lyrics: Not provided"}${descContext}
-
-Keys to fill:
-- intro (3–4 sentences): A compelling opening hook that introduces the song and its emotional significance within ${movie.title}. Set the stage like the opening line of a great music review.
-${aboutSongInstruction}
-- lyricsNote (3-4 sentences): About the lyrical theme, depth, and emotional connect. Dive into how the words elevate the music.${hasLyrics ? " Naturally mention that full lyrics are available below on this page." : ""}
-- verdict (2-3 sentences): A strong, memorable closing recommendation. End with exactly "Watch the full video on Ollypedia."
-- metaDescription (max 155 chars): SEO meta description.${hasLyrics ? ' Include the word "lyrics" naturally.' : ""}`,
-    ["intro", "aboutSong", "lyricsNote", "verdict", "metaDescription", "audioCredits", "videoCredits"],
+    "You are a senior Odia cinema music journalist writing dual-language (English + Odia) song feature articles for Ollypedia. Return ONLY a valid JSON object.",
+    userPrompt,
+    [
+      "seoTitle", "metaDescription", "introEn", "introOr", "detailsEn", "detailsOr",
+      "sec1TitleEn", "sec1TitleOr", "sec1ContentEn", "sec1ContentOr",
+      "sec2TitleEn", "sec2TitleOr", "sec2ContentEn", "sec2ContentOr",
+      "sec3TitleEn", "sec3TitleOr", "sec3ContentEn", "sec3ContentOr",
+      "conclusionEn", "conclusionOr"
+    ],
     fallbacks,
-    3000
+    4500
   );
 }
 
-/**
- * buildSongBlogHTML — full article HTML for the song First Drop blog.
- * Follows the same dark-theme design system as movie detail / OTT blogs.
- */
 function buildSongBlogHTML(song, movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = [], dropLabel = "First Drop") {
-  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  const singer = song.singer || "";
-  const md = song.musicDirector || cc.musicDirector || "";
-  const lyricist = song.lyricist || "";
-  const genre = (movie.genre || []).join(", ") || "Odia";
-  const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
-  const ogImage = poster || `${SITE_URL}/logo.png`;
-  const movieUrl = `/movie/${movie.slug || movie._id}`;
-  const songUrl = `/songs/${movie.slug || movie._id}/${(movie.media?.songs || []).findIndex(s => s.title === song.title)}/${String(song.title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").trim()}`;
-  const dp = datePublished || new Date().toISOString();
-  const dm = dateModified || dp;
-  const ytVideoId = song.ytId || "";
-  const thumbnail = song.thumbnailUrl || (ytVideoId ? `https://img.youtube.com/vi/${ytVideoId}/hqdefault.jpg` : ogImage);
+  const poster = song.thumbnailUrl || (song.ytId ? `https://img.youtube.com/vi/${song.ytId}/hqdefault.jpg` : movie.posterUrl || movie.thumbnailUrl || "");
+  const sections = [
+    { headingEn: ai.sec1TitleEn, headingOr: ai.sec1TitleOr, contentEn: ai.sec1ContentEn, contentOr: ai.sec1ContentOr },
+    { headingEn: ai.sec2TitleEn, headingOr: ai.sec2TitleOr, contentEn: ai.sec2ContentEn, contentOr: ai.sec2ContentOr },
+    { headingEn: ai.sec3TitleEn, headingOr: ai.sec3TitleOr, contentEn: ai.sec3ContentEn, contentOr: ai.sec3ContentOr },
+  ];
 
-  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
-  const h2 = `font-size:1.05rem;font-weight:800;color:#c9973a;border-left:4px solid #c9973a;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
-  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
-  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
+  let html = buildRichEditorialHtml({
+    seoTitle: ai.seoTitle || seoTitle,
+    metaDescription: ai.metaDescription,
+    introEn: ai.introEn,
+    introOr: ai.introOr,
+    detailsEn: ai.detailsEn,
+    detailsOr: ai.detailsOr,
+    sections,
+    conclusionEn: ai.conclusionEn,
+    conclusionOr: ai.conclusionOr,
+    poster,
+    movie,
+    cc,
+    blogSlug,
+    datePublished,
+    dateModified,
+    category: "Song Updates"
+  });
 
-  const leadNames = cc.leadCast.map(c => c.name).filter(Boolean);
-  const allSongs = (movie.media?.songs || []).filter(s => s.title && s.title !== song.title);
-
-  // ── Schema JSON-LD ─────────────────────────────────────────────────────────
-  const schemaObj = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": ["Article", "MusicRecording"],
-        "headline": seoTitle.replace(/ \| Ollypedia$/, ""),
-        "description": ai.metaDescription || buildSongSeoDesc(song, movie),
-        "datePublished": dp,
-        "dateModified": dm,
-        "image": thumbnail,
-        "inLanguage": "en-IN",
-        "articleSection": "Songs",
-        "author": { "@type": "Organization", "name": "Ollypedia", "url": SITE_URL },
-        "publisher": {
-          "@type": "Organization", "name": "Ollypedia", "url": SITE_URL,
-          "logo": { "@type": "ImageObject", "url": `${SITE_URL}/logo.png`, "width": 600, "height": 60 }
-        },
-        "mainEntityOfPage": { "@type": "WebPage", "@id": `${SITE_URL}/blog/${blogSlug}` },
-        "about": { "@type": "Movie", "name": movie.title, "url": `${SITE_URL}${movieUrl}` },
-        ...(singer ? { "byArtist": { "@type": "MusicGroup", "name": singer } } : {}),
-        ...(md ? { "producer": { "@type": "Person", "name": md } } : {}),
-      },
-      {
-        "@type": "BreadcrumbList",
-        "itemListElement": [
-          { "@type": "ListItem", "position": 1, "name": "Home", "item": `${SITE_URL}/` },
-          { "@type": "ListItem", "position": 2, "name": "Songs", "item": `${SITE_URL}/songs` },
-          { "@type": "ListItem", "position": 3, "name": movie.title, "item": `${SITE_URL}${movieUrl}` },
-          { "@type": "ListItem", "position": 4, "name": `${song.title} ${dropLabel}`, "item": `${SITE_URL}/blog/${blogSlug}` },
-        ],
-      },
-      ...(ytVideoId ? [{
-        "@type": "VideoObject",
-        "name": `${song.title} — Official Video | ${movie.title}`,
-        "description": ai.metaDescription || buildSongSeoDesc(song, movie),
-        "thumbnailUrl": thumbnail,
-        "uploadDate": dp,
-        "embedUrl": `https://www.youtube.com/embed/${ytVideoId}`,
-        "contentUrl": `https://www.youtube.com/watch?v=${ytVideoId}`,
-      }] : []),
-    ],
-  };
-
-  // ── Keywords ────────────────────────────────────────────────────────────────
-  const keywordsArr = [
-    song.title, `${song.title} lyrics`, `${song.title} video`,
-    `${song.title} ${movie.title}`, `${song.title} odia song`,
-    singer ? `${song.title} ${singer}` : "",
-    singer ? `${singer} songs` : "",
-    md ? `${md} music` : "",
-    movie.title, `${movie.title} songs`, `${movie.title} ${year || ""}`.trim(),
-    "Odia songs", "Odia film songs", "Ollywood songs",
-    ...leadNames.map(n => `${n} songs`),
-    genre ? `${genre} odia songs` : "",
-  ].filter(Boolean);
-  const keywordsStr = [...new Set(keywordsArr)].join(", ");
-
-  // ── Other songs from same movie ─────────────────────────────────────────────
-  const otherSongsHtml = allSongs.length > 0 ? `
-<section style="${card}">
-  <h2 style="${h2}">More Songs from ${movie.title}</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;">
-    ${allSongs.map(s => {
-    const sIdx = (movie.media?.songs || []).findIndex(x => x.title === s.title);
-    const dropSlug = ordinalDropName(sIdx > -1 ? sIdx : 0).slug;
-    const sBlogSlug = buildSongSlug(s.title, movie, dropSlug, Boolean(s.lyrics?.trim()));
-    const cTitle = cleanSongTitle(s.title);
-    return `
-    <a href="/blog/${sBlogSlug}" style="display:flex;flex-direction:column;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;text-decoration:none;transition:border-color 0.2s;">
-      <div style="position:relative;width:100%;padding-bottom:56.25%;background:#000;">
-        ${s.ytId ? `<img src="https://img.youtube.com/vi/${s.ytId}/hqdefault.jpg" alt="${cTitle}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" loading="lazy">` : `<div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;">🎵</div>`}
-      </div>
-      <div style="padding:12px 14px;">
-        <div style="font-size:0.85rem;font-weight:700;color:#ddd;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" title="${cTitle}">${cTitle}</div>
-        ${s.singer ? `<div style="font-size:0.72rem;color:#666;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.singer}">${s.singer}</div>` : ""}
-      </div>
-    </a>`;
-  }).join("")}
-  </div>
-</section>` : "";
-
-  // ── Related movies ──────────────────────────────────────────────────────────
-  const relatedHtml = relatedMovies.length > 0 ? buildRelatedMoviesHtml(relatedMovies, "#c9973a", "More Odia Films") : "";
-
-  // ── Also Read ───────────────────────────────────────────────────────────────
-  const alsoReadHtml = `
-<section class="faq-section" style="${card}margin-bottom:22px;">
-  <h2 style="${h2}">Also Read</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
-    <a href="${movieUrl}" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
-      <span style="font-size:1.3rem;flex-shrink:0;">🎬</span>
-      <div><div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">${movie.title} — Full Movie Details</div><div style="font-size:0.72rem;color:#666;margin-top:2px;">Cast, story & release info</div></div>
-    </a>
-    <a href="/songs" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
-      <span style="font-size:1.3rem;flex-shrink:0;">🎵</span>
-      <div><div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">All Odia Songs</div><div style="font-size:0.72rem;color:#666;margin-top:2px;">Latest Ollywood music</div></div>
-    </a>
-    <a href="/blog?category=Songs" style="display:flex;align-items:center;gap:10px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:10px;padding:14px 16px;text-decoration:none;">
-      <span style="font-size:1.3rem;flex-shrink:0;">📰</span>
-      <div><div style="font-size:0.82rem;font-weight:700;color:#ddd;line-height:1.4;">More Song Features</div><div style="font-size:0.72rem;color:#666;margin-top:2px;">Odia music coverage on Ollypedia</div></div>
-    </a>
-  </div>
-</section>`;
-
-  // ── Tags ────────────────────────────────────────────────────────────────────
-  const tagChip = (t) => `<span style="display:inline-block;background:#1e1e1e;color:#c9973a;border:1px solid #3a2800;border-radius:20px;padding:4px 13px;font-size:0.78rem;font-weight:600;margin:2px;">#${t.replace(/\s+/g, "")}</span>`;
-  const tagsList = [song.title, `${song.title}Song`, movie.title, "OdiaSong", "Ollywood", "OdiaMusic", singer ? singer.replace(/\s/g, "") : "", "OllywoodSongs"].filter(Boolean);
-
-  // ── Full HTML ───────────────────────────────────────────────────────────────
-  return `${BLOG_RESPONSIVE_STYLES}
-
-<!-- ════════════════════════════════════════════════════════════════
-  OLLYPEDIA SEO META — Song ${dropLabel} Blog
-  title:       ${seoTitle}
-  description: ${ai.metaDescription || buildSongSeoDesc(song, movie)}
-════════════════════════════════════════════════════════════════ -->
-
-<script type="application/ld+json">
-${JSON.stringify(schemaObj, null, 2)}
-</script>
-
-<!-- BREADCRUMB + TIMESTAMP -->
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-    <a href="/" style="color:#777;text-decoration:none;">Home</a>
-    <span style="color:#333;">›</span>
-    <a href="/songs" style="color:#777;text-decoration:none;">Songs</a>
-    <span style="color:#333;">›</span>
-    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
-    <span style="color:#333;">›</span>
-    <span style="color:#c9973a;">${song.title} ${dropLabel}</span>
-  </nav>
-  <time datetime="${dp.split("T")[0]}" style="font-size:0.73rem;color:#444;white-space:nowrap;">
-    🕐 Published: ${formatHumanDate(dp)}
-  </time>
-</div>
-
-<!-- HERO BANNER -->
-<div class="hero-section" style="background:linear-gradient(135deg,#0e001a 0%,#121212 100%);border:1px solid #2e0050;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
-  <div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <span style="display:inline-block;background:#1a0030;color:#b388ff;font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #3a0060;">🎵 Song ${dropLabel}</span>
-    <span style="display:inline-block;background:#1e1e1e;color:#888;font-size:0.68rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px;border:1px solid #2a2a2a;">${movie.title}${year ? ` (${year})` : ""}</span>
-  </div>
-
-  <h1 style="color:#fff;font-size:clamp(1.2rem,4.5vw,1.7rem);line-height:1.3;font-weight:800;margin:0 0 12px;word-break:break-word;">
-    ${song.title} — ${dropLabel} from ${movie.title}${year ? ` (${year})` : ""}
-  </h1>
-
-  <p style="color:#bbb;font-size:0.97rem;line-height:1.85;margin:0 0 20px;">${ai.intro}</p>
-
-  <div class="stat-chips" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;">
-    ${singer ? `<div style="background:rgba(0,0,0,0.5);border:1px solid #2e0050;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Singer</div><div style="font-size:0.92rem;font-weight:800;color:#b388ff;word-break:break-word;">${singer}</div></div>` : ""}
-    ${md ? `<div style="background:rgba(0,0,0,0.5);border:1px solid #1a2a3a;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Music</div><div style="font-size:0.92rem;font-weight:800;color:#7ec8e3;word-break:break-word;">${md}</div></div>` : ""}
-    ${lyricist ? `<div style="background:rgba(0,0,0,0.5);border:1px solid #222;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Lyricist</div><div style="font-size:0.92rem;font-weight:800;color:#fff;word-break:break-word;">${lyricist}</div></div>` : ""}
-    <div style="background:rgba(0,0,0,0.5);border:1px solid #2a2a2a;border-radius:10px;padding:12px 14px;"><div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Film</div><div style="font-size:0.92rem;font-weight:800;color:#c9973a;word-break:break-word;">${movie.title}</div></div>
-  </div>
-</div>
-
-<!-- YOUTUBE VIDEO EMBED -->
-${ytVideoId ? `
-<section style="${card}">
-  <h2 style="${h2}">🎬 Official Video — ${song.title}</h2>
+  if (song.ytId) {
+    const ytEmbed = `
+<figure style="margin: 20px auto; text-align: center; max-width: 100%;">
   <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;background:#000;">
-    <iframe
-      src="https://www.youtube.com/embed/${ytVideoId}?rel=0&modestbranding=1"
-      title="${song.title} — Official Video from ${movie.title}"
-      frameborder="0"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen
-      loading="lazy"
-      style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:10px;">
-    </iframe>
+    <iframe src="https://www.youtube.com/embed/${song.ytId}?rel=0&modestbranding=1" title="${song.title} Video" frameborder="0" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:10px;"></iframe>
   </div>
-  <p style="color:#555;font-size:0.75rem;margin:10px 0 0;">▶ Watch "${song.title}" official video from <strong style="color:#777;">${movie.title}</strong> on YouTube</p>
-</section>` : poster ? `
-<section style="${card}text-align:center;">
-  <h2 style="${h2}">🎵 ${song.title}</h2>
-  <img src="${poster}" alt="${song.title} — ${movie.title}" style="max-width:320px;width:100%;border-radius:12px;border:1px solid #2a2a2a;" loading="lazy">
-  <p style="color:#555;font-size:0.78rem;margin:12px 0 0;">Official video coming soon. Follow Ollypedia for updates.</p>
-</section>` : ""}
+</figure>`;
+    html = html.replace('</figure>', `</figure>\n${ytEmbed}`);
+  }
 
-<!-- SONG DETAILS TABLE -->
-<section style="${card}">
-  <h2 style="${h2}">Song Details — ${song.title}</h2>
-  <table style="width:100%;border-collapse:collapse;">
-    <tbody>
-      <tr><td style="${tdL}">Song Title</td><td style="${tdR}">${song.title}</td></tr>
-      <tr><td style="${tdL}">Film</td><td style="${tdR}"><a href="${movieUrl}" style="color:#c9973a;text-decoration:underline;text-underline-offset:2px;">${movie.title}${year ? ` (${year})` : ""}</a></td></tr>
-      ${singer ? `<tr><td style="${tdL}">Singer</td><td style="${tdR}">${singer}</td></tr>` : ""}
-      ${md ? `<tr><td style="${tdL}">Music Director</td><td style="${tdR}">${md}</td></tr>` : ""}
-      ${lyricist ? `<tr><td style="${tdL}">Lyricist</td><td style="${tdR}">${lyricist}</td></tr>` : ""}
-      ${cc.director ? `<tr><td style="${tdL}">Director</td><td style="${tdR}">${cc.director}</td></tr>` : ""}
-      <tr><td style="${tdL}">Language</td><td style="${tdR}">Odia</td></tr>
-      <tr><td style="${tdL}">Industry</td><td style="${tdR}">Ollywood</td></tr>
-    </tbody>
-  </table>
-  <div style="text-align:center;margin-top:20px;">
-    <a href="${movieUrl}" style="display:inline-block;background:#c9973a;color:#000;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:800;font-size:0.9rem;">
-      🎬 View Full Movie Details
-    </a>
-  </div>
-</section>
-
-<!-- ABOUT THE SONG -->
-<section style="${card}">
-  <h2 style="${h2}">About the Song — ${song.title}</h2>
-  <p style="color:#ccc;line-height:1.9;margin:0 0 14px;font-size:0.97rem;">${ai.aboutSong}</p>
-</section>
-
-<!-- LYRICS NOTE -->
-<section style="${card}">
-  <h2 style="${h2}">Lyrics & Theme</h2>
-  <p style="color:#ccc;line-height:1.9;margin:0 0 14px;font-size:0.97rem;">${ai.lyricsNote}</p>
-  ${song.lyrics ? `
-  <div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:10px;padding:20px 22px;margin-top:14px;">
-    <h3 style="font-size:0.8rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 14px;">Song Lyrics</h3>
-    <pre style="color:#aaa;font-size:0.9rem;line-height:1.9;white-space:pre-wrap;word-break:break-word;margin:0;font-family:inherit;">${song.lyrics}</pre>
-  </div>` : ""}
-</section>
-
-<!-- VERDICT -->
-<section style="${card}">
-  <h2 style="${h2}">Verdict</h2>
-  <div style="border-left:4px solid #c9973a;padding-left:16px;">
-    <p style="color:#ccc;line-height:1.9;margin:0;font-size:0.97rem;">${ai.verdict}</p>
-  </div>
-</section>
-
-${(() => {
-      const buildCreditsTable = (title, credits) => {
-        if (!Array.isArray(credits) || credits.length === 0) return "";
-        return `
-<section style="${card}">
-  <h3 style="${h2.replace('1.05rem', '0.95rem')}">${title}</h3>
-  <table style="width:100%;border-collapse:collapse;">
-    <tbody>
-      ${credits.map(c => `<tr><td style="${tdL}">${c.role || "Credit"}</td><td style="${tdR}">${c.name || "-"}</td></tr>`).join("")}
-    </tbody>
-  </table>
-</section>`;
-      };
-      return buildCreditsTable("Audio Credits", ai.audioCredits) + buildCreditsTable("Video Credits", ai.videoCredits);
-    })()}
-
-<!-- MORE SONGS FROM THIS MOVIE -->
-${otherSongsHtml}
-
-<!-- RELATED MOVIES -->
-${relatedHtml}
-
-<!-- ALSO READ -->
-${alsoReadHtml}
-
-<!-- TAGS -->
-<section style="background:#111;border-radius:14px;padding:18px 22px;margin-bottom:22px;">
-  <h2 style="font-size:0.7rem;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 10px;">Tags</h2>
-  <div style="display:flex;flex-wrap:wrap;gap:5px;">${tagsList.map(t => tagChip(t)).join("")}</div>
-</section>
-
-<!-- FOOTER -->
-<div style="border-top:1px solid #1c1c1c;padding-top:14px;margin-top:4px;">
-  <p style="color:#444;font-size:0.8rem;line-height:1.8;margin:0;">
-    <strong style="color:#555;">Source:</strong> Ollypedia Song Database &nbsp;·&nbsp;
-    <strong style="color:#555;">Published:</strong> <time datetime="${dp.split("T")[0]}" style="color:#444;">${formatHumanDate(dp)}</time> &nbsp;·&nbsp;
-    <a href="${movieUrl}" style="color:#c9973a;text-decoration:none;">View ${movie.title} full details →</a>
-  </p>
-</div>`;
+  return html;
 }
 
 /**
@@ -2025,19 +2077,16 @@ function ordinalDropName(index) {
  *   (e.g. when the song's ytId or lyrics are updated via the dedicated song edit route).
  */
 async function autoGenerateSongBlog(song, movie, songIndex = 0, onlyIfNew = true) {
-  if (!song?.title?.trim()) return null;
+  if (!AUTO_BLOG_ENABLED || !song?.title?.trim()) return null;
   try {
     const { label: dropLabel, slug: dropSlug } = ordinalDropName(songIndex);
     const cc = extractMovieCastCrew(movie);
     const hasLyrics = Boolean(song.lyrics?.trim());
-    const seoTitle = buildSongTitle(song.title, movie, dropLabel, hasLyrics, song.singer || "", song.musicDirector || cc.musicDirector || "");
-    const baseSlug = buildSongSlug(song.title, movie, dropSlug, hasLyrics);
-    const seoDesc = buildSongSeoDesc(song, movie, dropLabel);
+    const ai = await generateSongAiSections(song, movie, cc);
+    const seoTitle = ai.seoTitle || buildSongTitle(song.title, movie, dropLabel, hasLyrics, song.singer || "", song.musicDirector || cc.musicDirector || "");
+    const baseSlug = buildSlugFromTitle(seoTitle, "song-details");
+    const seoDesc = ai.metaDescription || buildSongSeoDesc(song, movie);
 
-    // ── Existence check ───────────────────────────────────────────────────
-    // If onlyIfNew is true, skip silently when a blog already exists for this song.
-    // Instead of relying on baseSlug (which changes based on index and lyrics), 
-    // we query the DB directly using movieId and song title inside tags.
     let blog = null;
     if (onlyIfNew) {
       blog = await Blog.findOne({ movieId: movie._id, category: { $in: ["Songs", "Song Updates"] }, tags: song.title });
@@ -2046,19 +2095,11 @@ async function autoGenerateSongBlog(song, movie, songIndex = 0, onlyIfNew = true
         return blog;
       }
     } else {
-      // For updates, try finding by title first, otherwise fallback to existing baseSlug mapping.
       blog = await Blog.findOne({ movieId: movie._id, category: { $in: ["Songs", "Song Updates"] }, tags: song.title });
-      if (!blog) {
-        const existingId = movie.songBlogIds instanceof Map
-          ? movie.songBlogIds.get(baseSlug)
-          : (movie.songBlogIds || {})[baseSlug];
-        if (existingId) blog = await Blog.findById(existingId);
-        if (!blog) blog = await Blog.findOne({ slug: baseSlug });
-      }
+      if (!blog) blog = await Blog.findOne({ slug: baseSlug });
     }
 
     const relatedMovies = await fetchRelatedMovies(movie);
-    const ai = await generateSongAiSections(song, movie, cc);
     const dp = new Date().toISOString();
     const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : dp;
     const dateModified = dp;
@@ -2075,7 +2116,7 @@ async function autoGenerateSongBlog(song, movie, songIndex = 0, onlyIfNew = true
       movieTitle: movie.title,
       author: "Ollypedia Team",
       published: true,
-      indexed: true,   // song blogs are always indexable — each is a unique entity
+      indexed: true,
       readTime: Math.max(1, Math.ceil(html.split(/\s+/).length / 200)),
       seoTitle: seoTitle,
       seoDesc: seoDesc,
@@ -2084,11 +2125,11 @@ async function autoGenerateSongBlog(song, movie, songIndex = 0, onlyIfNew = true
 
     if (blog) {
       Object.assign(blog, fields);
+      blog.slug = baseSlug;
       await blog.save();
       console.log(`✅ Updated Song blog for "${song.title}" (${movie.title}) → /blog/${blog.slug}`);
     } else {
       blog = await Blog.create({ ...fields, slug: baseSlug });
-      // Store the blog ID in the movie's songBlogIds map
       await Movie.findByIdAndUpdate(movie._id, {
         $set: { [`songBlogIds.${baseSlug}`]: blog._id },
       });
@@ -2101,23 +2142,6 @@ async function autoGenerateSongBlog(song, movie, songIndex = 0, onlyIfNew = true
   }
 }
 
-/**
- * autoGenerateAllSongBlogs — iterates all songs of a movie and generates a blog for each.
- * Called when a movie is created with songs already attached.
- * Always passes onlyIfNew=true so existing song blogs are never clobbered on re-runs.
- */
-async function autoGenerateAllSongBlogs(movie) {
-  const songs = movie.media?.songs || [];
-  for (let i = 0; i < songs.length; i++) {
-    const song = songs[i];
-    if (song?.title?.trim()) {
-      await autoGenerateSongBlog(song, movie, i, true);
-    }
-  }
-}
-
-
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  OTT RELEASE BLOG
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2126,324 +2150,127 @@ async function generateOttAiSections(movie, cc) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const isDateAvailable = isRealDate(movie.ottReleaseDate);
   const ottDateFmt = isDateAvailable ? formatHumanDate(movie.ottReleaseDate) : "Release Date Not Announced";
-  // BUGFIX: use the strictly-filtered ottCast so the AI is never told a
-  // Cinematographer/Editor/Music Director is part of the "Lead Cast".
-  const leadNames = (cc.ottCast || cc.leadCast).map(c => c.name).filter(Boolean).join(", ");
-  const festival = isDateAvailable ? findNearbyFestival(movie.ottReleaseDate) : "";
+  const leadNames = (cc.ottCast || cc.leadCast || []).map(c => c.name).filter(Boolean).join(", ");
+  const genreStr = (movie.genre || []).join(", ") || "Odia";
 
-  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | OTT Platform: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${(movie.genre || []).join(", ") || "Odia"} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"}${festival ? ` | Note: this OTT release falls close to ${festival} — you may mention this naturally if it fits.` : ""}`;
+  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | OTT Platform: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${genreStr} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Producer: ${cc.producer || "N/A"} | Synopsis: ${movie.synopsis || "N/A"}`;
 
-  const userPrompt = `Write deeply detailed, SEO-rich JSON content for an OTT-release announcement article on Ollypedia, an Odia (Ollywood) cinema website, about the film "${movie.title}" streaming on ${movie.streamingOn}. This MUST be a full editorial article with long, rich paragraphs — each paragraph should feel like professional journalism. Use ONLY the details given. No HTML or markdown.
+  const userPrompt = `Write deeply detailed, dual-language (English + Odia translation) JSON content for an OTT Release announcement article on Ollypedia (Odia cinema website) about "${movie.title}" streaming on ${movie.streamingOn}.
+Write in a professional, rich journalism style. Each section MUST have a unique dynamic heading tailored to this film, followed by a detailed English paragraph and an Odia translation paragraph in Odia script.
 
+Context:
 ${ctx}
 
-Return a JSON object with exactly these keys (plain text only, NO HTML, NO markdown, aim for maximum detail):
-- metaDescription: 150-160 characters mentioning movie title, OTT platform and release status/date, maximising Google click-through
-- introParagraph: 220-320 words announcing that "${movie.title}" will stream on ${movie.streamingOn}. Name the lead cast, detail the genre and story highlights, explain why this OTT release is significant for Odia cinema fans, and clearly state the release status: ${ottDateFmt}.
-- synopsisParagraph: 200-280 words recapping the film's story, genre, thematic conflicts, emotional highlights, and what makes it worth watching on OTT. Draw from the synopsis and genre; do not invent specific plot points not mentioned. Write to help a viewer decide whether to watch. IMPORTANT: paraphrase and reframe in your own words for an OTT/streaming context — do not copy the source synopsis verbatim, since this same film also has a separate theatrical-release article with its own story section.
-- castHighlightParagraph: 200-280 words specifically naming and highlighting each lead actor — their roles, acting style, past notable performances in Odia cinema, and what they bring to this specific film. Make it feel like a genuine talent profile piece.
-- howToWatchParagraph: 180-250 words explaining step-by-step how Odisha audiences can stream the film on ${movie.streamingOn} — app download, website access, subscription tiers, regional language content availability, and how digital OTT access is transforming Odia cinema viewership.
-- platformParagraph: 150-220 words introducing ${movie.streamingOn} as an OTT platform — its founding story, growth, content library, focus on regional Indian language films, contribution to Odia cinema's digital accessibility, and why it is a key destination for Ollywood fans.`;
+Return ONLY a valid JSON object with these keys (plain text only, NO markdown):
+- seoTitle: Full article title in English with Odia translation in parentheses, e.g. "${movie.title} Teaser Out Now: An Exciting Premiere for Ollywood (ଦହନ ଟ୍ରେଲର୍ ରିଲିଜ୍: ଅଲିଉଡ୍ ପାଇଁ ଏକ ନୂଆ ଯୁଗ)"
+- metaDescription: 150-160 char SEO snippet mentioning film, OTT platform, and date.
+- introEn: Detailed English intro paragraph (200-300 words) announcing the film and OTT premiere on ${movie.streamingOn}.
+- introOr: Odia translation of introEn in Odia script.
+- detailsEn: Detailed English paragraph (200-280 words) covering release date (${ottDateFmt}), production house, director ${cc.director || ""}, cast ${leadNames || ""}.
+- detailsOr: Odia translation of detailsEn in Odia script.
+- sec1TitleEn: Specific dynamic heading for Title decoding or story theme (e.g. "Decoding the Title: ${movie.title}")
+- sec1TitleOr: Odia translation of sec1TitleEn (e.g. "ଶୀର୍ଷକର ବିଶ୍ଳେଷଣ: ${movie.title}")
+- sec1ContentEn: English analysis of film theme, title meaning, and story setup (200-280 words).
+- sec1ContentOr: Odia translation of sec1ContentEn.
+- sec2TitleEn: Dynamic heading for Director & Filmmaking Legacy (e.g. "The Visionary Director: ${cc.director || "Production Vision"}'s Craft")
+- sec2TitleOr: Odia translation of sec2TitleEn
+- sec2ContentEn: English editorial on director's vision, past work, and filmmaking approach (200-280 words).
+- sec2ContentOr: Odia translation of sec2ContentEn.
+- sec3TitleEn: Dynamic heading for Lead Star Cast & Performance (e.g. "The Lead Star & Performance Highlights")
+- sec3TitleOr: Odia translation of sec3TitleEn
+- sec3ContentEn: English editorial on lead actors' performances, screen presence, and chemistry (200-280 words).
+- sec3ContentOr: Odia translation of sec3ContentEn.
+- sec4TitleEn: Dynamic heading for Platform & Production Powerhouse
+- sec4TitleOr: Odia translation of sec4TitleEn
+- sec4ContentEn: English details on ${movie.streamingOn} OTT platform, viewing guide, and production house (180-250 words).
+- sec4ContentOr: Odia translation of sec4ContentEn.
+- conclusionEn: English conclusion summarizing expectations, release date, and countdown (150-220 words).
+- conclusionOr: Odia translation of conclusionEn.`;
 
   const fallbacks = {
-    metaDescription: `${movie.title} streams on ${movie.streamingOn}. Get cast, release details and how-to-watch info on Ollypedia.`,
-    introParagraph: `${movie.title}${leadNames ? `, starring ${leadNames},` : ""} is set to stream on the popular OTT platform ${movie.streamingOn}. The OTT release status is currently: ${ottDateFmt}. This digital premiere marks an exciting milestone for Odia cinema fans everywhere, giving audiences across Odisha and around the world the opportunity to experience this ${(movie.genre || []).join(", ") || "Odia"} film from the comfort of their homes. With the growing reach of regional OTT platforms like ${movie.streamingOn}, Odia cinema is finding new audiences far beyond the traditional theatrical circuit, and ${movie.title} is set to be a significant addition to this wave of digital content.`,
-    // SEO FIX: previously fell back to the raw, unmodified `movie.synopsis`
-    // string — byte-identical to the Movie Details page's storyParagraph
-    // fallback, which the audit flags as duplicate content across blog
-    // pages for the same movie. Now reframes the synopsis with OTT-specific
-    // context instead of repeating it verbatim.
-    synopsisParagraph: movie.synopsis
-      ? `Now streaming on ${movie.streamingOn}, ${movie.title} tells a story that has resonated strongly with Odia audiences since it was first announced. ${movie.synopsis} For viewers deciding whether to press play, this ${(movie.genre || []).join(", ") || "Odia"} film offers a self-contained viewing experience that holds up just as well on a home screen as it did in theatres.`
-      : `${movie.title} is a ${(movie.genre || []).join(", ") || "Odia"} film that has drawn considerable attention from Ollywood audiences and critics alike. The film carries a story built around the cultural and emotional landscape of Odisha, exploring themes that resonate deeply with Odia viewers. Full story details, including character backgrounds and plot specifics, will be updated as officially confirmed by the production team. What is clear is that ${movie.title} combines strong performances with a compelling narrative structure that is ideal for OTT viewing.`,
-    castHighlightParagraph: leadNames ? `${leadNames} lead the cast of ${movie.title}, each bringing their distinctive acting strengths and on-screen presence to their respective roles. The ensemble is widely regarded as one of the strongest assembled for an Odia film in recent memory, with each actor having established themselves as a significant talent in the Ollywood industry. Their combined performances are expected to be a major draw for OTT audiences discovering the film on ${movie.streamingOn}, and early reviews of their work on screen have been overwhelmingly positive.` : `${movie.title} features a talented cast of Odia cinema's most acclaimed performers, whose nuanced portrayals and strong screen chemistry are expected to be the highlight of this OTT viewing experience on ${movie.streamingOn}. The casting choices reflect the production team's commitment to quality storytelling and authentic representation of Odia culture and characters.`,
-    howToWatchParagraph: `Viewers can catch ${movie.title} on ${movie.streamingOn} by downloading the official app from the Google Play Store or Apple App Store, or by visiting the platform's website directly. ${movie.streamingOn} offers subscription plans tailored for Odia-speaking audiences, with options for monthly and annual memberships that provide unlimited access to its growing library of Odia films, web series, and regional content. Once subscribed, simply search for "${movie.title}" in the app or website to start streaming. Ollypedia will update the direct streaming link as soon as it goes live officially.`,
-    platformParagraph: `${movie.streamingOn} is among the leading OTT platforms dedicated to bringing Odia-language films, web series, and regional entertainment to digital screens across India and beyond. With a rapidly growing content library and a strong focus on authentic regional storytelling, ${movie.streamingOn} has become a vital destination for Odia cinema fans who want to stay connected with Ollywood's latest releases. The platform's commitment to supporting Odia-language content creators and giving regional films a digital home has made it an important part of the Ollywood ecosystem.`,
+    seoTitle: `${movie.title} OTT Release Date Announced: Premieres on ${movie.streamingOn} (${movie.title} ଓଟିଟି ରିଲିଜ୍ ତାରିଖ)`,
+    metaDescription: `${movie.title} streams on ${movie.streamingOn}. Get cast, release details and OTT info on Ollypedia.`,
+    introEn: `The Odia film industry is about to witness an exciting digital premiere. The highly anticipated Odia film ${movie.title}${leadNames ? `, starring ${leadNames},` : ""} is officially slated to stream on ${movie.streamingOn}. This release marks a significant milestone for Ollywood fans looking forward to experiencing quality Odia cinema digitally.`,
+    introOr: `ଓଡ଼ିଆ ଚଳଚ୍ଚିତ୍ର ଜଗତ ଏକ ନୂତନ ସିନେମାଟିକ୍ ଅନୁଭୂତି ଦେଖିବାକୁ ଯାଉଛି। ଆଗାମୀ ଓଡ଼ିଆ ଚଳଚ୍ଚିତ୍ର ${movie.title} ର ବହୁ ପ୍ରତୀକ୍ଷିତ ଡିଜିଟାଲ୍ ପ୍ରିମିୟର୍ ${movie.streamingOn} ରେ ମୁକ୍ତିଲାଭ କରିବାକୁ ଯାଉଛି।`,
+    detailsEn: `Slated for release on ${ottDateFmt}, ${movie.title} is directed by ${cc.director || "acclaimed filmmakers"} and features lead performances from ${leadNames || "top Odia talent"}. The film brings together strong production values and compelling storytelling tailored for both regional and global audiences on ${movie.streamingOn}.`,
+    detailsOr: `${ottDateFmt} ରେ ମୁକ୍ତିଲାଭ କରିବାକୁ ଥିବା ${movie.title}, ନିର୍ଦ୍ଦେଶକ ${cc.director || "ନିର୍ମାତା"} ଙ୍କ ଦ୍ୱାରା ନିର୍ଦ୍ଦେଶିତ ଏବଂ ମୁଖ୍ୟ ଅଭିନେତା ${leadNames || "କଳାକାର"} ଙ୍କ ଅଭିନୟରେ ସମୃଦ୍ଧ।`,
+    sec1TitleEn: `Decoding the Film: ${movie.title}`,
+    sec1TitleOr: `ଶୀର୍ଷକର ବିଶ୍ଳେଷଣ: ${movie.title}`,
+    sec1ContentEn: `${movie.title} explores compelling themes within the ${genreStr} genre. The narrative combines emotional depth with relatable Odia culture, offering viewers an engaging story from start to finish.`,
+    sec1ContentOr: `${movie.title} ଚଳଚ୍ଚିତ୍ରଟି ${genreStr} ଜେନର୍ରେ ଏକ ଆକର୍ଷଣୀୟ କାହାଣୀ ଉପସ୍ଥାପନ କରେ, ଯାହା ଓଡ଼ିଆ ସଂସ୍କୃତି ଏବଂ ମାନବୀୟ ଭାବନାକୁ ଛୁଇଁପାରେ।`,
+    sec2TitleEn: `Director's Vision & Craft`,
+    sec2TitleOr: `ନିର୍ଦ୍ଦେଶକଙ୍କ ଦୃଷ୍ଟିକୋଣ`,
+    sec2ContentEn: `Director ${cc.director || "the creative team"} has focused on realistic storytelling, atmospheric visuals, and authentic Odia dialogues to deliver an unforgettable cinematic experience on OTT.`,
+    sec2ContentOr: `ନିର୍ଦ୍ଦେଶକ ${cc.director || "ଟିମ୍"} ସୁନ୍ଦର ଦୃଶ୍ୟାୟନ ଏବଂ ବାସ୍ତବିକ ସଂଳାପ ମାଧ୍ୟମରେ ଦର୍ଶକଙ୍କ ନିକଟରେ ଏକ ମନୋରଞ୍ଜନଧର୍ମୀ ସିନେମା ପହଞ୍ଚାଇବାକୁ ପ୍ରଚେଷ୍ଟା କରିଛନ୍ତି।`,
+    sec3TitleEn: `Star Performances & Cast Highlights`,
+    sec3TitleOr: `ମୁଖ୍ୟ ତାରକା ଏବଂ ଅଭିନୟ`,
+    sec3ContentEn: `${leadNames || "The lead cast"} delivers powerful expressions and screen presence, carrying the emotional weight of the film effortlessly.`,
+    sec3ContentOr: `ମୁଖ୍ୟ ଅଭିନେତାମାନଙ୍କର ଚମତ୍କାର ଅଭିବ୍ୟକ୍ତି ଏବଂ ଅଭିନୟ ଚଳଚ୍ଚିତ୍ରର ମୁଖ୍ୟ ଆକର୍ଷଣ ଅଟେ।`,
+    sec4TitleEn: `Streaming on ${movie.streamingOn}`,
+    sec4TitleOr: `ଓଟିଟି ପ୍ଲାଟଫର୍ମ: ${movie.streamingOn}`,
+    sec4ContentEn: `Audiences can stream ${movie.title} on ${movie.streamingOn} via web or mobile apps. Subscriptions allow easy access to this Odia release in high definition.`,
+    sec4ContentOr: `ଦର୍ଶକମାନେ ${movie.streamingOn} ଆପ୍ କିମ୍ବା ୱେବସାଇଟ୍ ମାଧ୍ୟମରେ ${movie.title} ସିନେମାଟିକୁ ସହଜରେ ଦେଖିପାରିବେ।`,
+    conclusionEn: `${movie.title} on ${movie.streamingOn} is a must-watch release for Ollywood fans. Mark your dates and enjoy the digital premiere.`,
+    conclusionOr: `${movie.streamingOn} ରେ ${movie.title} ର ଆଗମନ ଓଡ଼ିଆ ସିନେମା ପ୍ରେମୀଙ୍କ ପାଇଁ ଏକ ଖୁସିର ଖବର।`,
   };
 
   return callGroqStructured(
-    "You are a senior Odia cinema (Ollywood) journalist writing long-form, highly detailed, SEO-optimised editorial articles for Ollypedia. Return ONLY a valid JSON object — no markdown, no code fences, no extra text. All values must be plain text with no HTML. Each paragraph must be thorough, specific, and written like professional film journalism. Every sentence must add real value.",
+    "You are a senior Odia cinema (Ollywood) journalist writing dual-language (English + Odia) editorial articles for Ollypedia. Return ONLY a valid JSON object. All values must be plain text with no HTML markdown.",
     userPrompt,
-    ["metaDescription", "introParagraph", "synopsisParagraph", "castHighlightParagraph", "howToWatchParagraph", "platformParagraph"],
+    [
+      "seoTitle", "metaDescription", "introEn", "introOr", "detailsEn", "detailsOr",
+      "sec1TitleEn", "sec1TitleOr", "sec1ContentEn", "sec1ContentOr",
+      "sec2TitleEn", "sec2TitleOr", "sec2ContentEn", "sec2ContentOr",
+      "sec3TitleEn", "sec3TitleOr", "sec3ContentEn", "sec3ContentOr",
+      "sec4TitleEn", "sec4TitleOr", "sec4ContentEn", "sec4ContentOr",
+      "conclusionEn", "conclusionOr"
+    ],
     fallbacks,
-    4000
+    4500
   );
 }
 
 function buildOttBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = []) {
-  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  // Prefer new ott object fields, fall back to legacy flat fields
-  const ott = movie.ott || {};
-  const platform = ott.platform || movie.streamingOn || "";
-  const watchUrl = ott.watchUrl || movie.streamingUrl || "";
-  const ottReleaseDate = ott.releaseDate || movie.ottReleaseDate || "";
-  const ottStatus = ott.status || "Upcoming";
-  const ottLanguages = Array.isArray(ott.languages) ? ott.languages.join(", ") : "";
-  const ottSubtitles = Array.isArray(ott.subtitles) ? ott.subtitles.join(", ") : "";
-  const ottQuality = ott.quality || "";
-  const ottRuntime = ott.runtime || movie.runtime || "";
-  const isDateAvailable = isRealDate(ottReleaseDate);
-  const ottDateFmt = isDateAvailable ? formatHumanDate(ottReleaseDate) : "Release Date Not Announced";
   const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
-  const ogImage = poster || `${SITE_URL}/logo.png`;
-  const movieUrl = `/movie/${movie.slug}`;
-  const ottPageUrl = movie.slug ? `/ott/${movie.slug}` : null;
-  const leadCast = cc.ottCast || cc.leadCast || [];
-  const imdbNum = parseFloat(movie.imdbRating);
-  const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
-  const dp = datePublished || new Date().toISOString();
-  const dm = dateModified || dp;
+  const sections = [
+    { headingEn: ai.sec1TitleEn, headingOr: ai.sec1TitleOr, contentEn: ai.sec1ContentEn, contentOr: ai.sec1ContentOr },
+    { headingEn: ai.sec2TitleEn, headingOr: ai.sec2TitleOr, contentEn: ai.sec2ContentEn, contentOr: ai.sec2ContentOr },
+    { headingEn: ai.sec3TitleEn, headingOr: ai.sec3TitleOr, contentEn: ai.sec3ContentEn, contentOr: ai.sec3ContentOr },
+    { headingEn: ai.sec4TitleEn, headingOr: ai.sec4TitleOr, contentEn: ai.sec4ContentEn, contentOr: ai.sec4ContentOr },
+  ];
 
-  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
-  const h2 = `font-size:1.05rem;font-weight:800;color:#7ec8e3;border-left:4px solid #7ec8e3;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
-  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
-  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
-
-  const castChips = leadCast.map(c => {
-    const url = castProfileUrl(c);
-    return `<span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#ddd;">${url ? `<a href="${url}" style="color:#7ec8e3;text-decoration:underline;text-underline-offset:2px;">${c.name}</a>` : c.name}</span>`;
-  }).join("");
-
-  const leadNames = leadCast.map(c => c.name).filter(Boolean);
-  const keywordsArr = [
-    movie.title, `${movie.title} OTT release date`, `${movie.title} ${platform}`,
-    `watch ${movie.title} online`, `${movie.title} streaming`, platform,
-    `${platform} odia movies`, "Odia movie OTT", "Ollywood streaming",
-    ...leadNames.map(n => `${n} movies`),
-  ].filter(Boolean);
-  const keywordsStr = [...new Set(keywordsArr)].join(", ");
-
-  const toc = [
-    ["OTT Release Details", "release-details"], ["Story", "synopsis"], ["Cast Highlights", "cast"],
-    ["How to Watch", "how-to-watch"], [`About ${platform}`, "platform"],
-    relatedMovies.length ? ["Related Movies", "related-movies"] : null,
-  ].filter(Boolean);
-  const tocHtml = `
-<nav aria-label="Table of contents" style="${card}padding:18px 24px;">
-  <strong style="color:#888;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;">On this page</strong>
-  <ul style="margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;">
-    ${toc.map(([label, id]) => `<li><a href="#${id}" style="color:#7ec8e3;text-decoration:none;font-size:0.85rem;">${label}</a></li>`).join("")}
-  </ul>
-</nav>`;
-
-  const plainWordCount = [ai.introParagraph, ai.synopsisParagraph, ai.castHighlightParagraph, ai.howToWatchParagraph, ai.platformParagraph]
-    .filter(Boolean).join(" ").split(/\s+/).filter(Boolean).length;
-
-  // SEO FIX: Event schema for the OTT premiere — only emitted with a real date.
-  const eventSchema = isDateAvailable ? `,
-    {
-      "@type": "Event",
-      "name": ${JSON.stringify(`${movie.title} — OTT Premiere on ${movie.streamingOn}`)},
-      "startDate": "${movie.ottReleaseDate}",
-      "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
-      "eventStatus": "https://schema.org/EventScheduled",
-      "location": { "@type": "VirtualLocation", "url": ${JSON.stringify(movie.streamingUrl || SITE_URL + movieUrl)} },
-      "workPerformed": { "@type": "Movie", "name": ${JSON.stringify(movie.title)} },
-      "image": ${JSON.stringify(ogImage)},
-      "organizer": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
-    }` : "";
-
-  return `<!-- ════════════════════════════════════════════════════════════════
-  OLLYPEDIA SEO META — READ BY CMS
-  title:          ${seoTitle}
-  description:    ${ai.metaDescription}
-  keywords:       ${keywordsStr}
-  canonical:      ${SITE_URL}/blog/${blogSlug}
-  robots:         index, follow
-  og:site_name:   Ollypedia
-  og:title:       ${seoTitle}
-  og:description: ${ai.metaDescription}
-  og:url:         ${SITE_URL}/blog/${blogSlug}
-  og:image:       ${ogImage}
-  og:image:width: 1200
-  og:image:height: 630
-  og:type:        article
-  og:locale:      en_IN
-  article:published_time: ${dp}
-  article:modified_time:  ${dm}
-  article:author: Ollypedia Team
-  article:section: OTT Release
-  twitter:card:   summary_large_image
-  twitter:site:   @OllypediaIn
-  twitter:creator: @OllypediaIn
-  twitter:title:  ${seoTitle}
-  twitter:description: ${ai.metaDescription}
-  twitter:image:  ${ogImage}
-  twitter:image:alt: ${movie.title} Poster
-════════════════════════════════════════════════════════════════ -->
-
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "NewsArticle",
-      "headline": ${JSON.stringify(seoTitle)},
-      "description": ${JSON.stringify(ai.metaDescription)},
-      "image": ${JSON.stringify(ogImage)},
-      "datePublished": "${dp}",
-      "dateModified": "${dm}",
-      "inLanguage": "en",
-      "wordCount": ${plainWordCount},
-      "keywords": ${JSON.stringify(keywordsStr)},
-      "author": [
-        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
-        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
-      ],
-      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}",
-                     "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" } },
-      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${blogSlug}" },
-      "about": {
-        "@type": "Movie",
-        "name": ${JSON.stringify(movie.title)},
-        "url": "${SITE_URL}${movieUrl}",
-        "image": ${JSON.stringify(ogImage)},
-        "inLanguage": ${JSON.stringify(movie.language || "Odia")}${movie.releaseDate ? `,
-        "datePublished": "${movie.releaseDate}"` : ""}${movie.runtime ? `,
-        "duration": ${JSON.stringify(movie.runtime)}` : ""}${cc.director ? `,
-        "director": { "@type": "Person", "name": ${JSON.stringify(cc.director)} }` : ""}${leadCast.length ? `,
-        "actor": [${leadCast.map(a => { const u = castProfileUrl(a); return `{ "@type": "Person", "name": ${JSON.stringify(a.name)}${u ? `, "url": "${SITE_URL}${u}"` : ""} }`; }).join(", ")}]` : ""}${hasImdb ? `,
-        "aggregateRating": { "@type": "AggregateRating", "ratingValue": ${imdbNum}, "bestRating": "10"${movie.imdbVotes ? `, "ratingCount": ${JSON.stringify(String(movie.imdbVotes).replace(/[^0-9]/g, "") || "1")}` : ""} }` : ""}${ottPageUrl ? `,
-        "potentialAction": {
-          "@type": "WatchAction",
-          "target": "${SITE_URL}${ottPageUrl}"
-        }` : watchUrl ? `,
-        "potentialAction": {
-          "@type": "WatchAction",
-          "target": ${JSON.stringify(watchUrl)}
-        }` : ""}
-      }
-    },
-    {
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
-        { "@type": "ListItem", "position": 2, "name": "Movies", "item": "${SITE_URL}/movies" },
-        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movie.title)}, "item": "${SITE_URL}${movieUrl}" },
-        { "@type": "ListItem", "position": 4, "name": "OTT Release", "item": "${SITE_URL}/blog/${blogSlug}" }
-      ]
-    }${eventSchema}
-  ]
-}
-</script>
-
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-    <a href="/" style="color:#777;text-decoration:none;">Home</a>
-    <span style="color:#333;">›</span>
-    <a href="/movies" style="color:#777;text-decoration:none;">Movies</a>
-    <span style="color:#333;">›</span>
-    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
-    <span style="color:#333;">›</span>
-    <span style="color:#999;">OTT Release</span>
-  </nav>
-</div>
-
-<div class="hero-section" style="background:linear-gradient(135deg,#001a1e 0%,#121212 100%);border:1px solid #00343d;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
-  <h1 style="color:#fff;font-size:1.4rem;font-weight:800;margin:0 0 12px;line-height:1.3;">${seoTitle}</h1>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#7ec8e3;font-weight:700;">📺 ${platform}</span>
-    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#e8c87a;font-weight:700;">📅 ${ottDateFmt}</span>
-    ${ottStatus === "Streaming" ? `<span style="background:#4ade80;color:#000;border-radius:20px;padding:5px 14px;font-size:0.78rem;font-weight:700;">🔴 Now Streaming</span>` : `<span style="background:#f59e0b;color:#000;border-radius:20px;padding:5px 14px;font-size:0.78rem;font-weight:700;">⏳ Coming Soon</span>`}
-    ${castChips}
-  </div>
-  ${autoBlogParagraphs(ai.introParagraph)}
-  ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:inline-block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.9rem;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:10px;">▶ Watch on Ollypedia OTT →</a>` : watchUrl ? `<a href="${watchUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:inline-block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.9rem;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:10px;">▶ Watch on ${platform} →</a>` : ""}
-</div>
-
-${tocHtml}
-
-${BLOG_RESPONSIVE_STYLES}
-<style>
-  .blog-content-layout { display: flex; flex-direction: column; gap: 24px; }
-  .blog-poster-aside { width: 100%; max-width: 300px; margin: 0 auto; }
-  .blog-poster-aside img { width: 100%; height: auto; border-radius: 12px; border: 1px solid #242424; box-shadow: 0 8px 32px rgba(0,0,0,0.6); }
-  @media (min-width: 900px) {
-    .blog-content-layout { flex-direction: row; align-items: flex-start; }
-    .blog-poster-aside { width: 240px; position: sticky; top: 80px; flex-shrink: 0; }
-  }
-</style>
-
-<div class="blog-content-layout">
-  <aside class="blog-poster-aside">
-    ${poster ? `<img src="${poster}" alt="${movie.title} Poster" width="240" height="360" fetchpriority="high" style="object-fit:cover;" onError="this.style.display='none'" />` : ""}
-    ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">▶ Watch on Ollypedia OTT →</a>` : watchUrl ? `<a href="${watchUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">▶ Watch on ${platform}</a>` : `<a href="${movieUrl}" style="display:block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">View Full Movie Page →</a>`}
-  </aside>
-  <div style="flex: 1; min-width: 0;">
-    <section id="release-details" style="${card}">
-      <h2 style="${h2}">OTT Release Details</h2>
-      <table style="width:100%;border-collapse:collapse;" class="info-table">
-        <tbody>
-          <tr><td style="${tdL}">Streaming Platform</td><td style="${tdR}">${platform}</td></tr>
-          <tr><td style="${tdL}">OTT Release Date</td><td style="${tdR}">${ottDateFmt}</td></tr>
-          <tr><td style="${tdL}">Status</td><td style="${tdR}">${ottStatus === "Streaming" ? "🔴 Now Streaming" : "⏳ Upcoming"}</td></tr>
-          ${ottLanguages ? `<tr><td style="${tdL}">Available Languages</td><td style="${tdR}">${ottLanguages}</td></tr>` : ""}
-          ${ottSubtitles ? `<tr><td style="${tdL}">Subtitles</td><td style="${tdR}">${ottSubtitles}</td></tr>` : ""}
-          ${ottQuality ? `<tr><td style="${tdL}">Video Quality</td><td style="${tdR}">${ottQuality}</td></tr>` : ""}
-          ${ottRuntime ? `<tr><td style="${tdL}">Runtime</td><td style="${tdR}">${ottRuntime}</td></tr>` : ""}
-          <tr><td style="${tdL}">Language</td><td style="${tdR}">${movie.language || "Odia"}</td></tr>
-          ${(movie.genre || []).length ? `<tr><td style="${tdL}">Genre</td><td style="${tdR}">${(movie.genre || []).join(", ")}</td></tr>` : ""}
-          ${movie.releaseDate ? `<tr><td style="${tdL}">Theatrical Release</td><td style="${tdR}">${formatHumanDate(movie.releaseDate)}</td></tr>` : ""}
-        </tbody>
-      </table>
-    </section>
-
-    <section id="synopsis" style="${card}">
-      <h2 style="${h2}">Story</h2>
-      ${autoBlogParagraphs(ai.synopsisParagraph)}
-    </section>
-
-    <section id="cast" style="${card}">
-      <h2 style="${h2}">Cast Highlights</h2>
-      ${autoBlogParagraphs(ai.castHighlightParagraph)}
-    </section>
-
-    <section id="how-to-watch" style="${card}">
-      <h2 style="${h2}">How to Watch</h2>
-      ${autoBlogParagraphs(ai.howToWatchParagraph)}
-      ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:inline-block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;margin-top:6px;">▶ Watch on Ollypedia OTT →</a>` : watchUrl ? `<a href="${watchUrl}" target="_blank" rel="nofollow noopener noreferrer" class="cta-btn" style="display:inline-block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;margin-top:6px;">Watch on ${platform} →</a>` : ""}
-    </section>
-
-    <section id="platform" style="${card}">
-      <h2 style="${h2}">About ${platform}</h2>
-      ${autoBlogParagraphs(ai.platformParagraph)}
-    </section>
-
-    ${buildRelatedMoviesHtml(relatedMovies, "#7ec8e3", `More Odia Movies on ${movie.streamingOn}`)}
-
-    <section style="background:#111;border-radius:14px;padding:20px 26px;margin-bottom:22px;display:flex;gap:12px;flex-wrap:wrap;">
-      ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:inline-block;background:#7ec8e3;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">▶ Watch Now on Ollypedia →</a>` : ""}
-      <a href="${movieUrl}" style="display:inline-block;background:#c9973a;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">View Full Movie Page →</a>
-      <a href="/movies" style="display:inline-block;background:transparent;border:1px solid #333;color:#ccc;font-weight:700;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">Browse More Odia Movies →</a>
-    </section>
-  </div>
-</div>`;
+  return buildRichEditorialHtml({
+    seoTitle: ai.seoTitle || seoTitle,
+    metaDescription: ai.metaDescription,
+    introEn: ai.introEn,
+    introOr: ai.introOr,
+    detailsEn: ai.detailsEn,
+    detailsOr: ai.detailsOr,
+    sections,
+    conclusionEn: ai.conclusionEn,
+    conclusionOr: ai.conclusionOr,
+    poster,
+    movie,
+    cc,
+    blogSlug,
+    datePublished,
+    dateModified,
+    category: "OTT Release"
+  });
 }
 
-/**
- * autoGenerateOttBlog — orchestrates AI + HTML + publish for the
- * "OTT Release" blog. Creates a new Blog if movie.ottBlogId is empty,
- * otherwise updates the existing one (so correcting the OTT date later
- * doesn't create a duplicate post). Never throws.
- */
 async function autoGenerateOttBlog(movie) {
+  if (!AUTO_BLOG_ENABLED || !movie?.streamingOn) return null;
   try {
-    if (!movie.streamingOn) return null;
-
     const cc = extractMovieCastCrew(movie);
     const ai = await generateOttAiSections(movie, cc);
-    const seoTitle = buildOttTitle(movie, cc);
-    // SEO FIX: short slug that does NOT embed the OTT release date (so it
-    // never goes stale), e.g. "bindusagar-2026-ott-release-tarang-plus".
-    const baseSlug = buildOttSlug(movie);
-    // SEO FIX: prefer related movies on the SAME platform first (the audit's
-    // "Also available on {Platform}" recommendation), falling back to
-    // genre-matched movies if the platform alone doesn't yield enough.
+    const seoTitle = ai.seoTitle || buildOttTitle(movie, cc);
+    const baseSlug = buildSlugFromTitle(seoTitle, "ott-release");
     const relatedMovies = await fetchRelatedMovies(movie, 4, true);
 
     let blog = movie.ottBlogId ? await Blog.findById(movie.ottBlogId) : null;
-    if (!blog) blog = await Blog.findOne({ slug: baseSlug }); // catch orphaned/duplicate slug instead of crashing
-    const slug = blog ? blog.slug : baseSlug;
+    if (!blog) blog = await Blog.findOne({ slug: baseSlug });
+    const slug = blog ? (blog.slug || baseSlug) : baseSlug;
     const datePublished = blog?.createdAt ? new Date(blog.createdAt).toISOString() : new Date().toISOString();
     const dateModified = new Date().toISOString();
     const html = buildOttBlogHTML(movie, cc, ai, slug, seoTitle, datePublished, dateModified, relatedMovies);
@@ -2466,9 +2293,10 @@ async function autoGenerateOttBlog(movie) {
 
     if (blog) {
       Object.assign(blog, fields);
+      blog.slug = baseSlug;
       await blog.save();
     } else {
-      blog = await Blog.create({ ...fields, slug });
+      blog = await Blog.create({ ...fields, slug: baseSlug });
       await Movie.findByIdAndUpdate(movie._id, { ottBlogId: blog._id });
     }
     console.log(`✅ Auto-published OTT Release blog for "${movie.title}" → /blog/${blog.slug}`);
@@ -2481,313 +2309,114 @@ async function autoGenerateOttBlog(movie) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  "NOW STREAMING ON OTT" LIVE BLOG
-//  Generated when the OTT release date has arrived (today >= ottReleaseDate).
-//  Stored in movie.ottLiveBlogId — completely separate from ottBlogId.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** SEO title for the "Now Streaming" blog.
- *  SEO FIX: dropped the redundant "Available to Watch Online" padding
- *  (every streaming announcement implies availability — the phrase added
- *  no keyword value) and capped at 90 chars so long names/platforms don't
- *  get truncated by Google with a graceful 1-lead-name fallback. */
 function buildOttLiveTitle(movie, cc) {
-  // BUGFIX: same fix as buildOttTitle — use the strictly-filtered ottCast
-  // so a crew member never ends up named as a "Starrer" in the title.
-  const build = (leadCount) => {
-    const leads = (cc.ottCast || cc.leadCast || []).slice(0, leadCount).map(c => c.name).filter(Boolean);
-    const subject = leads.length ? `${leads.join(" & ")} Starrer` : "Odia Movie";
-    return `${movie.title} Is Now Streaming on ${movie.streamingOn}: ${subject}`.replace(/\s+/g, " ").trim();
-  };
-  let title = build(2);
-  if (title.length > 90) title = build(1);
-  if (title.length > 90) title = build(0);
-  return title.length > 90 ? title.slice(0, 89).trim() + "…" : title;
+  const leads = (cc.ottCast || cc.leadCast || []).slice(0, 2).map(c => c.name).filter(Boolean);
+  const subject = leads.length ? `${leads.join(" & ")} Starrer` : "Odia Movie";
+  return `${movie.title} Is Now Streaming on ${movie.streamingOn}: ${subject} (${movie.title} ବର୍ତ୍ତମାନ ଷ୍ଟ୍ରିମିଂ ହେଉଛି)`;
 }
 
 async function generateOttLiveAiSections(movie, cc) {
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  const ottDateFmt = isRealDate(movie.ottReleaseDate) ? formatHumanDate(movie.ottReleaseDate) : "Now";
-  // BUGFIX: use the strictly-filtered ottCast so the AI is never told a
-  // Cinematographer/Editor/Music Director is part of the "Lead Cast".
-  const leadNames = (cc.ottCast || cc.leadCast).map(c => c.name).filter(Boolean).join(", ");
-  const genre = (movie.genre || []).join(", ") || "Odia";
+  const ottDateFmt = isRealDate(movie.ottReleaseDate) ? formatHumanDate(movie.ottReleaseDate) : "Now Available";
+  const leadNames = (cc.ottCast || cc.leadCast || []).map(c => c.name).filter(Boolean).join(", ");
+  const genreStr = (movie.genre || []).join(", ") || "Odia";
 
-  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | Now Streaming on: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${genre} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"} | Streaming URL: ${movie.streamingUrl || "N/A"}`;
+  const ctx = `Movie: "${movie.title}"${year ? ` (${year})` : ""} | Now Streaming on: ${movie.streamingOn} | OTT Release Date: ${ottDateFmt} | Genre: ${genreStr} | Language: ${movie.language || "Odia"} | Lead Cast: ${leadNames || "N/A"} | Director: ${cc.director || "N/A"} | Synopsis: ${movie.synopsis || "N/A"}`;
 
-  const userPrompt = `Write deeply detailed, SEO-rich JSON content for a "Now Streaming on OTT" announcement article on Ollypedia, an Odia (Ollywood) cinema website. The film "${movie.title}" is NOW AVAILABLE to stream on ${movie.streamingOn} as of ${ottDateFmt}. Write in an excited, celebratory, present-tense editorial tone. This must feel like a breaking news announcement for Odia cinema fans. No HTML or markdown in values.
+  const userPrompt = `Write deeply detailed, dual-language (English + Odia translation) JSON content for a "Now Streaming on OTT" live release article on Ollypedia about "${movie.title}" streaming live NOW on ${movie.streamingOn}.
+Write in an excited, present-tense editorial style. Each section MUST have a unique dynamic heading in English with Odia translation in parentheses.
 
+Context:
 ${ctx}
 
-Return a JSON object with exactly these keys (plain text only, NO HTML, NO markdown):
-- metaDescription: 150-160 characters announcing that "${movie.title}" is NOW streaming on ${movie.streamingOn}, with date, maximising click-through
-- introParagraph: 250-350 words — breaking-news style announcement that "${movie.title}" is NOW AVAILABLE on ${movie.streamingOn} as of ${ottDateFmt}. Name the lead cast, describe what kind of film it is (genre, emotional tone, story highlights), explain why this is an exciting moment for Odia cinema, and urge fans to watch it today.
-- whyWatchParagraph: 250-350 words — a compelling editorial making the case for why viewers should watch "${movie.title}" RIGHT NOW on ${movie.streamingOn}. Cover the story's emotional appeal, the quality of the performances, the director's craft, what makes this film stand out from other Odia films, and what kind of viewer will love it most.
-- synopsisParagraph: 200-280 words — a vivid, spoiler-free retelling of the film's story that makes viewers want to press play immediately. Focus on the opening setup, main conflict, and emotional stakes without revealing major plot twists. IMPORTANT: paraphrase and reframe in your own words — do not copy the source synopsis verbatim, since this same film also has separate theatrical-release and OTT-release articles with their own story sections.
-- castReviewParagraph: 220-300 words — present-tense review-style writing about the lead actors' performances in the film. Name each lead actor, describe their character briefly, and discuss what they bring to the film and why their performances are worth seeing on OTT.
-- howToWatchParagraph: 180-250 words — direct, step-by-step guide to streaming "${movie.title}" on ${movie.streamingOn} RIGHT NOW. Include app download instructions, website access, subscription info, and a call to action to start watching immediately.`;
+Return ONLY a valid JSON object with these keys (plain text only, NO markdown):
+- seoTitle: Full article title in English with Odia translation in parentheses, e.g. "${movie.title} Is Now Streaming on ${movie.streamingOn}: Watch Online Today (${movie.title} ବର୍ତ୍ତମାନ ଷ୍ଟ୍ରିମିଂ ହେଉଛି)"
+- metaDescription: 150-160 char SEO snippet announcing live streaming status.
+- introEn: Breaking-news style English intro paragraph (200-300 words) announcing that "${movie.title}" is NOW AVAILABLE to stream on ${movie.streamingOn}.
+- introOr: Odia translation of introEn.
+- detailsEn: Detailed English paragraph (200-280 words) covering how to watch, subscription access, director ${cc.director || ""}, cast ${leadNames || ""}.
+- detailsOr: Odia translation of detailsEn.
+- sec1TitleEn: Specific dynamic heading for Story & Emotional Hook (e.g. "Plot & Character Arc: What Makes ${movie.title} Unmissable")
+- sec1TitleOr: Odia translation of sec1TitleEn
+- sec1ContentEn: English spoiler-free story breakdown & viewing recommendation (200-280 words).
+- sec1ContentOr: Odia translation of sec1ContentEn.
+- sec2TitleEn: Dynamic heading for Lead Performances (e.g. "Star Performances: ${leadNames || "Lead Cast"}'s Outstanding Roles")
+- sec2TitleOr: Odia translation of sec2TitleEn
+- sec2ContentEn: English present-tense review of lead acting performances (200-280 words).
+- sec2ContentOr: Odia translation of sec2ContentEn.
+- sec3TitleEn: Dynamic heading for Platform & How to Watch Now
+- sec3TitleOr: Odia translation of sec3TitleEn
+- sec3ContentEn: English step-by-step guide to stream on ${movie.streamingOn} right now (180-250 words).
+- sec3ContentOr: Odia translation of sec3ContentEn.
+- conclusionEn: English verdict encouraging readers to press play today (150-220 words).
+- conclusionOr: Odia translation of conclusionEn.`;
 
   const fallbacks = {
-    metaDescription: `${movie.title} is NOW streaming on ${movie.streamingOn}! Watch this Odia ${genre} film online today. Full details on Ollypedia.`,
-    introParagraph: `${movie.title}${leadNames ? `, starring ${leadNames},` : ""} is officially now available to stream on ${movie.streamingOn} as of ${ottDateFmt}. This eagerly awaited Odia ${genre} film has made its digital debut, giving fans across Odisha and around the world the chance to experience it from the comfort of their homes. Directed by ${cc.director || "the talented creative team"}, the film brings together a stellar cast and a compelling story that has been the talk of Ollywood since its theatrical run. With its arrival on ${movie.streamingOn}, ${movie.title} joins the growing library of premium Odia cinema available on OTT, marking another milestone for Ollywood's digital expansion.`,
-    whyWatchParagraph: `${movie.title} is the kind of Odia film that demands to be experienced \u2014 and now that it is available on ${movie.streamingOn}, there has never been a better time to press play. The film combines a gripping ${genre.toLowerCase()} narrative with outstanding performances from its lead cast, creating an experience that is both entertaining and emotionally resonant. The direction, cinematography, and production values set a new benchmark for Odia cinema, proving that Ollywood continues to grow in ambition and craft. Whether you are a long-time Odia cinema fan or a newcomer discovering Ollywood through OTT, ${movie.title} is the perfect film to start with.`,
-    // SEO FIX: previously fell back to the raw, unmodified `movie.synopsis`
-    // string — identical to the other two blog pages' fallbacks. Reframed
-    // with "now streaming" / spoiler-light viewing-decision framing instead
-    // of repeating the synopsis verbatim, so all three pages read distinctly.
-    synopsisParagraph: movie.synopsis
-      ? `Here's the setup, without spoiling the journey: ${movie.synopsis} It's a story Odia audiences have already responded to strongly, and watching it now on ${movie.streamingOn} means experiencing those emotional beats with the comfort of a pause button — perfect for catching every detail you might have missed on the big screen.`
-      : `${movie.title} is a ${genre} film set in the heart of Odisha, weaving a story that touches on themes of identity, love, struggle, and triumph. The narrative unfolds with a compelling central conflict that keeps viewers engaged from the first scene to the last. With strong character development, authentic dialogue, and a richly depicted setting, the film creates a world that feels real and emotionally involving. Without giving too much away, ${movie.title} delivers a satisfying and memorable cinematic journey that OTT viewers are sure to appreciate at home on ${movie.streamingOn}.`,
-    castReviewParagraph: leadNames ? `${leadNames} deliver performances in ${movie.title} that are among the finest of their careers in Odia cinema. Each actor brings depth, authenticity, and a genuine emotional investment to their role, creating characters that linger in the memory long after the film ends. The ensemble dynamic is one of the film's greatest strengths, with the cast working in perfect harmony to bring the story to life with nuance and power. OTT viewers on ${movie.streamingOn} are in for a treat as they experience these performances for the first time.` : `The cast of ${movie.title} delivers remarkable performances that elevate this Odia ${genre.toLowerCase()} film to a memorable cinematic experience. Available now on ${movie.streamingOn}, viewers can witness the full depth and range of the ensemble cast's talents in the comfort of their own homes.`,
-    howToWatchParagraph: `To start watching ${movie.title} on ${movie.streamingOn} right now, download the ${movie.streamingOn} app from the Google Play Store or Apple App Store on your smartphone or tablet. Alternatively, visit the ${movie.streamingOn} website directly in your browser. Create an account or log in if you already have one, then choose a subscription plan that suits you \u2014 ${movie.streamingOn} offers flexible monthly and annual options. Once subscribed, search for "${movie.title}" using the search bar and press play to begin streaming instantly. The film is available in Odia with optional subtitles for wider accessibility.`,
+    seoTitle: `${movie.title} Is Now Streaming on ${movie.streamingOn}: Watch Online Today (${movie.title} ବର୍ତ୍ତମାନ ଷ୍ଟ୍ରିମିଂ ହେଉଛି)`,
+    metaDescription: `${movie.title} is NOW streaming on ${movie.streamingOn}! Watch this Odia film online today. Full details on Ollypedia.`,
+    introEn: `${movie.title}${leadNames ? `, starring ${leadNames},` : ""} is officially now available to stream on ${movie.streamingOn}. This eagerly awaited Odia ${genreStr} film has made its digital debut, giving fans across Odisha and around the world the chance to experience it at home.`,
+    introOr: `${movie.title} ବର୍ତ୍ତମାନ ${movie.streamingOn} ରେ ମୁକ୍ତିଲାଭ କରିସାରିଛି। ଏହି ବହୁ ପ୍ରତୀକ୍ଷିତ ଓଡ଼ିଆ ସିନେମାଟିକୁ ଆପଣ ଆଜି ହିଁ ଘରେ ବସି ଦେଖିପାରିବେ।`,
+    detailsEn: `Directed by ${cc.director || "talented creators"}, ${movie.title} brings together exceptional performances and strong emotional story arcs. The film is now live in high definition on ${movie.streamingOn}.`,
+    detailsOr: `ନିର୍ଦ୍ଦେଶକ ${cc.director || "ଟିମ୍"} ଙ୍କ ନିର୍ଦ୍ଦେଶିତ ଏହି ସିନେମାଟି ${movie.streamingOn} ରେ ସମ୍ପୂର୍ଣ୍ଣ ଏଚ୍‌ଡି ରେ ଉପଲବ୍ଧ।`,
+    sec1TitleEn: `Why You Should Stream ${movie.title} Right Now`,
+    sec1TitleOr: `ଆପଣ କାହିଁକି ଏହି ସିନେମା ଦେଖିବା ଉଚିତ୍`,
+    sec1ContentEn: `${movie.title} combines a gripping ${genreStr.toLowerCase()} narrative with outstanding performances, making it an ideal choice for home streaming.`,
+    sec1ContentOr: `ଏହି ସିନେମାର ଆକର୍ଷଣୀୟ କାହାଣୀ ଏବଂ ଅଭିନେତାମାନଙ୍କର ସୁନ୍ଦର ଅଭିନୟ ଆପଣଙ୍କୁ ଆକର୍ଷିତ କରିବ।`,
+    sec2TitleEn: `Performances & Character Highlights`,
+    sec2TitleOr: `ଅଭିନେତାମାନଙ୍କର ଦମଦାର ଅଭିନୟ`,
+    sec2ContentEn: `${leadNames || "The lead actors"} deliver deeply felt performances that stay with the audience long after the film ends.`,
+    sec2ContentOr: `ମୁଖ୍ୟ କଳାକାରମାନଙ୍କର ଅଭିନୟ ଅତ୍ୟନ୍ତ ପ୍ରଶଂସନୀୟ।`,
+    sec3TitleEn: `How to Watch on ${movie.streamingOn} Today`,
+    sec3TitleOr: `${movie.streamingOn} ରେ କିପରି ଦେଖିବେ`,
+    sec3ContentEn: `Log in to ${movie.streamingOn} via smartphone, TV, or browser, search for "${movie.title}", and press play immediately.`,
+    sec3ContentOr: `ଆପଣ ${movie.streamingOn} ଆପ୍ ଖୋଲି ${movie.title} ସର୍ଚ୍ଚ କରି ତୁରନ୍ତ ଷ୍ଟ୍ରିମିଂ ଆରମ୍ଭ କରିପାରିବେ।`,
+    conclusionEn: `${movie.title} is live right now on ${movie.streamingOn}. Don't miss this outstanding Odia release!`,
+    conclusionOr: `${movie.streamingOn} ରେ ${movie.title} ବର୍ତ୍ତମାନ ଉପଲବ୍ଧ, ଆଜି ହିଁ ଦେଖନ୍ତୁ!`,
   };
 
   return callGroqStructured(
-    "You are a senior Odia cinema (Ollywood) journalist writing a 'Now Streaming on OTT' announcement article for Ollypedia. Return ONLY a valid JSON object \u2014 no markdown, no code fences, no extra text. All values must be plain text with no HTML. Write in an engaged, celebratory, present-tense tone that makes Odia cinema fans excited to watch the film right now. Every sentence must add real value.",
+    "You are a senior Odia cinema (Ollywood) journalist writing a 'Now Streaming' article for Ollypedia. Return ONLY a valid JSON object.",
     userPrompt,
-    ["metaDescription", "introParagraph", "whyWatchParagraph", "synopsisParagraph", "castReviewParagraph", "howToWatchParagraph"],
+    [
+      "seoTitle", "metaDescription", "introEn", "introOr", "detailsEn", "detailsOr",
+      "sec1TitleEn", "sec1TitleOr", "sec1ContentEn", "sec1ContentOr",
+      "sec2TitleEn", "sec2TitleOr", "sec2ContentEn", "sec2ContentOr",
+      "sec3TitleEn", "sec3TitleOr", "sec3ContentEn", "sec3ContentOr",
+      "conclusionEn", "conclusionOr"
+    ],
     fallbacks,
-    4000
+    4500
   );
 }
 
 function buildOttLiveBlogHTML(movie, cc, ai, blogSlug, seoTitle, datePublished, dateModified, relatedMovies = []) {
-  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-  // Prefer new ott object fields, fall back to legacy flat fields
-  const ott = movie.ott || {};
-  const platform = ott.platform || movie.streamingOn || "";
-  const watchUrl = ott.watchUrl || movie.streamingUrl || "";
-  const ottReleaseDate = ott.releaseDate || movie.ottReleaseDate || "";
-  const ottLanguages = Array.isArray(ott.languages) ? ott.languages.join(", ") : "";
-  const ottSubtitles = Array.isArray(ott.subtitles) ? ott.subtitles.join(", ") : "";
-  const ottQuality = ott.quality || "";
-  const ottRuntime = ott.runtime || movie.runtime || "";
-  const ottDateFmt = isRealDate(ottReleaseDate) ? formatHumanDate(ottReleaseDate) : "Now Available";
   const poster = movie.posterUrl || movie.thumbnailUrl || movie.bannerUrl || "";
-  const ogImage = poster || `${SITE_URL}/logo.png`;
-  const movieUrl = `/movie/${movie.slug}`;
-  const ottPageUrl = movie.slug ? `/ott/${movie.slug}` : null;
-  // BUGFIX: same fix as the OTT Release blog — use the strictly-filtered
-  // ottCast (Director + Actor + Actress only) for this blog's Cast section
-  // and its actor[] schema, instead of the shared cc.leadCast (which can
-  // include crew). Scoped to this function only.
-  const leadCast = cc.ottCast || cc.leadCast || [];
-  const genre = (movie.genre || []).join(", ") || "Odia";
-  const imdbNum = parseFloat(movie.imdbRating);
-  const hasImdb = !isNaN(imdbNum) && imdbNum > 0 && imdbNum <= 10;
-  const dp = datePublished || new Date().toISOString();
-  const dm = dateModified || dp;
+  const sections = [
+    { headingEn: ai.sec1TitleEn, headingOr: ai.sec1TitleOr, contentEn: ai.sec1ContentEn, contentOr: ai.sec1ContentOr },
+    { headingEn: ai.sec2TitleEn, headingOr: ai.sec2TitleOr, contentEn: ai.sec2ContentEn, contentOr: ai.sec2ContentOr },
+    { headingEn: ai.sec3TitleEn, headingOr: ai.sec3TitleOr, contentEn: ai.sec3ContentEn, contentOr: ai.sec3ContentOr },
+  ];
 
-  const card = `background:#181818;border:1px solid #242424;border-radius:14px;padding:26px 28px;margin-bottom:22px;`;
-  const h2 = `font-size:1.05rem;font-weight:800;color:#4ade80;border-left:4px solid #4ade80;padding-left:12px;margin:0 0 18px;line-height:1.3;`;
-  const tdL = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#888;font-size:0.87rem;width:38%;vertical-align:top;`;
-  const tdR = `padding:10px 0;border-bottom:1px solid #1e1e1e;color:#ddd;font-size:0.87rem;font-weight:600;`;
-
-  const castChips = leadCast.map(c => {
-    const url = castProfileUrl(c);
-    return `<span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#ddd;">${url ? `<a href="${url}" style="color:#4ade80;text-decoration:underline;text-underline-offset:2px;">${c.name}</a>` : c.name}</span>`;
-  }).join("");
-
-  const leadNames = leadCast.map(c => c.name).filter(Boolean);
-  const keywordsArr = [
-    movie.title, `${movie.title} OTT`, `${movie.title} streaming now`, `watch ${movie.title} online`,
-    `${movie.title} ${platform}`, platform, `${platform} odia movies`,
-    "Odia movie OTT", "Ollywood streaming", "watch odia movie online",
-    ...leadNames.map(n => `${n} movies`),
-  ].filter(Boolean);
-  const keywordsStr = [...new Set(keywordsArr)].join(", ");
-
-  const toc = [
-    ["Streaming Details", "stream-details"], ["Why You Should Watch", "why-watch"],
-    ["Story", "synopsis"], ["Cast Performances", "cast-review"], ["How to Watch Now", "how-to-watch"],
-    relatedMovies.length ? ["Related Movies", "related-movies"] : null,
-  ].filter(Boolean);
-  const tocHtml = `
-<nav aria-label="Table of contents" style="${card}padding:18px 24px;">
-  <strong style="color:#888;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;">On this page</strong>
-  <ul style="margin:10px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;">
-    ${toc.map(([label, id]) => `<li><a href="#${id}" style="color:#4ade80;text-decoration:none;font-size:0.85rem;">${label}</a></li>`).join("")}
-  </ul>
-</nav>`;
-
-  const plainWordCount = [ai.introParagraph, ai.whyWatchParagraph, ai.synopsisParagraph, ai.castReviewParagraph, ai.howToWatchParagraph]
-    .filter(Boolean).join(" ").split(/\s+/).filter(Boolean).length;
-
-  return `<!-- ════════════════════════════════════════════════════════════════
-  OLLYPEDIA SEO META — READ BY CMS
-  title:          ${seoTitle}
-  description:    ${ai.metaDescription}
-  keywords:       ${keywordsStr}
-  canonical:      ${SITE_URL}/blog/${blogSlug}
-  robots:         index, follow
-  og:site_name:   Ollypedia
-  og:title:       ${seoTitle}
-  og:description: ${ai.metaDescription}
-  og:url:         ${SITE_URL}/blog/${blogSlug}
-  og:image:       ${ogImage}
-  og:image:width: 1200
-  og:image:height: 630
-  og:type:        article
-  og:locale:      en_IN
-  article:published_time: ${dp}
-  article:modified_time:  ${dm}
-  article:author: Ollypedia Team
-  article:section: OTT Release
-  twitter:card:   summary_large_image
-  twitter:site:   @OllypediaIn
-  twitter:creator: @OllypediaIn
-  twitter:title:  ${seoTitle}
-  twitter:description: ${ai.metaDescription}
-  twitter:image:  ${ogImage}
-  twitter:image:alt: ${movie.title} Poster
-════════════════════════════════════════════════════════════════ -->
-
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "NewsArticle",
-      "headline": ${JSON.stringify(seoTitle)},
-      "description": ${JSON.stringify(ai.metaDescription)},
-      "image": ${JSON.stringify(ogImage)},
-      "datePublished": "${dp}",
-      "dateModified": "${dm}",
-      "inLanguage": "en",
-      "wordCount": ${plainWordCount},
-      "keywords": ${JSON.stringify(keywordsStr)},
-      "author": [
-        { "@type": "Person", "name": "Ollypedia Team", "url": "${SITE_URL}/about" },
-        { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}" }
-      ],
-      "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "${SITE_URL}",
-                     "logo": { "@type": "ImageObject", "url": "${SITE_URL}/logo.png" } },
-      "mainEntityOfPage": { "@type": "WebPage", "@id": "${SITE_URL}/blog/${blogSlug}" },
-      "about": {
-        "@type": "Movie",
-        "name": ${JSON.stringify(movie.title)},
-        "url": "${SITE_URL}${movieUrl}",
-        "image": ${JSON.stringify(ogImage)},
-        "inLanguage": ${JSON.stringify(movie.language || "Odia")},
-        "genre": ${JSON.stringify(genre)}${movie.releaseDate ? `,
-        "datePublished": "${movie.releaseDate}"` : ""}${movie.runtime ? `,
-        "duration": ${JSON.stringify(movie.runtime)}` : ""}${cc.director ? `,
-        "director": { "@type": "Person", "name": ${JSON.stringify(cc.director)} }` : ""}${leadCast.length ? `,
-        "actor": [${leadCast.map(a => { const u = castProfileUrl(a); return `{ "@type": "Person", "name": ${JSON.stringify(a.name)}${u ? `, "url": "${SITE_URL}${u}"` : ""} }`; }).join(", ")}]` : ""}${hasImdb ? `,
-        "aggregateRating": { "@type": "AggregateRating", "ratingValue": ${imdbNum}, "bestRating": "10"${movie.imdbVotes ? `, "ratingCount": ${JSON.stringify(String(movie.imdbVotes).replace(/[^0-9]/g, "") || "1")}` : ""} }` : ""}${ottPageUrl ? `,
-        "potentialAction": {
-          "@type": "WatchAction",
-          "target": "${SITE_URL}${ottPageUrl}"
-        }` : watchUrl ? `,
-        "potentialAction": {
-          "@type": "WatchAction",
-          "target": ${JSON.stringify(watchUrl)}
-        }` : ""}
-      }
-    },
-    {
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": "Home", "item": "${SITE_URL}" },
-        { "@type": "ListItem", "position": 2, "name": "Movies", "item": "${SITE_URL}/movies" },
-        { "@type": "ListItem", "position": 3, "name": ${JSON.stringify(movie.title)}, "item": "${SITE_URL}${movieUrl}" },
-        { "@type": "ListItem", "position": 4, "name": "Watch Online", "item": "${SITE_URL}/blog/${blogSlug}" }
-      ]
-    }
-  ]
-}
-</script>
-
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-  <nav aria-label="Breadcrumb" style="font-size:0.78rem;color:#555;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-    <a href="/" style="color:#777;text-decoration:none;">Home</a>
-    <span style="color:#333;">›</span>
-    <a href="/movies" style="color:#777;text-decoration:none;">Movies</a>
-    <span style="color:#333;">›</span>
-    <a href="${movieUrl}" style="color:#777;text-decoration:none;">${movie.title}</a>
-    <span style="color:#333;">›</span>
-    <span style="color:#999;">Watch Online</span>
-  </nav>
-</div>
-
-<div class="hero-section" style="background:linear-gradient(135deg,#001a0e 0%,#121212 100%);border:1px solid #004d1a;border-radius:14px;padding:30px 28px 24px;margin-bottom:22px;">
-  <div style="display:inline-block;background:#4ade80;color:#000;font-size:0.7rem;font-weight:800;padding:4px 12px;border-radius:20px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em;">🔴 Now Streaming</div>
-  <h1 style="color:#fff;font-size:1.4rem;font-weight:800;margin:0 0 12px;line-height:1.3;">${seoTitle}</h1>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#4ade80;font-weight:700;">📺 ${platform}</span>
-    <span style="background:#1f1f1f;border:1px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:0.78rem;color:#e8c87a;font-weight:700;">🗓 ${ottDateFmt}</span>
-    ${castChips}
-  </div>
-  ${autoBlogParagraphs(ai.introParagraph)}
-  ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.9rem;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:10px;">▶ Watch Now on Ollypedia OTT →</a>` : watchUrl ? `<a href="${watchUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.9rem;padding:12px 28px;border-radius:8px;text-decoration:none;margin-top:10px;">▶ Watch Now on ${platform}</a>` : ""}
-</div>
-
-${tocHtml}
-
-${BLOG_RESPONSIVE_STYLES}
-<style>
-  .blog-live-layout { display: flex; flex-direction: column; gap: 24px; }
-  .blog-live-poster { width: 100%; max-width: 300px; margin: 0 auto; }
-  .blog-live-poster img { width: 100%; height: auto; border-radius: 12px; border: 2px solid #4ade80; box-shadow: 0 8px 32px rgba(74,222,128,0.15); }
-  @media (min-width: 900px) {
-    .blog-live-layout { flex-direction: row; align-items: flex-start; }
-    .blog-live-poster { width: 240px; position: sticky; top: 80px; flex-shrink: 0; }
-  }
-</style>
-
-<div class="blog-live-layout">
-  <aside class="blog-live-poster">
-    ${poster ? `<img src="${poster}" alt="${movie.title} Poster" width="240" height="360" fetchpriority="high" style="object-fit:cover;" onError="this.style.display='none'" />` : ""}
-    ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:block;background:#4ade80;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">▶ Watch on Ollypedia OTT →</a>` : watchUrl ? `<a href="${watchUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:block;background:#4ade80;color:#000;font-weight:800;font-size:0.82rem;padding:10px;border-radius:8px;text-decoration:none;margin-top:12px;text-align:center;">▶ Watch on ${platform}</a>` : ""}
-  </aside>
-  <div style="flex: 1; min-width: 0;">
-    <section id="stream-details" style="${card}">
-      <h2 style="${h2}">Streaming Details</h2>
-      <table style="width:100%;border-collapse:collapse;" class="info-table">
-        <tbody>
-          <tr><td style="${tdL}">Streaming Platform</td><td style="${tdR}">${platform}</td></tr>
-          <tr><td style="${tdL}">OTT Release Date</td><td style="${tdR}">${ottDateFmt}</td></tr>
-          ${ottLanguages ? `<tr><td style="${tdL}">Available Languages</td><td style="${tdR}">${ottLanguages}</td></tr>` : ""}
-          ${ottSubtitles ? `<tr><td style="${tdL}">Subtitles</td><td style="${tdR}">${ottSubtitles}</td></tr>` : ""}
-          ${ottQuality ? `<tr><td style="${tdL}">Video Quality</td><td style="${tdR}">${ottQuality}</td></tr>` : ""}
-          ${ottRuntime ? `<tr><td style="${tdL}">Runtime</td><td style="${tdR}">${ottRuntime}</td></tr>` : ""}
-          <tr><td style="${tdL}">Language</td><td style="${tdR}">${movie.language || "Odia"}</td></tr>
-          ${genre ? `<tr><td style="${tdL}">Genre</td><td style="${tdR}">${genre}</td></tr>` : ""}
-          ${movie.releaseDate ? `<tr><td style="${tdL}">Theatrical Release</td><td style="${tdR}">${formatHumanDate(movie.releaseDate)}</td></tr>` : ""}
-          ${cc.director ? `<tr><td style="${tdL}">Director</td><td style="${tdR}">${(() => { const u = castProfileUrl(cc.directorEntry); return u ? `<a href="${u}" style="color:#4ade80;text-decoration:underline;text-underline-offset:2px;">${cc.director}</a>` : cc.director; })()}</td></tr>` : ""}
-        </tbody>
-      </table>
-    </section>
-
-    <section id="why-watch" style="${card}">
-      <h2 style="${h2}">Why You Should Watch ${movie.title}</h2>
-      ${autoBlogParagraphs(ai.whyWatchParagraph)}
-    </section>
-
-    <section id="synopsis" style="${card}">
-      <h2 style="${h2}">Story</h2>
-      ${autoBlogParagraphs(ai.synopsisParagraph)}
-    </section>
-
-    <section id="cast-review" style="${card}">
-      <h2 style="${h2}">Cast Performances</h2>
-      ${autoBlogParagraphs(ai.castReviewParagraph)}
-    </section>
-
-    <section id="how-to-watch" style="${card}">
-      <h2 style="${h2}">How to Watch Now on ${platform}</h2>
-      ${autoBlogParagraphs(ai.howToWatchParagraph)}
-      ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;margin-top:6px;">▶ Watch on Ollypedia OTT →</a>` : watchUrl ? `<a href="${watchUrl}" target="_blank" rel="nofollow noopener noreferrer" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;margin-top:6px;">▶ Start Watching on ${platform} →</a>` : ""}
-    </section>
-
-    ${buildRelatedMoviesHtml(relatedMovies, "#4ade80", `More Odia Movies on ${platform}`)}
-
-    <section style="background:#111;border-radius:14px;padding:20px 26px;margin-bottom:22px;display:flex;gap:12px;flex-wrap:wrap;">
-      ${ottPageUrl ? `<a href="${ottPageUrl}" style="display:inline-block;background:#4ade80;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">▶ Watch Now on Ollypedia OTT →</a>` : ""}
-      <a href="${movieUrl}" style="display:inline-block;background:#c9973a;color:#000;font-weight:800;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">View Full Movie Page →</a>
-      <a href="/movies" style="display:inline-block;background:transparent;border:1px solid #333;color:#ccc;font-weight:700;font-size:0.85rem;padding:10px 22px;border-radius:8px;text-decoration:none;">Browse More Odia Movies →</a>
-    </section>
-  </div>
-</div>`;
+  return buildRichEditorialHtml({
+    seoTitle: ai.seoTitle || seoTitle,
+    metaDescription: ai.metaDescription,
+    introEn: ai.introEn,
+    introOr: ai.introOr,
+    detailsEn: ai.detailsEn,
+    detailsOr: ai.detailsOr,
+    sections,
+    conclusionEn: ai.conclusionEn,
+    conclusionOr: ai.conclusionOr,
+    poster,
+    movie,
+    cc,
+    blogSlug,
+    datePublished,
+    dateModified,
+    category: "OTT Release"
+  });
 }
 
 /**
@@ -2795,14 +2424,12 @@ ${BLOG_RESPONSIVE_STYLES}
  * when the OTT release date has arrived. Stored separately in movie.ottLiveBlogId.
  */
 async function autoGenerateOttLiveBlog(movie) {
+  if (!AUTO_BLOG_ENABLED || !movie?.streamingOn) return null;
   try {
-    if (!movie.streamingOn) return null;
     const cc = extractMovieCastCrew(movie);
     const ai = await generateOttLiveAiSections(movie, cc);
-    const seoTitle = buildOttLiveTitle(movie, cc);
-    // SEO FIX: short, clean slug (≤60 chars), distinct from the OTT-release
-    // slug so the two pages never collide, e.g. "bindusagar-2026-streaming-now-tarang-plus".
-    const baseSlug = buildOttLiveSlug(movie);
+    const seoTitle = ai.seoTitle || buildOttLiveTitle(movie, cc);
+    const baseSlug = buildSlugFromTitle(seoTitle, "ott-streaming");
     const relatedMovies = await fetchRelatedMovies(movie, 4, true);
 
     let blog = movie.ottLiveBlogId ? await Blog.findById(movie.ottLiveBlogId) : null;
@@ -4482,11 +4109,117 @@ app.get("/api/admin/blog", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
+  if (!htmlContent || typeof htmlContent !== "string") return htmlContent || "";
+  let out = htmlContent;
+  const linkedTracker = new Set();
+
+  try {
+    const entityList = [];
+
+    // 1. CONTEXT-AWARE: If targetMovieId is provided, fetch target movie and its EXACT cast members!
+    let targetMovie = null;
+    if (targetMovieId && isOid(targetMovieId)) {
+      targetMovie = await Movie.findById(targetMovieId).lean();
+    }
+
+    if (targetMovie) {
+      // Add Target Movie title + subtitle
+      const movieUrl = `/movie/${targetMovie.slug}`;
+      const movieTrackerKey = `movie-${targetMovie.slug}`;
+      entityList.push({ name: targetMovie.title.trim(), url: movieUrl, trackerKey: movieTrackerKey });
+      
+      if (targetMovie.title.includes(":") || targetMovie.title.includes(" - ") || targetMovie.title.includes(" – ")) {
+        const shortTitle = targetMovie.title.split(/[:\-–]/)[0].trim();
+        if (shortTitle.length > 2 && !["the", "movie", "odia", "new"].includes(shortTitle.toLowerCase())) {
+          entityList.push({ name: shortTitle, url: movieUrl, trackerKey: movieTrackerKey });
+        }
+      }
+
+      // Add Target Movie's EXACT Cast & Crew (Full names + first names for this movie's actors ONLY)
+      const cc = extractMovieCastCrew(targetMovie);
+      const movieCastList = cc.ottCast || cc.leadCast || cc.fullCast || [];
+
+      for (const c of movieCastList) {
+        if (!c?.name || c.name.trim().length < 3) continue;
+        const fullName = c.name.trim();
+        const url = castProfileUrl(c) || (c._id ? `/cast/${c._id}` : "");
+        if (!url) continue;
+        const trackerKey = `cast-${c._id || fullName}`;
+
+        entityList.push({ name: fullName, url, trackerKey });
+
+        // First-name alias ONLY for actors in THIS specific movie
+        const parts = fullName.split(/\s+/);
+        if (parts.length >= 2) {
+          const firstName = parts[0].trim();
+          const commonWords = ["director", "producer", "writer", "music", "editor", "singer", "actor", "actress", "star", "lead"];
+          if (firstName.length >= 4 && !commonWords.includes(firstName.toLowerCase())) {
+            entityList.push({ name: firstName, url, trackerKey });
+          }
+        }
+      }
+    }
+
+    // 2. GLOBAL FALLBACK: For ALL other movies and cast members in DB, require FULL EXACT NAME (min 2 words)
+    const allMovies = await Movie.find({}, "title slug").lean();
+    for (const m of allMovies) {
+      if (!m.title || !m.slug || m.title.length < 3) continue;
+      if (targetMovie && String(m._id) === String(targetMovie._id)) continue;
+      const url = `/movie/${m.slug}`;
+      const trackerKey = `movie-${m.slug}`;
+      entityList.push({ name: m.title.trim(), url, trackerKey });
+    }
+
+    const allCast = await Cast.find({}, "name").lean();
+    for (const c of allCast) {
+      if (!c?.name) continue;
+      const fullName = c.name.trim();
+      // Require FULL NAME (at least 2 words, e.g. "Sabyasachi Mishra") for global DB actors to prevent false positives!
+      if (!fullName.includes(" ") || fullName.length < 6) continue;
+      const url = `/cast/${c._id}`;
+      const trackerKey = `cast-${c._id}`;
+
+      entityList.push({ name: fullName, url, trackerKey });
+    }
+
+    // Sort entityList by name length DESCENDING so full names ("Babushaan Mohanty") match before first names ("Babushaan")
+    entityList.sort((a, b) => b.name.length - a.name.length);
+
+    // Apply link replacements — ONE LINK PER ENTITY
+    for (const ent of entityList) {
+      if (linkedTracker.has(ent.trackerKey)) continue;
+      out = replaceTextOutsideHeadingsAndLinks(out, ent.name, ent.url, linkedTracker, ent.trackerKey);
+    }
+  } catch (e) {
+    console.error("⚠️ Error in autoInjectAllDatabaseLinks:", e.message);
+  }
+
+  return out;
+}
+
+// POST /api/admin/blog/auto-link
+app.post("/api/admin/blog/auto-link", adminAuth, async (req, res) => {
+  try {
+    const { content, movieId } = req.body;
+    if (!content?.trim()) return res.json({ success: true, content: "" });
+    const linkedHtml = await autoInjectAllDatabaseLinks(content, movieId);
+    res.json({ success: true, content: linkedHtml });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/admin/blog
 app.post("/api/admin/blog", adminAuth, async (req, res) => {
   try {
-    const { title, excerpt, content, category, tags, coverImage, movieId, movieTitle, castId, castName, author, published, featured, seoTitle, seoDesc, youtubeVideoId } = req.body;
+    let { title, excerpt, content, category, tags, coverImage, movieId, movieTitle, castId, castName, author, published, featured, seoTitle, seoDesc, youtubeVideoId, autoLink } = req.body;
     if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: "Title and content required" });
+
+    if (autoLink !== false) {
+      content = await autoInjectAllDatabaseLinks(content, movieId);
+    }
+
     const slug = req.body.slug?.trim()
       ? req.body.slug.trim()
       : title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim()
@@ -4514,6 +4247,11 @@ app.patch("/api/admin/blog/:id", adminAuth, async (req, res) => {
     // Validate ObjectId fields — reject invalid strings to prevent Mongoose cast errors
     if (update.castId !== undefined && !isOid(update.castId)) update.castId = null;
     if (update.movieId !== undefined && !isOid(update.movieId)) update.movieId = null;
+
+    if (update.content && req.body.autoLink !== false) {
+      update.content = await autoInjectAllDatabaseLinks(update.content, update.movieId || req.body.movieId);
+    }
+
     if (update.content) update.readTime = Math.max(1, Math.ceil(update.content.split(/\s+/).length / 200));
     if (update.tags && !Array.isArray(update.tags)) update.tags = update.tags.split(",").map(t => t.trim()).filter(Boolean);
     const post = await Blog.findByIdAndUpdate(req.params.id, update, { new: true });
