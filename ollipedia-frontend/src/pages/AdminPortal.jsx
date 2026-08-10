@@ -13,6 +13,7 @@ const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
 const PosterGeneratorPanel = lazy(() => import("./PosterGeneratorPanel"));
 const ModelBlogPanel = lazy(() => import("./ModelBlogPanel"));
 const BlogSuggestionsPanel = lazy(() => import("./BlogSuggestionsPanel"));
+const UserReviewsPanel = lazy(() => import("./UserReviewsPanel"));
 
 
 
@@ -2568,6 +2569,7 @@ const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
   { key: "movies", icon: "🎬", label: "Movies" },
   { key: "songs", icon: "🎵", label: "Songs" },
+  { key: "reviews", icon: "⭐", label: "Users & Reviews" },
   { key: "cast", icon: "🎭", label: "Cast & Crew" },
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
@@ -3332,6 +3334,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
                     {[
                       ["🎬", "Movies", stats?.movies || movies.length, "movies"],
+                      ["⭐", "Users & Reviews", "View", "reviews"],
                       ["🎭", "Cast & Crew", stats?.cast || cast.length, "cast"],
                       ["🎥", "Productions", stats?.productions || prods.length, "productions"],
                       ["📰", "News Articles", stats?.news || news.length, "news"],
@@ -4141,6 +4144,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {tab === "poster" && (
                 <Suspense fallback={<Spinner />}>
                   <PosterGeneratorPanel movies={movies} onToast={onToast} />
+                </Suspense>
+              )}
+
+              {/* ── USERS & REVIEWS ── */}
+              {tab === "reviews" && (
+                <Suspense fallback={<Spinner />}>
+                  <UserReviewsPanel movies={movies} onToast={onToast} />
                 </Suspense>
               )}
 

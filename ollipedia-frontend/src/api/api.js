@@ -233,4 +233,11 @@ export const API = {
   adminGetMoviesList: (page = 1, limit = 50, search = "", verdict = "", year = "") =>
     get(`/admin/movies-list?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&verdict=${encodeURIComponent(verdict)}&year=${encodeURIComponent(year)}`, _adminToken),
   adminGetCastList: () => get("/admin/cast-list", _adminToken),
+
+  // ── Admin — Users & Reviews
+  adminGetReviews: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/reviews${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminDeleteReview: (movieId, reviewIdx) => del(`/admin/movies/${movieId}/reviews/${reviewIdx}`, _adminToken),
 };

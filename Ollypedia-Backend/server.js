@@ -2864,19 +2864,185 @@ app.get("/api/songs", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/img-proxy — Image proxy to prevent canvas CORS tainting on export
+app.get("/api/img-proxy", async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).send("Url required");
+    const response = await fetch(url);
+    if (!response.ok) return res.status(response.status).send("Failed to fetch image");
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    const arrayBuffer = await response.arrayBuffer();
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(Buffer.from(arrayBuffer));
+  } catch (e) {
+    res.status(500).send(e.message);
+  }
+});
+
 app.post("/api/movies/:id/reviews", async (req, res) => {
   try {
-    const { user, rating, text } = req.body;
+    const { user, email, rating, text } = req.body;
     if (!user?.trim() || !text?.trim()) return res.status(400).json({ error: "Name and review required." });
     const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
     const movie = await Movie.findOneAndUpdate(
       query,
-      { $push: { reviews: { user: user.trim(), rating: Number(rating) || 5, text: text.trim(), date: new Date().toISOString().split("T")[0] } } },
+      { $push: { reviews: { user: user.trim(), email: (email || "").trim().toLowerCase(), rating: Number(rating) || 5, text: text.trim(), date: new Date().toISOString().split("T")[0] } } },
       { new: true }
     );
     if (!movie) return res.status(404).json({ error: "Movie not found" });
     res.json(movie.reviews);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/reviews — Get all user reviews across movies with dynamic filters & metrics
+app.get("/api/admin/reviews", async (req, res) => {
+  try {
+    const { search, movieId, rating, fromDate, toDate, sort } = req.query;
+
+    const movieQuery = {};
+    if (movieId && isOid(movieId)) {
+      movieQuery._id = movieId;
+    }
+
+    const movies = await Movie.find(movieQuery, "title slug posterUrl reviews releaseDate").lean();
+
+    let allReviews = [];
+    let movieReviewCounts = {};
+
+    movies.forEach(movie => {
+      if (Array.isArray(movie.reviews)) {
+        movie.reviews.forEach((rev, idx) => {
+          allReviews.push({
+            reviewId: rev._id ? String(rev._id) : `${movie._id}_${idx}`,
+            reviewIndex: idx,
+            movieId: String(movie._id),
+            movieTitle: movie.title,
+            moviePoster: movie.posterUrl || "",
+            movieSlug: movie.slug || "",
+            releaseDate: movie.releaseDate || "",
+            user: rev.user || "Anonymous",
+            email: rev.email || "",
+            rating: typeof rev.rating === "number" ? rev.rating : 5,
+            text: rev.text || "",
+            date: rev.date || "",
+            likes: rev.likes || 0,
+            repliesCount: rev.replies ? rev.replies.length : 0,
+          });
+
+          movieReviewCounts[movie.title] = (movieReviewCounts[movie.title] || 0) + 1;
+        });
+      }
+    });
+
+    // Filtering
+    let filtered = allReviews;
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter(r =>
+        r.user.toLowerCase().includes(q) ||
+        r.email.toLowerCase().includes(q) ||
+        r.text.toLowerCase().includes(q) ||
+        r.movieTitle.toLowerCase().includes(q)
+      );
+    }
+
+    if (rating) {
+      const rNum = Number(rating);
+      if (rNum === -1) {
+        // low ratings <= 2
+        filtered = filtered.filter(r => r.rating <= 2);
+      } else if (!isNaN(rNum) && rNum > 0) {
+        filtered = filtered.filter(r => Math.round(r.rating) === rNum || r.rating === rNum);
+      }
+    }
+
+    if (fromDate) {
+      const fDate = new Date(fromDate).getTime();
+      if (!isNaN(fDate)) {
+        filtered = filtered.filter(r => {
+          if (!r.date) return false;
+          return new Date(r.date).getTime() >= fDate;
+        });
+      }
+    }
+
+    if (toDate) {
+      const tDate = new Date(toDate).getTime() + 86399999; // include end of day
+      if (!isNaN(tDate)) {
+        filtered = filtered.filter(r => {
+          if (!r.date) return false;
+          return new Date(r.date).getTime() <= tDate;
+        });
+      }
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+      if (sort === "oldest") {
+        return new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+      }
+      if (sort === "highest_rating") {
+        return b.rating - a.rating;
+      }
+      if (sort === "lowest_rating") {
+        return a.rating - b.rating;
+      }
+      // default: newest
+      return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+    });
+
+    // Metrics summary (computed across all reviews)
+    const totalReviews = allReviews.length;
+    const uniqueEmails = new Set(allReviews.map(r => r.email).filter(Boolean)).size;
+    const uniqueUsers = uniqueEmails > 0 ? uniqueEmails : new Set(allReviews.map(r => r.user)).size;
+    const avgRating = totalReviews > 0
+      ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+      : "0.0";
+
+    let topMovie = "N/A";
+    let maxCount = 0;
+    Object.entries(movieReviewCounts).forEach(([mTitle, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topMovie = mTitle;
+      }
+    });
+
+    res.json({
+      reviews: filtered,
+      stats: {
+        totalReviews,
+        uniqueUsers,
+        avgRating,
+        topMovie,
+        filteredCount: filtered.length,
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/admin/movies/:movieId/reviews/:reviewIdx — Delete user review
+app.delete("/api/admin/movies/:movieId/reviews/:reviewIdx", async (req, res) => {
+  try {
+    const { movieId, reviewIdx } = req.params;
+    const idx = parseInt(reviewIdx, 10);
+    const movie = await Movie.findById(movieId);
+    if (!movie) return res.status(404).json({ error: "Movie not found" });
+    if (!movie.reviews || idx < 0 || idx >= movie.reviews.length) {
+      return res.status(404).json({ error: "Review index out of bounds" });
+    }
+    movie.reviews.splice(idx, 1);
+    await movie.save();
+    res.json({ message: "Review deleted successfully", reviews: movie.reviews });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // POST /api/movies/:id/interested — vote yes or no

@@ -203,7 +203,13 @@ const API = {
   // ── Admin — Optimized list endpoints (paginated / lightweight) ──
   // Use these in the admin portal instead of the full getMovies / getCast calls.
   adminGetMoviesList: (page = 1, limit = 50, search = "", verdict = "", year = "") => get(`/admin/movies-list?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&verdict=${encodeURIComponent(verdict)}&year=${encodeURIComponent(year)}`, _adminToken),
-  adminGetCastList: () => get("/admin/cast-list", _adminToken)
+  adminGetCastList: () => get("/admin/cast-list", _adminToken),
+  // ── Admin — Users & Reviews
+  adminGetReviews: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/reviews${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminDeleteReview: (movieId, reviewIdx) => del(`/admin/movies/${movieId}/reviews/${reviewIdx}`, _adminToken)
 };
 const api = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -12279,7 +12285,7 @@ function PortalCastProfile({ production }) {
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
   ] });
 }
-const BlogGenerator = lazy(() => import("./assets/BlogGenerator-B9_nZvzO.js"));
+const BlogGenerator = lazy(() => import("./assets/BlogGenerator-DPzTqQTD.js"));
 const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-DWba9T8B.js"));
 const BMSTrackerPanel = lazy(() => import("./assets/BMSTrackerPanel-BvRme0rO.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
@@ -12288,6 +12294,7 @@ const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBh
 const PosterGeneratorPanel = lazy(() => import("./assets/PosterGeneratorPanel-C8rzoByl.js"));
 const ModelBlogPanel = lazy(() => import("./assets/ModelBlogPanel-BCcctcEN.js"));
 const BlogSuggestionsPanel = lazy(() => import("./assets/BlogSuggestionsPanel-BXKyQEqd.js"));
+const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-BlX6b9lw.js"));
 const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
 const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES = [
@@ -14810,6 +14817,7 @@ const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
   { key: "movies", icon: "🎬", label: "Movies" },
   { key: "songs", icon: "🎵", label: "Songs" },
+  { key: "reviews", icon: "⭐", label: "Users & Reviews" },
   { key: "cast", icon: "🎭", label: "Cast & Crew" },
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
@@ -15498,6 +15506,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
           /* @__PURE__ */ jsx("h2", { style: { marginBottom: 24, fontSize: "1.5rem" }, children: "Dashboard" }),
           /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 32 }, children: [
             ["🎬", "Movies", (stats == null ? void 0 : stats.movies) || movies.length, "movies"],
+            ["⭐", "Users & Reviews", "View", "reviews"],
             ["🎭", "Cast & Crew", (stats == null ? void 0 : stats.cast) || cast.length, "cast"],
             ["🎥", "Productions", (stats == null ? void 0 : stats.productions) || prods.length, "productions"],
             ["📰", "News Articles", (stats == null ? void 0 : stats.news) || news.length, "news"],
@@ -16361,6 +16370,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
         tab === "autoindex" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(AutoIndexPanel, { onToast }) }) }),
         tab === "sacnilk" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(SacnilkScraperPanel, { movies, onToast }) }),
         tab === "poster" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(PosterGeneratorPanel, { movies, onToast }) }),
+        tab === "reviews" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(UserReviewsPanel, { movies, onToast }) }),
         tab === "analytics" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(AnalyticsPanel, { onToast }) }),
         tab === "staff" && /* @__PURE__ */ jsx(StaffPanel, { onToast }),
         tab === "settings" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(AdminSettings, { admin, onToast }) })

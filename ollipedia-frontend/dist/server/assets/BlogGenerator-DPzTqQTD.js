@@ -9,6 +9,10 @@ const _API_ROOT = "http://localhost:4000".replace(/\/$/, "");
 const API_BASE = _API_ROOT.endsWith("/api") ? _API_ROOT : _API_ROOT + "/api";
 const ARTICLE_TYPES = [
   { id: "review", label: "🎬 Movie Review", color: "#c9973a" },
+  { id: "ott-release", label: "📺 OTT Release Feature", color: "#7ec8e3" },
+  { id: "ott-streaming", label: "🔴 Now Streaming on OTT", color: "#4ade80" },
+  { id: "movie-details", label: "📄 Full Movie Details", color: "#e8c87a" },
+  { id: "song-details", label: "🎵 Song Feature", color: "#b388ff" },
   { id: "story", label: "📖 Story & Plot", color: "#7aaae8" },
   { id: "cast", label: "👥 Cast Spotlight", color: "#a78be8" },
   { id: "music", label: "🎵 Music & Songs", color: "#4caf82" },
@@ -27,7 +31,8 @@ const BLOG_CATEGORIES = [
   "Industry News",
   "Opinion",
   "Movie Update",
-  "OTT Release"
+  "OTT Release",
+  "Song Updates"
 ];
 function slugify(str) {
   return String(str || "").toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
@@ -43,12 +48,14 @@ function readTime(txt) {
   return Math.max(1, Math.ceil(wordCount(txt) / 200));
 }
 function buildMoviePrompt(movie, type) {
-  var _a;
+  var _a, _b, _c;
   const cast = (movie.cast || []).slice(0, 5).map((c) => `${c.name}${c.role ? ` as ${c.role}` : ""}`).join(", ");
   const songs = (((_a = movie.media) == null ? void 0 : _a.songs) || []).slice(0, 3).map((s) => s.title).filter(Boolean).join(", ");
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
   const genre = (movie.genre || []).join(", ") || "Odia";
-  const ctx = `Movie: "${movie.title}" (${year}) | Genre: ${genre} | Director: ${movie.director || "N/A"} | Cast: ${cast || "N/A"} | Songs: ${songs || "N/A"} | Synopsis: ${movie.synopsis || "N/A"} | Verdict: ${movie.verdict || "Upcoming"}`;
+  const platform = movie.streamingOn || ((_b = movie.ott) == null ? void 0 : _b.platform) || "OTT Platform";
+  const ottDate = movie.ottReleaseDate || ((_c = movie.ott) == null ? void 0 : _c.releaseDate) || "TBA";
+  const ctx = `Movie: "${movie.title}" (${year}) | Genre: ${genre} | Director: ${movie.director || "N/A"} | Cast: ${cast || "N/A"} | OTT Platform: ${platform} | OTT Date: ${ottDate} | Songs: ${songs || "N/A"} | Synopsis: ${movie.synopsis || "N/A"} | Verdict: ${movie.verdict || "Upcoming"}`;
   const htmlRules = `
 OUTPUT RULES — STRICTLY FOLLOW:
 - Output ONLY clean HTML. No markdown. No plain text. No code blocks.
@@ -60,6 +67,7 @@ OUTPUT RULES — STRICTLY FOLLOW:
 - Use <ol><li> for numbered lists
 - Use <strong> for emphasis on key terms
 - Use <table> for any data/comparison (with <thead><tbody><tfoot>)
+- Include a Movie & OTT Details Table (Movie Title, OTT Platform, OTT Release Date, Theatrical Release, Genre, Director, Lead Cast) using <table>
 - End with a <section class="faq-section"><h2>Frequently Asked Questions</h2> block with 4–5 <details><summary> FAQ items
 - 800–1200 words total
 - SEO-friendly: include the movie name naturally in the first 100 words
@@ -67,17 +75,70 @@ OUTPUT RULES — STRICTLY FOLLOW:
 - Do NOT use inline styles
 - Do NOT output any text outside the <article> tag`;
   const map = {
+    "ott-release": `You are an expert SEO content writer for Ollypedia. Write a dual-language (English + Odia translation) OTT Release article for "${movie.title}" releasing on ${platform}.
+
+Sections to include:
+1. Engaging introduction (mention "${movie.title}" OTT premiere on ${platform})
+2. OTT & Movie Details Table (Movie Title, OTT Platform, OTT Release Date, Language, Genre, Director, Lead Cast)
+3. Story & Plot Overview
+4. Director's Vision & Production Value
+5. Star Performances & Cast Highlights
+6. Platform & Viewing Guide for ${platform}
+7. Conclusion & Countdown
+8. FAQ section
+
+${ctx}
+${htmlRules}`,
+    "ott-streaming": `You are an expert SEO content writer for Ollypedia. Write an excited, dual-language (English + Odia translation) "NOW STREAMING ON OTT" article for "${movie.title}" streaming live NOW on ${platform}.
+
+Sections to include:
+1. Breaking-news introduction (announcing "${movie.title}" is NOW LIVE on ${platform})
+2. OTT & Movie Details Table (Movie Title, OTT Platform, Release Status: Streaming, Genre, Director, Lead Cast)
+3. Story & Emotional Hook
+4. Lead Performances & Character Highlights
+5. How to Watch on ${platform} Today
+6. Verdict & Final Recommendation
+7. FAQ section
+
+${ctx}
+${htmlRules}`,
+    "movie-details": `You are an expert SEO content writer for Ollypedia. Write a comprehensive Movie Details article for "${movie.title}" (${year}).
+
+Sections to include:
+1. Complete Introduction to "${movie.title}"
+2. Movie & OTT Details Table (Movie Title, Release Date, Language, Genre, Director, Producer, Starring Cast, Music Director)
+3. Full Storyline & Plot Breakdown
+4. Lead Cast & Character Profiles
+5. Music, Songs & Soundtrack Highlights
+6. Theatrical & Digital Release Status
+7. FAQ section
+
+${ctx}
+${htmlRules}`,
+    "song-details": `You are an expert SEO content writer for Ollypedia. Write a Song Release & Soundtrack Feature article for "${movie.title}".
+
+Sections to include:
+1. Song Release Introduction
+2. Track Details Table (Song Title, Movie, Singer, Music Director, Lyricist, Platform)
+3. Musical Style & Composition Breakdown
+4. Vocal Performance & Lyrics Significance
+5. Music Video & Visual Highlights
+6. FAQ section
+
+${ctx}
+${htmlRules}`,
     review: `You are an expert SEO content writer for Ollypedia, an Odia cinema website. Write a fully structured, AdSense-friendly HTML movie review for the Odia film "${movie.title}" (${year}).
 
 Sections to include:
 1. Engaging introduction (mention "${movie.title}" in first sentence)
-2. Story & Plot Overview
-3. Performances & Cast
-4. Direction & Screenplay
-5. Music & Soundtrack
-6. Verdict & Final Thoughts
-7. Key Highlights (as <ul>)
-8. FAQ section
+2. Movie & OTT Details Table
+3. Story & Plot Overview
+4. Performances & Cast
+5. Direction & Screenplay
+6. Music & Soundtrack
+7. Verdict & Final Thoughts
+8. Key Highlights (as <ul>)
+9. FAQ section
 
 ${ctx}
 ${htmlRules}`,
@@ -85,12 +146,13 @@ ${htmlRules}`,
 
 Sections to include:
 1. Introduction — what the film is about
-2. Story Overview
-3. Key Plot Points & Narrative Arc
-4. Emotional Beats & Themes
-5. What Makes the Story Stand Out (as <ul>)
-6. Comparison Table — "${movie.title}" vs similar Odia films (themes, tone, style)
-7. FAQ section
+2. Movie & OTT Details Table
+3. Story Overview
+4. Key Plot Points & Narrative Arc
+5. Emotional Beats & Themes
+6. What Makes the Story Stand Out (as <ul>)
+7. Comparison Table — "${movie.title}" vs similar Odia films (themes, tone, style)
+8. FAQ section
 
 ${ctx}
 ${htmlRules}`,
@@ -150,9 +212,15 @@ ${htmlRules}`
   return map[type] || map.review;
 }
 function autoTitle(movie, type) {
+  var _a;
   const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
   const genre = (movie.genre || []).join(", ") || "Odia Film";
+  const platform = movie.streamingOn || ((_a = movie.ott) == null ? void 0 : _a.platform) || "OTT";
   return {
+    "ott-release": `${movie.title} OTT Release Date Announced: Premieres on ${platform} (${movie.title} ଓଟିଟି ରିଲିଜ୍)`,
+    "ott-streaming": `${movie.title} Is Now Streaming on ${platform}: Watch Online Today (${movie.title} ବର୍ତ୍ତମାନ ଷ୍ଟ୍ରିମିଂ)`,
+    "movie-details": `${movie.title}${year ? ` (${year})` : ""} Movie Details, Cast, Story & Release Date`,
+    "song-details": `${movie.title} Song Release: Music, Lyrics & Video Breakdown`,
     review: `${movie.title}${year ? ` (${year})` : ""} – ${genre} Odia Movie Review & Story`,
     story: `${movie.title} – Full Story, Plot & Narrative Breakdown`,
     cast: `${movie.title} – Cast Spotlight: Meet the Actors & Characters`,
@@ -163,7 +231,18 @@ function autoTitle(movie, type) {
   }[type] || `${movie.title} – Article`;
 }
 function autoCategory(type) {
-  return { review: "Movie Review", story: "Movie Review", cast: "Actor Spotlight", music: "General", analysis: "Top 10", trivia: "General" }[type] || "General";
+  return {
+    "ott-release": "OTT Release",
+    "ott-streaming": "OTT Release",
+    "movie-details": "Movie Update",
+    "song-details": "Song Updates",
+    review: "Movie Review",
+    story: "Movie Review",
+    cast: "Actor Spotlight",
+    music: "Music",
+    analysis: "General",
+    trivia: "General"
+  }[type] || "General";
 }
 function buildCastPrompt(castMember, type) {
   const movies = (castMember.movies || []).slice(0, 5).map((m) => typeof m === "string" ? m : m.title || "").filter(Boolean).join(", ");
@@ -813,10 +892,10 @@ function applyEntityLink(content, name, url) {
         }
       }
     } else if (part.trim().length > 0) {
-      const inA = tagStack.includes("a");
-      const inHeading = tagStack.some((t) => /^h[1-6]$/.test(t));
+      const excludedTags = ["a", "h1", "h2", "h3", "h4", "h5", "h6", "title", "script", "style", "figure", "figcaption", "summary"];
+      const isExcluded = tagStack.some((t) => excludedTags.includes(t.toLowerCase()));
       const inTableOrList = tagStack.includes("table") || tagStack.includes("ul") || tagStack.includes("ol");
-      if (!inA && !inHeading) {
+      if (!isExcluded) {
         parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
           if (inTableOrList) {
             return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
@@ -1164,7 +1243,38 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
         )
       ] }),
       /* @__PURE__ */ jsxs("div", { children: [
-        /* @__PURE__ */ jsx("label", { className: "bg-field-label", style: { marginBottom: 5 }, children: "Content" }),
+        /* @__PURE__ */ jsxs("label", { className: "bg-field-label", style: { marginBottom: 5, display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
+          /* @__PURE__ */ jsx("span", { children: "Content" }),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "button",
+              className: "bg-btn bg-btn-blue",
+              style: { padding: "3px 8px", fontSize: ".7rem" },
+              onClick: async () => {
+                if (!content.trim()) return;
+                try {
+                  const token = getAdminToken();
+                  const res = await fetch(`${API_BASE}/admin/blog/auto-link`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ content, movieId: (linkedMovie == null ? void 0 : linkedMovie._id) || article.movieId })
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.content) {
+                      setContent(data.content);
+                      onToast("⚡ Auto-linked all movie & cast names in your pasted article!", "success");
+                    }
+                  }
+                } catch (e) {
+                  onToast("❌ Auto-link error: " + e.message, "error");
+                }
+              },
+              children: "⚡ Auto-Link Movies & Cast"
+            }
+          )
+        ] }),
         /* @__PURE__ */ jsx(
           DragDropImageGrid,
           {
@@ -1835,13 +1945,42 @@ IMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no 
           /* @__PURE__ */ jsxs("label", { className: "bg-field-label", children: [
             "Content ",
             /* @__PURE__ */ jsx("span", { style: { color: "#e57373" }, children: "*" }),
-            /* @__PURE__ */ jsxs("span", { style: { fontWeight: 400, textTransform: "none", color: "var(--muted)", display: "flex", alignItems: "center", gap: 8 }, children: [
+            /* @__PURE__ */ jsxs("span", { style: { fontWeight: 400, textTransform: "none", color: "var(--muted)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }, children: [
               /* @__PURE__ */ jsxs("span", { children: [
                 wordCount(blogContent),
                 " words · ~",
                 readTime(blogContent),
                 " min"
               ] }),
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  type: "button",
+                  className: "bg-btn bg-btn-blue",
+                  style: { padding: "4px 10px", fontSize: ".72rem" },
+                  onClick: async () => {
+                    if (!blogContent.trim()) return;
+                    try {
+                      const token = getAdminToken();
+                      const res = await fetch(`${API_BASE}/admin/blog/auto-link`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ content: blogContent, movieId: linkedMovie == null ? void 0 : linkedMovie._id })
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        if (data.content) {
+                          setBlogContent(data.content);
+                          onToast("⚡ Auto-linked all movie & cast names in your pasted article!", "success");
+                        }
+                      }
+                    } catch (e) {
+                      onToast("❌ Auto-link error: " + e.message, "error");
+                    }
+                  },
+                  children: "⚡ Auto-Link Movies & Cast (SEO Safe)"
+                }
+              ),
               /* @__PURE__ */ jsx(
                 DragDropImageGrid,
                 {
@@ -1861,7 +2000,7 @@ IMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no 
               style: { minHeight: 260, resize: "vertical" },
               value: blogContent,
               onChange: (e) => setBlogContent(e.target.value),
-              placeholder: "Write your full blog content here…"
+              placeholder: "Paste or write your full blog content here…"
             }
           ),
           /* @__PURE__ */ jsx(EntityLinkerUI, { content: blogContent, movies, cast, onChange: setBlogContent })
