@@ -1514,19 +1514,100 @@ function buildOttLiveSlug(movie, title = "") {
  * 2. Any section heading tags `<h1>`, `<h2>`, `<h3>`, `<h4>`, `<h5>`, `<h6>`
  * 3. Media/Metadata containers like `<figure>`, `<figcaption>`, `<title>`, `<script>`, `<style>`
  */
-function replaceTextOutsideHeadingsAndLinks(html, entityName, href, linkedTracker = new Set(), trackerKey = "") {
-  if (!html || !entityName) return html || "";
-  if (trackerKey && linkedTracker.has(trackerKey)) return html;
+/**
+ * Scans HTML to extract all existing <a href="..."> links and categorizes them by context:
+ * - bodyLinkedUrls: set of normalized URLs found in paragraphs, divs, blockquotes, etc.
+ * - tableLinkedUrls: set of normalized URLs found inside tables/lists (<table>, <tr>, <td>, <th>, <dl>, etc.)
+ */
+function scanExistingLinksInHtml(html) {
+  const bodyLinkedUrls = new Set();
+  const tableLinkedUrls = new Set();
+  if (!html) return { bodyLinkedUrls, tableLinkedUrls };
+
+  const parts = String(html).split(/(<[^>]*>)/g);
+  let tagStack = [];
+  const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!part) continue;
+
+    if (part.startsWith('</')) {
+      const match = part.match(/^<\/\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        const idx = tagStack.lastIndexOf(tagName);
+        if (idx !== -1) tagStack.splice(idx, 1);
+      }
+    } else if (part.startsWith('<')) {
+      const match = part.match(/^<\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        if (tagName === 'a') {
+          const hrefMatch = part.match(/href=["']([^"']+)["']/i);
+          if (hrefMatch && hrefMatch[1]) {
+            const rawHref = hrefMatch[1].trim().toLowerCase();
+            const inTable = tagStack.some(t => ['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'dl', 'dd', 'dt'].includes(t));
+            if (inTable) {
+              tableLinkedUrls.add(rawHref);
+            } else {
+              bodyLinkedUrls.add(rawHref);
+            }
+          }
+        }
+        if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
+          tagStack.push(tagName);
+        }
+      }
+    }
+  }
+  return { bodyLinkedUrls, tableLinkedUrls };
+}
+
+/**
+ * Safely replaces at most:
+ * 1. ONE unlinked occurrence of `entityName` in the article body text (outside tables).
+ * 2. ONE unlinked occurrence of `entityName` inside tables/lists (<table>, <td>, <th>, etc.).
+ *
+ * STRICTLY EXCLUDES:
+ * - Existing anchor tags <a>...</a>
+ * - Section headings <h1> through <h6>
+ * - Media/metadata tags: <figure>, <figcaption>, <title>, <script>, <style>, <summary>
+ */
+function replaceTextOutsideHeadingsAndLinks(html, entityName, href, tracker = null, legacyKey = "") {
+  if (!html || !entityName || !href) return html || "";
+
+  const normHref = String(href).trim().toLowerCase();
+
+  // If tracker is a Set (legacy call) convert or handle
+  let activeTracker = tracker;
+  if (tracker instanceof Set) {
+    if (legacyKey && tracker.has(legacyKey)) return html;
+    activeTracker = {
+      bodyLinkedUrls: new Set(Array.from(tracker).map(k => String(k).toLowerCase())),
+      tableLinkedUrls: new Set(),
+      legacySet: tracker,
+      legacyKey,
+    };
+  } else if (!activeTracker) {
+    activeTracker = scanExistingLinksInHtml(html);
+  }
+
+  if (activeTracker.bodyLinkedUrls?.has(normHref) && activeTracker.tableLinkedUrls?.has(normHref)) {
+    return html;
+  }
 
   const escName = entityName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
   const regex = new RegExp(`(^|[\\s\\W])(${escName})(?=[\\s\\W]|$)`, 'i');
 
   const parts = String(html).split(/(<[^>]*>)/g);
   let tagStack = [];
-  let replaced = false;
 
   const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
   const excludedContainers = ['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'title', 'script', 'style', 'figure', 'figcaption', 'summary'];
+
+  let hasLinkedInBody = activeTracker.bodyLinkedUrls?.has(normHref) || false;
+  let hasLinkedInTable = activeTracker.tableLinkedUrls?.has(normHref) || false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
@@ -1548,46 +1629,63 @@ function replaceTextOutsideHeadingsAndLinks(html, entityName, href, linkedTracke
         }
       }
     } else if (part.trim().length > 0) {
-      // Check if current text block is inside any excluded container
       const isExcluded = tagStack.some(t => excludedContainers.includes(t.toLowerCase()));
+      const inTable = tagStack.some(t => ['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'dl', 'dd', 'dt'].includes(t.toLowerCase()));
 
-      if (!isExcluded && !replaced) {
-        if (regex.test(part)) {
-          parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
-            if (!replaced) {
-              replaced = true;
-              return `${prefix}<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
-            }
-            return fullMatch;
-          });
-          if (replaced) {
-            if (trackerKey) linkedTracker.add(trackerKey);
-            break;
+      if (!isExcluded) {
+        if (inTable && !hasLinkedInTable) {
+          if (regex.test(part)) {
+            parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+              if (!hasLinkedInTable) {
+                hasLinkedInTable = true;
+                if (activeTracker.tableLinkedUrls) activeTracker.tableLinkedUrls.add(normHref);
+                if (activeTracker.legacySet && activeTracker.legacyKey) activeTracker.legacySet.add(activeTracker.legacyKey);
+                return `${prefix}<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+              }
+              return fullMatch;
+            });
+          }
+        } else if (!inTable && !hasLinkedInBody) {
+          if (regex.test(part)) {
+            parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+              if (!hasLinkedInBody) {
+                hasLinkedInBody = true;
+                if (activeTracker.bodyLinkedUrls) activeTracker.bodyLinkedUrls.add(normHref);
+                if (activeTracker.legacySet && activeTracker.legacyKey) activeTracker.legacySet.add(activeTracker.legacyKey);
+                return `${prefix}<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+              }
+              return fullMatch;
+            });
           }
         }
       }
+    }
+
+    if (hasLinkedInBody && hasLinkedInTable) {
+      break;
     }
   }
 
   return parts.join('');
 }
 
-function injectRichBlogLinks(text, movie, cc = {}, enableLinks = true, linkedTracker = new Set()) {
+function injectRichBlogLinks(text, movie, cc = {}, enableLinks = true, tracker = null) {
   if (!text || !enableLinks) return String(text || "");
   let out = String(text);
+  const activeTracker = tracker || scanExistingLinksInHtml(out);
 
-  // Link movie title if present and not already linked in this article
-  if (movie?.title && movie?.slug && !linkedTracker.has("movie")) {
-    out = replaceTextOutsideHeadingsAndLinks(out, movie.title, `/movie/${movie.slug}`, linkedTracker, "movie");
+  // Link movie title if present and not already linked
+  if (movie?.title && movie?.slug) {
+    out = replaceTextOutsideHeadingsAndLinks(out, movie.title, `/movie/${movie.slug}`, activeTracker);
   }
 
-  // Link cast members at most once per article
+  // Link cast members at most once in body + once in table
   const castList = cc.ottCast || cc.leadCast || cc.fullCast || [];
   for (const c of castList) {
-    if (c?.name && c.name.length > 2 && !linkedTracker.has(`cast-${c.name}`)) {
+    if (c?.name && c.name.length > 2) {
       const url = castProfileUrl(c);
       if (url) {
-        out = replaceTextOutsideHeadingsAndLinks(out, c.name, url, linkedTracker, `cast-${c.name}`);
+        out = replaceTextOutsideHeadingsAndLinks(out, c.name, url, activeTracker);
       }
     }
   }
@@ -4278,10 +4376,24 @@ app.get("/api/admin/blog", adminAuth, async (req, res) => {
 async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
   if (!htmlContent || typeof htmlContent !== "string") return htmlContent || "";
   let out = htmlContent;
-  const linkedTracker = new Set();
 
   try {
-    const entityList = [];
+    // 1. Pre-scan existing links in the input HTML
+    const tracker = scanExistingLinksInHtml(out);
+
+    // 2. Map of unique entities grouped by canonical URL -> { url, names: Set }
+    const entityMap = new Map();
+
+    const addEntity = (url, name) => {
+      if (!url || !name || typeof name !== "string") return;
+      const cleanName = name.trim();
+      if (cleanName.length < 3) return;
+      const normUrl = url.trim();
+      if (!entityMap.has(normUrl)) {
+        entityMap.set(normUrl, { url: normUrl, names: new Set() });
+      }
+      entityMap.get(normUrl).names.add(cleanName);
+    };
 
     // 1. CONTEXT-AWARE: If targetMovieId is provided, fetch target movie and its EXACT cast members!
     let targetMovie = null;
@@ -4289,16 +4401,14 @@ async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
       targetMovie = await Movie.findById(targetMovieId).lean();
     }
 
-    if (targetMovie) {
-      // Add Target Movie title + subtitle
+    if (targetMovie && targetMovie.slug) {
       const movieUrl = `/movie/${targetMovie.slug}`;
-      const movieTrackerKey = `movie-${targetMovie.slug}`;
-      entityList.push({ name: targetMovie.title.trim(), url: movieUrl, trackerKey: movieTrackerKey });
-      
+      addEntity(movieUrl, targetMovie.title);
+
       if (targetMovie.title.includes(":") || targetMovie.title.includes(" - ") || targetMovie.title.includes(" – ")) {
         const shortTitle = targetMovie.title.split(/[:\-–]/)[0].trim();
         if (shortTitle.length > 2 && !["the", "movie", "odia", "new"].includes(shortTitle.toLowerCase())) {
-          entityList.push({ name: shortTitle, url: movieUrl, trackerKey: movieTrackerKey });
+          addEntity(movieUrl, shortTitle);
         }
       }
 
@@ -4309,11 +4419,11 @@ async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
       for (const c of movieCastList) {
         if (!c?.name || c.name.trim().length < 3) continue;
         const fullName = c.name.trim();
-        const url = castProfileUrl(c) || (c._id ? `/cast/${c._id}` : "");
+        const castId = c.castId || (isOid(c._id) ? c._id : null);
+        const url = castId ? `/cast/${castId}` : "";
         if (!url) continue;
-        const trackerKey = `cast-${c._id || fullName}`;
 
-        entityList.push({ name: fullName, url, trackerKey });
+        addEntity(url, fullName);
 
         // First-name alias ONLY for actors in THIS specific movie
         const parts = fullName.split(/\s+/);
@@ -4321,7 +4431,7 @@ async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
           const firstName = parts[0].trim();
           const commonWords = ["director", "producer", "writer", "music", "editor", "singer", "actor", "actress", "star", "lead"];
           if (firstName.length >= 4 && !commonWords.includes(firstName.toLowerCase())) {
-            entityList.push({ name: firstName, url, trackerKey });
+            addEntity(url, firstName);
           }
         }
       }
@@ -4332,9 +4442,7 @@ async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
     for (const m of allMovies) {
       if (!m.title || !m.slug || m.title.length < 3) continue;
       if (targetMovie && String(m._id) === String(targetMovie._id)) continue;
-      const url = `/movie/${m.slug}`;
-      const trackerKey = `movie-${m.slug}`;
-      entityList.push({ name: m.title.trim(), url, trackerKey });
+      addEntity(`/movie/${m.slug}`, m.title);
     }
 
     const allCast = await Cast.find({}, "name").lean();
@@ -4343,19 +4451,31 @@ async function autoInjectAllDatabaseLinks(htmlContent, targetMovieId = null) {
       const fullName = c.name.trim();
       // Require FULL NAME (at least 2 words, e.g. "Sabyasachi Mishra") for global DB actors to prevent false positives!
       if (!fullName.includes(" ") || fullName.length < 6) continue;
-      const url = `/cast/${c._id}`;
-      const trackerKey = `cast-${c._id}`;
-
-      entityList.push({ name: fullName, url, trackerKey });
+      addEntity(`/cast/${c._id}`, fullName);
     }
 
-    // Sort entityList by name length DESCENDING so full names ("Babushaan Mohanty") match before first names ("Babushaan")
-    entityList.sort((a, b) => b.name.length - a.name.length);
+    // Convert map to list and sort entities by maximum name length DESCENDING so longest names match first
+    const entityList = Array.from(entityMap.values()).map(e => ({
+      url: e.url,
+      names: Array.from(e.names).sort((a, b) => b.length - a.length),
+      maxLength: Math.max(...Array.from(e.names).map(n => n.length)),
+    }));
 
-    // Apply link replacements — ONE LINK PER ENTITY
+    entityList.sort((a, b) => b.maxLength - a.maxLength);
+
+    // Apply link replacements — ONE LINK IN BODY + ONE LINK IN CAST TABLE MAX PER ENTITY
     for (const ent of entityList) {
-      if (linkedTracker.has(ent.trackerKey)) continue;
-      out = replaceTextOutsideHeadingsAndLinks(out, ent.name, ent.url, linkedTracker, ent.trackerKey);
+      const normHref = ent.url.toLowerCase();
+      if (tracker.bodyLinkedUrls.has(normHref) && tracker.tableLinkedUrls.has(normHref)) {
+        continue;
+      }
+
+      for (const name of ent.names) {
+        if (tracker.bodyLinkedUrls.has(normHref) && tracker.tableLinkedUrls.has(normHref)) {
+          break;
+        }
+        out = replaceTextOutsideHeadingsAndLinks(out, name, ent.url, tracker);
+      }
     }
   } catch (e) {
     console.error("⚠️ Error in autoInjectAllDatabaseLinks:", e.message);
@@ -4382,7 +4502,7 @@ app.post("/api/admin/blog", adminAuth, async (req, res) => {
     let { title, excerpt, content, category, tags, coverImage, movieId, movieTitle, castId, castName, author, published, featured, seoTitle, seoDesc, youtubeVideoId, autoLink } = req.body;
     if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: "Title and content required" });
 
-    if (autoLink !== false) {
+    if (autoLink === true) {
       content = await autoInjectAllDatabaseLinks(content, movieId);
     }
 
@@ -4414,7 +4534,7 @@ app.patch("/api/admin/blog/:id", adminAuth, async (req, res) => {
     if (update.castId !== undefined && !isOid(update.castId)) update.castId = null;
     if (update.movieId !== undefined && !isOid(update.movieId)) update.movieId = null;
 
-    if (update.content && req.body.autoLink !== false) {
+    if (update.content && req.body.autoLink === true) {
       update.content = await autoInjectAllDatabaseLinks(update.content, update.movieId || req.body.movieId);
     }
 
@@ -11181,8 +11301,8 @@ app.get("/api/blog-suggestions/cron-status", adminAuth, async (req, res) => {
     const lastLog = await BlogSuggestionLog.findOne().sort({ createdAt: -1 }).lean();
 
     res.json({
-      active: true,
-      schedule: "Every day at 08:00 AM IST (0 8 * * *)",
+      active: false,
+      schedule: "Disabled (Manual Generation Only)",
       lastRunAt: lastLog ? lastLog.createdAt : null,
       lastRunStatus: lastLog ? lastLog.status : "Never",
       lastRunCount: lastLog ? lastLog.generatedCount : 0,
@@ -11216,16 +11336,6 @@ const { runTmdbOdiaScraper } = require("./scrape_tmdb_odia");
 cron.schedule("0 3 * * *", async () => {
   console.log("Cron: Starting daily TMDB Odia Movie Scraper...");
   await runTmdbOdiaScraper(autoGenerateMovieDetailsBlog);
-}, { timezone: "Asia/Kolkata" });
-
-// ── Daily Odia Film & Actor Blog Suggestion Generator Cron (08:00 AM IST daily)
-cron.schedule("0 8 * * *", async () => {
-  console.log("Cron: Starting Daily Odia Film & Actor Blog Suggestion Engine...");
-  try {
-    await runBlogSuggestionEngine();
-  } catch (e) {
-    console.error("Cron Error in Blog Suggestion Engine:", e.message);
-  }
 }, { timezone: "Asia/Kolkata" });
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -851,84 +851,101 @@ function makeFuzzyRegex(name) {
 }
 
 function applyEntityLink(content, name, url) {
-  if (!content) return content;
-  const regex = new RegExp(`(^|[\\s\\W])(${escapeRegex(name)})(?=[\\s\\W]|$)`, 'gi');
+  if (!content || !name || !url) return content;
+  const regex = new RegExp(`(^|[\\s\\W])(${escapeRegex(name)})(?=[\\s\\W]|$)`, 'i');
   const parts = content.split(/(<[^>]*>)/g);
   
   const voidElements = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
-  
-  // Pass 1: Check if already linked in body
+  const excludedTags = ['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'title', 'script', 'style', 'figure', 'figcaption', 'summary'];
+  const normUrl = url.trim().toLowerCase();
+
+  // Pass 1: Pre-scan if already linked in body or table
   let tagStack = [];
   let alreadyLinkedInBody = false;
+  let alreadyLinkedInTable = false;
+
   for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (part.startsWith('</')) {
-          const match = part.match(/^<\/\s*([a-z0-9]+)/i);
-          if (match) {
-              const tagName = match[1].toLowerCase();
-              const idx = tagStack.lastIndexOf(tagName);
-              if (idx !== -1) tagStack.splice(idx, 1);
-          }
-      } else if (part.startsWith('<')) {
-          const match = part.match(/^<\s*([a-z0-9]+)/i);
-          if (match) {
-              const tagName = match[1].toLowerCase();
-              if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
-                  tagStack.push(tagName);
-              }
-          }
-          if (part.toLowerCase().startsWith('<a ') && part.includes(url)) {
-              const inTableOrList = tagStack.includes('table') || tagStack.includes('ul') || tagStack.includes('ol');
-              if (!inTableOrList) {
-                  alreadyLinkedInBody = true;
-              }
-          }
+    const part = parts[i];
+    if (part.startsWith('</')) {
+      const match = part.match(/^<\/\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        const idx = tagStack.lastIndexOf(tagName);
+        if (idx !== -1) tagStack.splice(idx, 1);
       }
+    } else if (part.startsWith('<')) {
+      const match = part.match(/^<\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        if (tagName === 'a') {
+          const hrefMatch = part.match(/href=["']([^"']+)["']/i);
+          if (hrefMatch && hrefMatch[1] && hrefMatch[1].trim().toLowerCase() === normUrl) {
+            const inTableOrList = tagStack.some(t => ['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'dl', 'dd', 'dt'].includes(t.toLowerCase()));
+            if (inTableOrList) alreadyLinkedInTable = true;
+            else alreadyLinkedInBody = true;
+          }
+        }
+        if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
+          tagStack.push(tagName);
+        }
+      }
+    }
   }
 
-  // Pass 2: Actual replacement
+  // Pass 2: Actual replacement (at most 1 in body + 1 in table)
   tagStack = [];
   let hasLinkedInBody = alreadyLinkedInBody;
+  let hasLinkedInTable = alreadyLinkedInTable;
 
   for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      
-      if (part.startsWith('</')) {
-          const match = part.match(/^<\/\s*([a-z0-9]+)/i);
-          if (match) {
-              const tagName = match[1].toLowerCase();
-              const idx = tagStack.lastIndexOf(tagName);
-              if (idx !== -1) tagStack.splice(idx, 1);
-          }
-      } else if (part.startsWith('<')) {
-          const match = part.match(/^<\s*([a-z0-9]+)/i);
-          if (match) {
-              const tagName = match[1].toLowerCase();
-              if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
-                  tagStack.push(tagName);
-              }
-          }
-      } else if (part.trim().length > 0) {
-          // It's a non-empty text node — check if inside any excluded tag
-          const excludedTags = ['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'title', 'script', 'style', 'figure', 'figcaption', 'summary'];
-          const isExcluded = tagStack.some(t => excludedTags.includes(t.toLowerCase()));
-          const inTableOrList = tagStack.includes('table') || tagStack.includes('ul') || tagStack.includes('ol');
-          
-          if (!isExcluded) {
-              parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
-                  if (inTableOrList) {
-                      return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
-                  } else {
-                      if (!hasLinkedInBody) {
-                          hasLinkedInBody = true;
-                          return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
-                      }
-                      return fullMatch;
-                  }
-              });
-          }
+    const part = parts[i];
+    if (part.startsWith('</')) {
+      const match = part.match(/^<\/\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        const idx = tagStack.lastIndexOf(tagName);
+        if (idx !== -1) tagStack.splice(idx, 1);
       }
+    } else if (part.startsWith('<')) {
+      const match = part.match(/^<\s*([a-z0-9]+)/i);
+      if (match) {
+        const tagName = match[1].toLowerCase();
+        if (!voidElements.includes(tagName) && !part.endsWith('/>')) {
+          tagStack.push(tagName);
+        }
+      }
+    } else if (part.trim().length > 0) {
+      const isExcluded = tagStack.some(t => excludedTags.includes(t.toLowerCase()));
+      const inTableOrList = tagStack.some(t => ['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'dl', 'dd', 'dt'].includes(t.toLowerCase()));
+
+      if (!isExcluded) {
+        if (inTableOrList && !hasLinkedInTable) {
+          if (regex.test(part)) {
+            parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+              if (!hasLinkedInTable) {
+                hasLinkedInTable = true;
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+              }
+              return fullMatch;
+            });
+          }
+        } else if (!inTableOrList && !hasLinkedInBody) {
+          if (regex.test(part)) {
+            parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+              if (!hasLinkedInBody) {
+                hasLinkedInBody = true;
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+              }
+              return fullMatch;
+            });
+          }
+        }
+      }
+    }
+
+    if (hasLinkedInBody && hasLinkedInTable) break;
   }
+
   return parts.join('');
 }
 
