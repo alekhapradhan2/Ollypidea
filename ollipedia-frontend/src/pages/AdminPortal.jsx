@@ -2569,7 +2569,8 @@ const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
   { key: "movies", icon: "🎬", label: "Movies" },
   { key: "songs", icon: "🎵", label: "Songs" },
-  { key: "reviews", icon: "⭐", label: "Users & Reviews" },
+  { key: "users", icon: "👥", label: "Users & Reviewers" },
+  { key: "reviews", icon: "⭐", label: "Reviews" },
   { key: "cast", icon: "🎭", label: "Cast & Crew" },
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
@@ -3334,7 +3335,8 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 32 }}>
                     {[
                       ["🎬", "Movies", stats?.movies || movies.length, "movies"],
-                      ["⭐", "Users & Reviews", "View", "reviews"],
+                      ["👥", "Users & Reviewers", "View", "users"],
+                      ["⭐", "Reviews Feed", "View", "reviews"],
                       ["🎭", "Cast & Crew", stats?.cast || cast.length, "cast"],
                       ["🎥", "Productions", stats?.productions || prods.length, "productions"],
                       ["📰", "News Articles", stats?.news || news.length, "news"],
@@ -4147,10 +4149,17 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 </Suspense>
               )}
 
-              {/* ── USERS & REVIEWS ── */}
+              {/* ── USERS & REVIEWERS ── */}
+              {tab === "users" && (
+                <Suspense fallback={<Spinner />}>
+                  <UserReviewsPanel defaultMode="users" movies={movies} onToast={onToast} />
+                </Suspense>
+              )}
+
+              {/* ── REVIEWS FEED ── */}
               {tab === "reviews" && (
                 <Suspense fallback={<Spinner />}>
-                  <UserReviewsPanel movies={movies} onToast={onToast} />
+                  <UserReviewsPanel defaultMode="reviews" movies={movies} onToast={onToast} />
                 </Suspense>
               )}
 

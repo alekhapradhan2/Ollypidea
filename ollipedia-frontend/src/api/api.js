@@ -239,5 +239,9 @@ export const API = {
     const qp = new URLSearchParams(params).toString();
     return get(`/admin/reviews${qp ? `?${qp}` : ""}`, _adminToken);
   },
+  adminGetReviewers: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/reviewers${qp ? `?${qp}` : ""}`, _adminToken);
+  },
   adminDeleteReview: (movieId, reviewIdx) => del(`/admin/movies/${movieId}/reviews/${reviewIdx}`, _adminToken),
 };

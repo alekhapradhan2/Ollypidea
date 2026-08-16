@@ -3143,6 +3143,178 @@ app.delete("/api/admin/movies/:movieId/reviews/:reviewIdx", async (req, res) => 
   }
 });
 
+// GET /api/admin/reviewers — Get aggregated reviewer user profiles with analytical breakdown
+app.get("/api/admin/reviewers", async (req, res) => {
+  try {
+    const { search, sort, minReviews } = req.query;
+    const movies = await Movie.find({ "reviews.0": { $exists: true } }, "title slug posterUrl reviews releaseDate").lean();
+
+    const usersMap = new Map();
+
+    movies.forEach(movie => {
+      if (!Array.isArray(movie.reviews)) return;
+      movie.reviews.forEach((rev, idx) => {
+        const userName = (rev.user || "Anonymous").trim();
+        const userEmail = (rev.email || "").trim().toLowerCase();
+        // Group key: email if present, otherwise normalized username
+        const key = userEmail || `anon_${userName.toLowerCase().replace(/\s+/g, "_")}`;
+
+        if (!usersMap.has(key)) {
+          usersMap.set(key, {
+            userKey: key,
+            name: userName,
+            email: userEmail,
+            reviews: [],
+            totalLikes: 0,
+            ratingSum: 0,
+            ratings: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+          });
+        }
+
+        const u = usersMap.get(key);
+        // Keep the latest non-anonymous or formatted name
+        if (userName && userName !== "Anonymous") {
+          u.name = userName;
+        }
+        if (userEmail && !u.email) {
+          u.email = userEmail;
+        }
+
+        const rawRating = typeof rev.rating === "number" ? rev.rating : 5;
+        const normalizedStar = Math.max(1, Math.min(5, Math.round(rawRating > 5 ? rawRating / 2 : rawRating)));
+
+        u.ratingSum += rawRating;
+        u.totalLikes += (rev.likes || 0);
+        u.ratings[normalizedStar] = (u.ratings[normalizedStar] || 0) + 1;
+
+        u.reviews.push({
+          reviewId: rev._id ? String(rev._id) : `${movie._id}_${idx}`,
+          reviewIndex: idx,
+          movieId: String(movie._id),
+          movieTitle: movie.title,
+          moviePoster: movie.posterUrl || "",
+          movieSlug: movie.slug || "",
+          releaseDate: movie.releaseDate || "",
+          rating: rawRating,
+          normalizedStar,
+          text: rev.text || "",
+          date: rev.date || "",
+          likes: rev.likes || 0,
+          repliesCount: rev.replies ? rev.replies.length : 0,
+        });
+      });
+    });
+
+    let reviewersList = Array.from(usersMap.values()).map(u => {
+      const count = u.reviews.length;
+      const avg = count > 0 ? (u.ratingSum / count).toFixed(1) : "0.0";
+      
+      // Sort reviews newest first
+      u.reviews.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+      const dates = u.reviews.map(r => r.date).filter(Boolean).sort();
+      const firstDate = dates[0] || "";
+      const lastDate = dates[dates.length - 1] || "";
+
+      // Highest and lowest rated movies
+      let highestReview = u.reviews[0];
+      let lowestReview = u.reviews[0];
+      u.reviews.forEach(r => {
+        if (r.rating > highestReview.rating) highestReview = r;
+        if (r.rating < lowestReview.rating) lowestReview = r;
+      });
+
+      // Positive sentiment % (4-5 stars)
+      const positiveCount = (u.ratings[5] || 0) + (u.ratings[4] || 0);
+      const positivePct = count > 0 ? Math.round((positiveCount / count) * 100) : 0;
+
+      // Reviewer Loyalty Tier
+      let tier = "First-timer";
+      if (count >= 5) tier = "Cinephile";
+      else if (count >= 2) tier = "Regular";
+
+      return {
+        userKey: u.userKey,
+        name: u.name,
+        email: u.email,
+        totalReviews: count,
+        avgRating: avg,
+        totalLikes: u.totalLikes,
+        ratingsDistribution: u.ratings,
+        positivePercentage: positivePct,
+        firstReviewDate: firstDate,
+        lastReviewDate: lastDate,
+        tier,
+        highestRatedMovie: highestReview ? {
+          title: highestReview.movieTitle,
+          rating: highestReview.rating,
+          posterUrl: highestReview.moviePoster,
+        } : null,
+        lowestRatedMovie: lowestReview ? {
+          title: lowestReview.movieTitle,
+          rating: lowestReview.rating,
+          posterUrl: lowestReview.moviePoster,
+        } : null,
+        movies: u.reviews.map(r => ({
+          movieId: r.movieId,
+          movieTitle: r.movieTitle,
+          moviePoster: r.moviePoster,
+          rating: r.rating,
+          date: r.date,
+        })),
+        reviews: u.reviews,
+      };
+    });
+
+    // Filtering
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      reviewersList = reviewersList.filter(u =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.movies.some(m => m.movieTitle.toLowerCase().includes(q))
+      );
+    }
+
+    if (minReviews && !isNaN(Number(minReviews))) {
+      reviewersList = reviewersList.filter(u => u.totalReviews >= Number(minReviews));
+    }
+
+    // Sorting
+    reviewersList.sort((a, b) => {
+      if (sort === "most_reviews") return b.totalReviews - a.totalReviews;
+      if (sort === "highest_rating") return Number(b.avgRating) - Number(a.avgRating);
+      if (sort === "lowest_rating") return Number(a.avgRating) - Number(b.avgRating);
+      if (sort === "oldest") return new Date(a.lastReviewDate || 0).getTime() - new Date(b.lastReviewDate || 0).getTime();
+      if (sort === "name") return a.name.localeCompare(b.name);
+      // Default: newest review activity first, then most reviews
+      const dateDiff = new Date(b.lastReviewDate || 0).getTime() - new Date(a.lastReviewDate || 0).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return b.totalReviews - a.totalReviews;
+    });
+
+    const totalReviewers = usersMap.size;
+    const totalReviews = Array.from(usersMap.values()).reduce((sum, u) => sum + u.reviews.length, 0);
+    const overallAvgRating = totalReviews > 0
+      ? (Array.from(usersMap.values()).reduce((sum, u) => sum + u.ratingSum, 0) / totalReviews).toFixed(1)
+      : "0.0";
+    const superReviewersCount = Array.from(usersMap.values()).filter(u => u.reviews.length >= 3).length;
+
+    res.json({
+      reviewers: reviewersList,
+      stats: {
+        totalReviewers,
+        totalReviews,
+        overallAvgRating,
+        superReviewersCount,
+        filteredCount: reviewersList.length,
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/movies/:id/interested — vote yes or no
 app.post("/api/movies/:id/interested", async (req, res) => {
   try {

@@ -841,12 +841,15 @@ function makeFuzzyRegex(name) {
   return new RegExp(`(^|[\\s\\W])(${fuzzyWords.join("\\s+")})(?=[\\s\\W]|$)`, "gi");
 }
 function applyEntityLink(content, name, url) {
-  if (!content) return content;
-  const regex = new RegExp(`(^|[\\s\\W])(${escapeRegex(name)})(?=[\\s\\W]|$)`, "gi");
+  if (!content || !name || !url) return content;
+  const regex = new RegExp(`(^|[\\s\\W])(${escapeRegex(name)})(?=[\\s\\W]|$)`, "i");
   const parts = content.split(/(<[^>]*>)/g);
   const voidElements = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
+  const excludedTags = ["a", "h1", "h2", "h3", "h4", "h5", "h6", "title", "script", "style", "figure", "figcaption", "summary"];
+  const normUrl = url.trim().toLowerCase();
   let tagStack = [];
   let alreadyLinkedInBody = false;
+  let alreadyLinkedInTable = false;
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (part.startsWith("</")) {
@@ -860,20 +863,23 @@ function applyEntityLink(content, name, url) {
       const match = part.match(/^<\s*([a-z0-9]+)/i);
       if (match) {
         const tagName = match[1].toLowerCase();
+        if (tagName === "a") {
+          const hrefMatch = part.match(/href=["']([^"']+)["']/i);
+          if (hrefMatch && hrefMatch[1] && hrefMatch[1].trim().toLowerCase() === normUrl) {
+            const inTableOrList = tagStack.some((t) => ["table", "thead", "tbody", "tfoot", "tr", "td", "th", "dl", "dd", "dt"].includes(t.toLowerCase()));
+            if (inTableOrList) alreadyLinkedInTable = true;
+            else alreadyLinkedInBody = true;
+          }
+        }
         if (!voidElements.includes(tagName) && !part.endsWith("/>")) {
           tagStack.push(tagName);
-        }
-      }
-      if (part.toLowerCase().startsWith("<a ") && part.includes(url)) {
-        const inTableOrList = tagStack.includes("table") || tagStack.includes("ul") || tagStack.includes("ol");
-        if (!inTableOrList) {
-          alreadyLinkedInBody = true;
         }
       }
     }
   }
   tagStack = [];
   let hasLinkedInBody = alreadyLinkedInBody;
+  let hasLinkedInTable = alreadyLinkedInTable;
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (part.startsWith("</")) {
@@ -892,23 +898,33 @@ function applyEntityLink(content, name, url) {
         }
       }
     } else if (part.trim().length > 0) {
-      const excludedTags = ["a", "h1", "h2", "h3", "h4", "h5", "h6", "title", "script", "style", "figure", "figcaption", "summary"];
       const isExcluded = tagStack.some((t) => excludedTags.includes(t.toLowerCase()));
-      const inTableOrList = tagStack.includes("table") || tagStack.includes("ul") || tagStack.includes("ol");
+      const inTableOrList = tagStack.some((t) => ["table", "thead", "tbody", "tfoot", "tr", "td", "th", "dl", "dd", "dt"].includes(t.toLowerCase()));
       if (!isExcluded) {
-        parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
-          if (inTableOrList) {
-            return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
-          } else {
-            if (!hasLinkedInBody) {
-              hasLinkedInBody = true;
-              return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
-            }
-            return fullMatch;
+        if (inTableOrList && !hasLinkedInTable) {
+          if (regex.test(part)) {
+            parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+              if (!hasLinkedInTable) {
+                hasLinkedInTable = true;
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+              }
+              return fullMatch;
+            });
           }
-        });
+        } else if (!inTableOrList && !hasLinkedInBody) {
+          if (regex.test(part)) {
+            parts[i] = part.replace(regex, (fullMatch, prefix, matchStr) => {
+              if (!hasLinkedInBody) {
+                hasLinkedInBody = true;
+                return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #7ec8e3; font-weight: 600; text-decoration: none; white-space: nowrap;">${matchStr}</a>`;
+              }
+              return fullMatch;
+            });
+          }
+        }
       }
     }
+    if (hasLinkedInBody && hasLinkedInTable) break;
   }
   return parts.join("");
 }

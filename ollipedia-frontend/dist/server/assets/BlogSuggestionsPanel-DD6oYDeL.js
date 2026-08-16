@@ -272,15 +272,15 @@ function BlogSuggestionsPanel({ onNavigateToBlog }) {
                 "span",
                 {
                   style: {
-                    background: "rgba(16, 185, 129, 0.15)",
-                    color: "#10b981",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    background: (cronStatus == null ? void 0 : cronStatus.active) ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                    color: (cronStatus == null ? void 0 : cronStatus.active) ? "#10b981" : "#94a3b8",
+                    border: (cronStatus == null ? void 0 : cronStatus.active) ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(148, 163, 184, 0.3)",
                     fontSize: "0.75rem",
                     padding: "3px 10px",
                     borderRadius: "20px",
                     fontWeight: 600
                   },
-                  children: "● Daily Cron Active (08:00 AM IST)"
+                  children: (cronStatus == null ? void 0 : cronStatus.active) ? "● Daily Cron Active (08:00 AM IST)" : "● Manual / On-Demand Mode"
                 }
               )
             ] }),
