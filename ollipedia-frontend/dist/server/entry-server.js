@@ -14673,6 +14673,82 @@ function EnquiriesPanel({ enquiries, setEnquiries, onToast, setConfirm }) {
     }) })
   ] });
 }
+const AP_THEMES = {
+  gold: {
+    name: "Imperial Gold",
+    icon: "👑",
+    accent: "#ffd700",
+    primary: "#c9973a",
+    glow: "rgba(201, 151, 58, 0.25)",
+    borderGlow: "rgba(201, 151, 58, 0.4)",
+    ambient: "rgba(201, 151, 58, 0.08)",
+    badgeBg: "rgba(201, 151, 58, 0.15)",
+    badgeBorder: "rgba(201, 151, 58, 0.35)",
+    activeGradient: "linear-gradient(90deg, rgba(201, 151, 58, 0.22) 0%, rgba(201, 151, 58, 0.04) 100%)"
+  },
+  emerald: {
+    name: "Cyber Emerald",
+    icon: "💎",
+    accent: "#34d399",
+    primary: "#10b981",
+    glow: "rgba(16, 185, 129, 0.25)",
+    borderGlow: "rgba(16, 185, 129, 0.4)",
+    ambient: "rgba(16, 185, 129, 0.08)",
+    badgeBg: "rgba(16, 185, 129, 0.15)",
+    badgeBorder: "rgba(16, 185, 129, 0.35)",
+    activeGradient: "linear-gradient(90deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.04) 100%)"
+  },
+  violet: {
+    name: "Neon Violet",
+    icon: "🔮",
+    accent: "#c084fc",
+    primary: "#9333ea",
+    glow: "rgba(168, 85, 247, 0.25)",
+    borderGlow: "rgba(168, 85, 247, 0.4)",
+    ambient: "rgba(168, 85, 247, 0.08)",
+    badgeBg: "rgba(168, 85, 247, 0.15)",
+    badgeBorder: "rgba(168, 85, 247, 0.35)",
+    activeGradient: "linear-gradient(90deg, rgba(168, 85, 247, 0.22) 0%, rgba(168, 85, 247, 0.04) 100%)"
+  }
+};
+const MODULE_GROUPS = [
+  {
+    title: "Overview",
+    items: [
+      { key: "dashboard", icon: "🏠", label: "Dashboard" },
+      { key: "community", icon: "🌐", label: "Community Hub (Live)" }
+    ]
+  },
+  {
+    title: "Media Catalog",
+    items: [
+      { key: "movies", icon: "🎬", label: "Movies" },
+      { key: "songs", icon: "🎵", label: "Songs" },
+      { key: "cast", icon: "🎭", label: "Cast & Crew" },
+      { key: "productions", icon: "🎥", label: "Productions" }
+    ]
+  },
+  {
+    title: "Editorial & Data",
+    items: [
+      { key: "news", icon: "📰", label: "News" },
+      { key: "blog", icon: "✍️", label: "Blog" },
+      { key: "boxoffice", icon: "📊", label: "Box Office" },
+      { key: "sacnilk", icon: "🕷️", label: "Sacnilk" }
+    ]
+  },
+  {
+    title: "Audience & Ops",
+    items: [
+      { key: "enquiries", icon: "✉️", label: "Enquiries" },
+      { key: "users", icon: "👥", label: "Users & Reviewers" },
+      { key: "reviews", icon: "⭐", label: "Reviews" },
+      { key: "merge", icon: "🔀", label: "Merge Duplicates" },
+      { key: "staff", icon: "👥", label: "Staff Management" },
+      { key: "settings", icon: "⚙️", label: "Settings" }
+    ]
+  }
+];
 const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
   { key: "community", icon: "🌐", label: "Community Hub (Live)" },
@@ -14900,9 +14976,26 @@ function StaffPanel({ onToast }) {
   ] });
 }
 function AdminPortal({ admin, onLogout, onToast }) {
-  var _a, _b;
+  var _a, _b, _c, _d;
   const navigate = useNavigate();
   const [tab, setTab] = useState("dashboard");
+  const [navSearch, setNavSearch] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [accentTheme, setAccentTheme] = useState(() => {
+    try {
+      return localStorage.getItem("ap_accent_theme") || "gold";
+    } catch {
+      return "gold";
+    }
+  });
+  const [densityMode, setDensityMode] = useState("luxury");
+  const switchTheme = (t) => {
+    setAccentTheme(t);
+    try {
+      localStorage.setItem("ap_accent_theme", t);
+    } catch {
+    }
+  };
   const [movies, setMovies] = useState([]);
   const [cast, setCast] = useState([]);
   const [prods, setProds] = useState([]);
@@ -15289,137 +15382,487 @@ function AdminPortal({ admin, onLogout, onToast }) {
     setDetailMovie(m);
     setTab("movies");
   };
-  return /* @__PURE__ */ jsxs("div", { style: { height: "100vh", overflow: "hidden", background: "var(--bg1)", display: "flex", flexDirection: "column" }, children: [
-    /* @__PURE__ */ jsxs("nav", { style: {
-      height: 58,
-      background: "var(--bg2)",
-      borderBottom: "1px solid var(--border)",
+  const currentTheme = AP_THEMES[accentTheme] || AP_THEMES.gold;
+  const activeModule = ALL_MODULES.find((m) => m.key === tab) || { label: "Dashboard", icon: "🏠" };
+  return /* @__PURE__ */ jsxs("div", { className: "ap-portal-root", style: {
+    height: "100vh",
+    overflow: "hidden",
+    background: `radial-gradient(circle at 18% 12%, ${currentTheme.ambient} 0%, transparent 45%), radial-gradient(circle at 85% 85%, ${currentTheme.ambient} 0%, transparent 40%), #09090e`,
+    color: "#f3f3f8",
+    display: "flex",
+    flexDirection: "column",
+    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+  }, children: [
+    /* @__PURE__ */ jsx("style", { children: `
+        .ap-portal-root * { box-sizing: border-box; }
+        .ap-portal-root ::-webkit-scrollbar { width: 6px; height: 6px; }
+        .ap-portal-root ::-webkit-scrollbar-track { background: transparent; }
+        .ap-portal-root ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
+        .ap-portal-root ::-webkit-scrollbar-thumb:hover { background: ${currentTheme.accent}; }
+        
+        .ap-glass-panel {
+          background: rgba(14, 14, 20, 0.82);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .ap-card-glow {
+          background: #12121a;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .ap-card-glow:hover {
+          border-color: ${currentTheme.borderGlow};
+          box-shadow: 0 10px 28px -6px rgba(0,0,0,0.65), 0 0 16px -4px ${currentTheme.glow};
+        }
+
+        .ap-nav-btn {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
+          margin: 2px 8px;
+          border-radius: 8px;
+          font-size: 0.83rem;
+          font-weight: 500;
+          color: #9292a4;
+          background: transparent;
+          border: 1px solid transparent;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          text-align: left;
+          width: calc(100% - 16px);
+        }
+        .ap-nav-btn:hover {
+          color: #f3f3f8;
+          background: rgba(255, 255, 255, 0.05);
+          transform: translateX(2px);
+        }
+        .ap-nav-btn.active {
+          color: ${currentTheme.accent};
+          background: ${currentTheme.activeGradient};
+          border: 1px solid ${currentTheme.borderGlow};
+          font-weight: 700;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .ap-kpi-card {
+          background: linear-gradient(145deg, #151522 0%, #0d0d14 100%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          padding: 20px 22px;
+          position: relative;
+          overflow: hidden;
+          cursor: pointer;
+          transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .ap-kpi-card:hover {
+          transform: translateY(-3px);
+          border-color: ${currentTheme.borderGlow};
+          box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 20px ${currentTheme.glow};
+        }
+
+        .ap-sticky-bar {
+          position: sticky;
+          top: 0;
+          z-index: 40;
+          background: rgba(9, 9, 14, 0.88);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          padding: 13px 28px;
+          margin: 0 -28px 24px -28px;
+        }
+
+        .ap-badge-pill {
+          font-size: 0.68rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          padding: 2px 8px;
+          border-radius: 20px;
+          text-transform: uppercase;
+        }
+
+        .ap-pulse {
+          animation: ap-pulse-anim 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes ap-pulse-anim {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
+        .ap-skeleton {
+          background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+          background-size: 200% 100%;
+          animation: ap-skeleton-shimmer 1.5s infinite;
+        }
+        @keyframes ap-skeleton-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      ` }),
+    /* @__PURE__ */ jsxs("header", { className: "ap-glass-panel", style: {
+      height: 60,
       display: "flex",
       alignItems: "center",
-      padding: "0 24px",
-      gap: 16,
+      padding: "0 20px",
+      gap: 14,
       flexShrink: 0,
-      zIndex: 200
+      zIndex: 100,
+      borderBottom: "1px solid rgba(255,255,255,0.08)"
     }, children: [
-      /* @__PURE__ */ jsxs("button", { onClick: () => handleTabChange("dashboard"), style: { fontFamily: "'Cinzel',serif", fontWeight: 900, fontSize: "1.1rem", letterSpacing: "0.08em", color: "var(--gold)", background: "none", border: "none", cursor: "pointer" }, children: [
-        "OLLY",
-        /* @__PURE__ */ jsx("span", { style: { color: "var(--text)" }, children: "PEDIA" })
-      ] }),
-      /* @__PURE__ */ jsx("span", { style: { fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", background: "var(--gold)", color: "#000", padding: "2px 8px", borderRadius: 4 }, children: "ADMIN" }),
-      /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
-      /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.82rem", color: "var(--muted)" }, children: [
-        "@",
-        admin.username
-      ] }),
-      /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => onLogout == null ? void 0 : onLogout(), children: "Logout" }),
-      /* @__PURE__ */ jsx("a", { href: "/", target: "_blank", rel: "noreferrer", className: "btn btn-outline btn-sm", style: { fontSize: "0.76rem" }, children: "View Site ↗" })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }, children: [
-      /* @__PURE__ */ jsx("aside", { style: {
-        width: 220,
-        background: "var(--bg2)",
-        borderRight: "1px solid var(--border)",
+      /* @__PURE__ */ jsx(
+        "button",
+        {
+          onClick: () => setSidebarCollapsed((c) => !c),
+          title: sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar",
+          style: {
+            background: "#161622",
+            border: "1px solid rgba(255,255,255,0.1)",
+            color: "#e2e2ea",
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.82rem",
+            transition: "all 0.15s"
+          },
+          children: sidebarCollapsed ? "▶" : "◀"
+        }
+      ),
+      /* @__PURE__ */ jsxs("button", { onClick: () => handleTabChange("dashboard"), style: {
         display: "flex",
-        flexDirection: "column",
-        padding: "24px 0",
-        flexShrink: 0,
-        height: "100%",
-        overflowY: "auto"
-      }, children: ALL_MODULES.filter((m) => hasAccess(m.key)).map(({ key, icon, label }) => {
-        const unread = key === "enquiries" ? enquiries.filter((e) => !e.read).length : 0;
-        return /* @__PURE__ */ jsxs("button", { onClick: () => handleTabChange(key), style: {
+        alignItems: "center",
+        gap: 10,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 0
+      }, children: [
+        /* @__PURE__ */ jsx("div", { style: {
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: currentTheme.gradient,
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          padding: "12px 20px",
-          border: "none",
-          cursor: "pointer",
-          fontFamily: "inherit",
-          fontSize: "0.85rem",
-          fontWeight: tab === key ? 700 : 400,
-          background: tab === key ? "rgba(201,151,58,0.1)" : "transparent",
-          color: tab === key ? "var(--gold)" : "var(--text)",
-          borderLeft: tab === key ? "3px solid var(--gold)" : "3px solid transparent",
-          textAlign: "left",
-          transition: "all 0.15s"
+          justifyContent: "center",
+          fontWeight: 900,
+          fontSize: "1rem",
+          color: "#000",
+          boxShadow: `0 2px 10px ${currentTheme.glow}`
+        }, children: "O" }),
+        /* @__PURE__ */ jsxs("span", { style: {
+          fontFamily: "'Playfair Display', serif",
+          fontWeight: 900,
+          fontSize: "1.18rem",
+          letterSpacing: "0.04em",
+          color: currentTheme.accent
         }, children: [
-          /* @__PURE__ */ jsx("span", { style: { fontSize: "1rem" }, children: icon }),
-          label,
-          key === "movies" && movies.length > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.7rem", background: "var(--bg3)", padding: "1px 7px", borderRadius: 10 }, children: movies.length }),
-          key === "songs" && movies.length > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.7rem", background: "var(--bg3)", padding: "1px 7px", borderRadius: 10 }, children: movies.reduce((a, m) => {
-            var _a2, _b2;
-            return a + (((_b2 = (_a2 = m.media) == null ? void 0 : _a2.songs) == null ? void 0 : _b2.length) || 0);
-          }, 0) }),
-          key === "cast" && cast.length > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.7rem", background: "var(--bg3)", padding: "1px 7px", borderRadius: 10 }, children: cast.length }),
-          key === "productions" && prods.length > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.7rem", background: "var(--bg3)", padding: "1px 7px", borderRadius: 10 }, children: prods.length }),
-          key === "news" && news.length > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.7rem", background: "var(--bg3)", padding: "1px 7px", borderRadius: 10 }, children: news.length }),
-          key === "enquiries" && unread > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.68rem", background: "#e05555", color: "#fff", padding: "1px 7px", borderRadius: 10, fontWeight: 800 }, children: unread }),
-          key === "enquiries" && unread === 0 && enquiries.length > 0 && /* @__PURE__ */ jsx("span", { style: { marginLeft: "auto", fontSize: "0.7rem", background: "var(--bg3)", padding: "1px 7px", borderRadius: 10 }, children: enquiries.length })
-        ] }, key);
-      }) }),
-      /* @__PURE__ */ jsx("main", { id: "admin-main", style: { flex: 1, overflowY: "auto", minHeight: 0 }, children: loading ? /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(Spinner, {}) }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-        tab === "dashboard" && /* @__PURE__ */ jsxs("div", { style: { padding: "28px 28px 40px" }, children: [
-          /* @__PURE__ */ jsx("h2", { style: { marginBottom: 24, fontSize: "1.5rem" }, children: "Dashboard" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 32 }, children: [
-            ["🎬", "Movies", (stats == null ? void 0 : stats.movies) || movies.length, "movies"],
-            ["👥", "Users & Reviewers", "View", "users"],
-            ["⭐", "Reviews Feed", "View", "reviews"],
-            ["🎭", "Cast & Crew", (stats == null ? void 0 : stats.cast) || cast.length, "cast"],
-            ["🎥", "Productions", (stats == null ? void 0 : stats.productions) || prods.length, "productions"],
-            ["📰", "News Articles", (stats == null ? void 0 : stats.news) || news.length, "news"],
-            ["✉️", "Enquiries", enquiries.length, "enquiries"]
-          ].filter(([, , , key]) => hasAccess(key)).map(([icon, label, count, key]) => {
+          "OLLY",
+          /* @__PURE__ */ jsx("span", { style: { color: "#fff" }, children: "PEDIA" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx("span", { style: {
+        fontSize: "0.62rem",
+        fontWeight: 800,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        background: currentTheme.badgeBg,
+        color: currentTheme.accent,
+        border: `1px solid ${currentTheme.badgeBorder}`,
+        padding: "3px 9px",
+        borderRadius: 6
+      }, children: "CONTROL SUITE" }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginLeft: 8, fontSize: "0.82rem", color: "#6a6a7c" }, children: [
+        /* @__PURE__ */ jsx("span", { children: "/" }),
+        /* @__PURE__ */ jsxs("span", { style: { color: "#e2e2ea", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }, children: [
+          /* @__PURE__ */ jsx("span", { children: activeModule.icon }),
+          /* @__PURE__ */ jsx("span", { children: activeModule.label })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
+      /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "center", background: "#14141d", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 2, gap: 2 }, children: Object.entries(AP_THEMES).map(([tKey, t]) => /* @__PURE__ */ jsxs(
+        "button",
+        {
+          onClick: () => switchTheme(tKey),
+          title: `Switch to ${t.name} Theme`,
+          style: {
+            background: accentTheme === tKey ? t.gradient : "transparent",
+            color: accentTheme === tKey ? "#000" : "#8a8a9e",
+            border: "none",
+            borderRadius: 16,
+            padding: "3px 9px",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            transition: "all 0.15s"
+          },
+          children: [
+            /* @__PURE__ */ jsx("span", { children: t.icon }),
+            /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem" }, children: tKey === "gold" ? "Gold" : tKey === "emerald" ? "Mint" : "Violet" })
+          ]
+        },
+        tKey
+      )) }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", padding: "4px 10px", borderRadius: 20 }, children: [
+        /* @__PURE__ */ jsx("span", { className: "ap-pulse", style: { width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block" } }),
+        /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", fontWeight: 700, color: "#10b981", letterSpacing: "0.04em" }, children: "LIVE SYSTEM" })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, background: "#14141d", border: "1px solid rgba(255,255,255,0.08)", padding: "4px 12px", borderRadius: 20 }, children: [
+        /* @__PURE__ */ jsx("div", { style: { width: 22, height: 22, borderRadius: "50%", background: currentTheme.gradient, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.72rem", fontWeight: 900 }, children: ((_c = (_b = admin.username) == null ? void 0 : _b[0]) == null ? void 0 : _c.toUpperCase()) || "A" }),
+        /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.8rem", fontWeight: 600, color: "#e2e2ea" }, children: [
+          "@",
+          admin.username
+        ] }),
+        isSuperAdmin && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", background: currentTheme.badgeBg, color: currentTheme.accent, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }, children: "SUPER" })
+      ] }),
+      /* @__PURE__ */ jsxs("a", { href: "/", target: "_blank", rel: "noreferrer", className: "btn btn-outline btn-sm", style: { fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 5, borderRadius: 8, borderColor: "rgba(255,255,255,0.15)" }, children: [
+        /* @__PURE__ */ jsx("span", { children: "View Site" }),
+        /* @__PURE__ */ jsx("span", { style: { fontSize: "0.85rem" }, children: "↗" })
+      ] }),
+      /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => onLogout == null ? void 0 : onLogout(), style: { fontSize: "0.78rem", color: "#f87171" }, children: "Logout" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { style: { display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }, children: [
+      /* @__PURE__ */ jsxs("aside", { style: {
+        width: sidebarCollapsed ? 68 : 240,
+        background: "#0c0c12",
+        borderRight: "1px solid rgba(255, 255, 255, 0.08)",
+        display: "flex",
+        flexDirection: "column",
+        flexShrink: 0,
+        height: "100%",
+        overflowY: "auto",
+        transition: "width 0.22s cubic-bezier(0.16, 1, 0.3, 1)"
+      }, children: [
+        !sidebarCollapsed && /* @__PURE__ */ jsx("div", { style: { padding: "14px 12px 6px" }, children: /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
+          /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "#6a6a7c", pointerEvents: "none" }, children: "🔍" }),
+          /* @__PURE__ */ jsx(
+            "input",
+            {
+              className: "form-input",
+              style: {
+                paddingLeft: 28,
+                paddingRight: 24,
+                fontSize: "0.78rem",
+                background: "#14141d",
+                borderColor: "rgba(255,255,255,0.08)",
+                borderRadius: 8,
+                height: 32
+              },
+              placeholder: "Filter tabs…",
+              value: navSearch,
+              onChange: (e) => setNavSearch(e.target.value)
+            }
+          ),
+          navSearch && /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "button",
+              onClick: () => setNavSearch(""),
+              style: {
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#888",
+                cursor: "pointer",
+                fontSize: "0.75rem",
+                padding: 0
+              },
+              children: "✕"
+            }
+          )
+        ] }) }),
+        /* @__PURE__ */ jsx("div", { style: { flex: 1, paddingBottom: 24, paddingTop: sidebarCollapsed ? 12 : 0 }, children: MODULE_GROUPS.map((group) => {
+          const allowedItems = group.items.filter((m) => hasAccess(m.key) && (!navSearch || m.label.toLowerCase().includes(navSearch.toLowerCase()) || m.key.includes(navSearch.toLowerCase())));
+          if (allowedItems.length === 0) return null;
+          return /* @__PURE__ */ jsxs("div", { style: { marginTop: sidebarCollapsed ? 8 : 12 }, children: [
+            !sidebarCollapsed && /* @__PURE__ */ jsx("div", { style: {
+              fontSize: "0.64rem",
+              fontWeight: 800,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "#5b5b6e",
+              padding: "6px 18px"
+            }, children: group.title }),
+            allowedItems.map(({ key, icon, label }) => {
+              const unread = key === "enquiries" ? enquiries.filter((e) => !e.read).length : 0;
+              const isActive = tab === key;
+              return /* @__PURE__ */ jsxs(
+                "button",
+                {
+                  onClick: () => handleTabChange(key),
+                  title: sidebarCollapsed ? `${label}${unread > 0 ? ` (${unread} new)` : ""}` : void 0,
+                  className: `ap-nav-btn ${isActive ? "active" : ""}`,
+                  style: {
+                    justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                    padding: sidebarCollapsed ? "10px 0" : "8px 12px",
+                    position: "relative"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsx("span", { style: { fontSize: "1.1rem", opacity: isActive ? 1 : 0.85 }, children: icon }),
+                    !sidebarCollapsed && /* @__PURE__ */ jsxs(Fragment, { children: [
+                      /* @__PURE__ */ jsx("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: label }),
+                      key === "movies" && movies.length > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }, children: movies.length }),
+                      key === "songs" && movies.length > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }, children: movies.reduce((a, m) => {
+                        var _a2, _b2;
+                        return a + (((_b2 = (_a2 = m.media) == null ? void 0 : _a2.songs) == null ? void 0 : _b2.length) || 0);
+                      }, 0) }),
+                      key === "cast" && cast.length > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }, children: cast.length }),
+                      key === "productions" && prods.length > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }, children: prods.length }),
+                      key === "news" && news.length > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }, children: news.length }),
+                      key === "enquiries" && unread > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.65rem", background: "#ef4444", color: "#fff", padding: "1px 7px", borderRadius: 10, fontWeight: 800 }, children: unread }),
+                      key === "enquiries" && unread === 0 && enquiries.length > 0 && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }, children: enquiries.length })
+                    ] }),
+                    sidebarCollapsed && key === "enquiries" && unread > 0 && /* @__PURE__ */ jsx("span", { style: { position: "absolute", top: 6, right: 14, width: 8, height: 8, borderRadius: "50%", background: "#ef4444" } })
+                  ]
+                },
+                key
+              );
+            })
+          ] }, group.title);
+        }) })
+      ] }),
+      /* @__PURE__ */ jsx("main", { id: "admin-main", style: { flex: 1, overflowY: "auto", minHeight: 0, position: "relative" }, children: loading ? /* @__PURE__ */ jsx("div", { style: { padding: 40 }, children: /* @__PURE__ */ jsx(Spinner, {}) }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+        tab === "dashboard" && /* @__PURE__ */ jsxs("div", { style: { padding: "32px 36px 50px" }, children: [
+          /* @__PURE__ */ jsxs("div", { style: {
+            background: "linear-gradient(135deg, rgba(201, 151, 58, 0.12) 0%, rgba(20, 20, 30, 0.6) 100%)",
+            border: "1px solid rgba(201, 151, 58, 0.25)",
+            borderRadius: 16,
+            padding: "26px 30px",
+            marginBottom: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 16
+          }, children: [
+            /* @__PURE__ */ jsxs("div", { children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "0.75rem", fontWeight: 800, color: "#ffd700", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }, children: "Administrative Command Hub" }),
+              /* @__PURE__ */ jsxs("h1", { style: { fontSize: "1.75rem", margin: 0, fontWeight: 900, color: "#fff" }, children: [
+                "Welcome, ",
+                admin.username || "Administrator"
+              ] }),
+              /* @__PURE__ */ jsx("p", { style: { color: "#9292a4", fontSize: "0.88rem", margin: "6px 0 0" }, children: "Manage Ollypedia movies, tracks, news, community feeds, and administrative settings." })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 10 }, children: [
+              /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("movie"), children: "+ Add Movie" }),
+              /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => handleTabChange("community"), children: "🌐 Community Hub" })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsx("h3", { style: { fontSize: "1.05rem", fontWeight: 800, marginBottom: 16, color: "#e2e2ea" }, children: "System Metrics Overview" }),
+          /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 36 }, children: [
+            ["🎬", "Total Movies", (stats == null ? void 0 : stats.movies) || movies.length, "movies", "Manage database titles"],
+            ["🌐", "Community Hub", "Live Feed", "community", "Live user activities"],
+            ["🎵", "Songs & Media", movies.reduce((a, m) => {
+              var _a2, _b2;
+              return a + (((_b2 = (_a2 = m.media) == null ? void 0 : _a2.songs) == null ? void 0 : _b2.length) || 0);
+            }, 0), "songs", "Soundtracks & videos"],
+            ["🎭", "Cast & Crew", (stats == null ? void 0 : stats.cast) || cast.length, "cast", "Actors, directors & staff"],
+            ["🎥", "Productions", (stats == null ? void 0 : stats.productions) || prods.length, "productions", "Studios & banners"],
+            ["📰", "News Articles", (stats == null ? void 0 : stats.news) || news.length, "news", "Published stories & updates"],
+            ["✉️", "User Enquiries", enquiries.length, "enquiries", "Contact messages"]
+          ].filter(([, , , key]) => hasAccess(key)).map(([icon, label, count, key, sub]) => {
             const unread = key === "enquiries" ? enquiries.filter((e) => !e.read).length : 0;
             return /* @__PURE__ */ jsxs(
               "div",
               {
                 onClick: () => handleTabChange(key),
-                style: { background: "var(--bg2)", border: `1px solid ${unread > 0 ? "rgba(224,85,85,.5)" : "var(--border)"}`, borderRadius: 10, padding: "20px 22px", cursor: "pointer", transition: "border-color 0.15s", position: "relative" },
-                onMouseEnter: (e) => e.currentTarget.style.borderColor = "var(--gold)",
-                onMouseLeave: (e) => e.currentTarget.style.borderColor = unread > 0 ? "rgba(224,85,85,.5)" : "var(--border)",
+                className: "ap-kpi-card",
                 children: [
-                  unread > 0 && /* @__PURE__ */ jsxs("div", { style: { position: "absolute", top: 10, right: 10, background: "#e05555", color: "#fff", fontSize: "0.65rem", fontWeight: 800, padding: "1px 7px", borderRadius: 10 }, children: [
+                  unread > 0 && /* @__PURE__ */ jsxs("div", { style: {
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    background: "#ef4444",
+                    color: "#fff",
+                    fontSize: "0.65rem",
+                    fontWeight: 800,
+                    padding: "2px 8px",
+                    borderRadius: 10
+                  }, children: [
                     unread,
-                    " new"
+                    " unread"
                   ] }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: "1.8rem", marginBottom: 8 }, children: icon }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: "2rem", fontWeight: 900, color: "var(--gold)" }, children: count }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: "0.8rem", color: "var(--muted)", marginTop: 2 }, children: label })
+                  /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }, children: [
+                    /* @__PURE__ */ jsx("div", { style: { fontSize: "1.6rem" }, children: icon }),
+                    /* @__PURE__ */ jsx("span", { style: { fontSize: "0.75rem", color: "#c9973a", fontWeight: 700 }, children: "Open →" })
+                  ] }),
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: "1.85rem", fontWeight: 900, color: "#ffd700", lineHeight: 1.1 }, children: count }),
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: "0.85rem", fontWeight: 700, color: "#e2e2ea", marginTop: 4 }, children: label }),
+                  /* @__PURE__ */ jsx("div", { style: { fontSize: "0.7rem", color: "#6a6a7c", marginTop: 2 }, children: sub })
                 ]
               },
               key
             );
           }) }),
-          ((_b = stats == null ? void 0 : stats.recentMovies) == null ? void 0 : _b.length) > 0 && /* @__PURE__ */ jsxs("div", { children: [
-            /* @__PURE__ */ jsx("h3", { style: { marginBottom: 14, fontSize: "1rem" }, children: "Recent Movies" }),
-            /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: stats.recentMovies.map((m) => {
-              var _a2;
-              return /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 14, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px" }, children: [
-                m.posterUrl && /* @__PURE__ */ jsx("img", { src: m.posterUrl, alt: m.title, style: { width: 34, height: 48, objectFit: "cover", borderRadius: 3, flexShrink: 0 }, onError: (e) => e.target.style.display = "none" }),
-                /* @__PURE__ */ jsxs("div", { style: { flex: 1 }, children: [
-                  /* @__PURE__ */ jsx("div", { style: { fontWeight: 600 }, children: m.title }),
-                  /* @__PURE__ */ jsx("div", { style: { fontSize: "0.72rem", color: "var(--muted)" }, children: ((_a2 = m.productions) == null ? void 0 : _a2.map((p) => p.name).join(", ")) || "—" })
-                ] }),
-                /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openMovieDetail(m), children: "Manage" })
-              ] }, m._id);
-            }) })
+          /* @__PURE__ */ jsxs("div", { style: { display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, alignItems: "start" }, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ap-card-glow", style: { padding: 22 }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }, children: [
+                /* @__PURE__ */ jsx("h3", { style: { fontSize: "1rem", fontWeight: 800, margin: 0 }, children: "Recent Movies Catalog" }),
+                /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { fontSize: "0.75rem", color: "#ffd700" }, onClick: () => handleTabChange("movies"), children: "View All Movies →" })
+              ] }),
+              ((_d = stats == null ? void 0 : stats.recentMovies) == null ? void 0 : _d.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: stats.recentMovies.map((m) => {
+                var _a2;
+                return /* @__PURE__ */ jsxs("div", { style: {
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  background: "#181824",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  transition: "border-color 0.15s"
+                }, children: [
+                  m.posterUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl, alt: m.title, style: { width: 36, height: 50, objectFit: "cover", borderRadius: 4, flexShrink: 0 }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: 36, height: 50, background: "#222230", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }, children: "🎬" }),
+                  /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                    /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: "0.9rem", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: m.title }),
+                    /* @__PURE__ */ jsx("div", { style: { fontSize: "0.72rem", color: "#8a8a9e", marginTop: 2 }, children: ((_a2 = m.productions) == null ? void 0 : _a2.map((p) => p.name).join(", ")) || "No Production House Linked" })
+                  ] }),
+                  /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openMovieDetail(m), style: { color: "#ffd700", fontSize: "0.78rem" }, children: "Manage" })
+                ] }, m._id);
+              }) }) : /* @__PURE__ */ jsx("div", { style: { textAlign: "center", padding: "30px 0", color: "#6a6a7c", fontSize: "0.85rem" }, children: "No recent movies loaded." })
+            ] }),
+            /* @__PURE__ */ jsxs("div", { className: "ap-card-glow", style: { padding: 22 }, children: [
+              /* @__PURE__ */ jsx("h3", { style: { fontSize: "1rem", fontWeight: 800, margin: "0 0 16px 0" }, children: "Quick Actions Launchpad" }),
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+                /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("movie"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎬 + Create New Movie" }),
+                /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("song"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎵 + Add New Soundtrack" }),
+                /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("cast"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎭 + Add Cast / Crew Member" }),
+                /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("production"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎥 + Add Production Studio" }),
+                /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("news"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "📰 + Write News Article" })
+              ] })
+            ] })
           ] })
         ] }),
         tab === "movies" && !detailMovie && (() => {
           const pagedMovies = yearFilter ? filteredMovies : filteredMovies.slice((moviePage - 1) * PG.movies, moviePage * PG.movies);
           const allIds = filteredMovies.map((m) => m._id);
           const allSel = allIds.length > 0 && allIds.every((id) => selected.has(id));
-          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 28px 40px" }, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 50, background: "var(--bg1)", padding: "13px 28px", margin: "0 -28px 22px", boxShadow: "0 2px 16px rgba(0,0,0,0.45)" }, children: [
-              /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 800 }, children: "Movies" }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", padding: "2px 9px", borderRadius: 12, fontWeight: 600 }, children: filteredMovies.length !== movies.length ? `${filteredMovies.length} / ${movies.length}` : `${movies.length} total` }),
+          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 32px 40px" }, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ap-sticky-bar", style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 900 }, children: "Movies Catalog" }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }, children: filteredMovies.length !== movies.length ? `${filteredMovies.length} / ${movies.length}` : `${movies.length} total` })
+              ] }),
               /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }, children: [
-                /* @__PURE__ */ jsx("span", { style: { fontSize: "0.78rem", color: "var(--muted)", fontWeight: 600 }, children: "Year:" }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: "0.78rem", color: "#8a8a9e", fontWeight: 600 }, children: "Year:" }),
                 /* @__PURE__ */ jsxs(
                   "select",
                   {
                     className: "form-input",
-                    style: { width: "auto", padding: "4px 10px", fontSize: "0.82rem", background: "var(--bg2)", color: "var(--text)" },
+                    style: { width: "auto", padding: "4px 10px", fontSize: "0.82rem", background: "#14141d", color: "#f3f3f8", borderRadius: 8, borderColor: "rgba(255,255,255,0.1)" },
                     value: yearFilter,
                     onChange: (e) => {
                       setYearFilter(e.target.value);
@@ -15432,7 +15875,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
                   }
                 )
               ] }),
-              /* @__PURE__ */ jsxs("div", { style: { display: "flex", background: "var(--bg2)", borderRadius: 8, padding: 2, border: "1px solid var(--border)", marginLeft: 6 }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", background: "#14141d", borderRadius: 8, padding: 3, border: "1px solid rgba(255,255,255,0.08)", marginLeft: 6 }, children: [
                 /* @__PURE__ */ jsx(
                   "button",
                   {
@@ -15442,9 +15885,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
                       border: "none",
                       borderRadius: 6,
                       cursor: "pointer",
-                      background: movieView === "grid" ? "var(--gold)" : "transparent",
-                      color: movieView === "grid" ? "#000" : "var(--muted)",
-                      fontWeight: 700,
+                      background: movieView === "grid" ? "#ffd700" : "transparent",
+                      color: movieView === "grid" ? "#000" : "#8a8a9e",
+                      fontWeight: 800,
                       fontSize: "0.78rem",
                       display: "flex",
                       alignItems: "center",
@@ -15462,9 +15905,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
                       border: "none",
                       borderRadius: 6,
                       cursor: "pointer",
-                      background: movieView === "list" ? "var(--gold)" : "transparent",
-                      color: movieView === "list" ? "#000" : "var(--muted)",
-                      fontWeight: 700,
+                      background: movieView === "list" ? "#ffd700" : "transparent",
+                      color: movieView === "list" ? "#000" : "#8a8a9e",
+                      fontWeight: 800,
                       fontSize: "0.78rem",
                       display: "flex",
                       alignItems: "center",
@@ -15476,31 +15919,40 @@ function AdminPortal({ admin, onLogout, onToast }) {
               ] }),
               /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
               /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
-                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--muted)", pointerEvents: "none" }, children: "🔍" }),
-                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 180 }, placeholder: "Search title…", value: search, onChange: (e) => setQ(e.target.value) })
+                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }, children: "🔍" }),
+                /* @__PURE__ */ jsx(
+                  "input",
+                  {
+                    className: "form-input",
+                    style: { paddingLeft: 30, width: 200, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" },
+                    placeholder: "Search movie title…",
+                    value: search,
+                    onChange: (e) => setQ(e.target.value)
+                  }
+                )
               ] }),
               /* @__PURE__ */ jsx("button", { className: `btn btn-sm ${selectMode ? "btn-gold" : "btn-outline"}`, onClick: () => {
                 setSelectMode((s) => !s);
                 setSelected(/* @__PURE__ */ new Set());
-              }, children: selectMode ? "✓ Selecting" : "☐ Select" }),
-              selectMode && selected.size > 0 && /* @__PURE__ */ jsxs("button", { className: "btn btn-sm", onClick: () => handleBulkDelete("movies"), style: { background: "var(--red)", color: "#fff", border: "none", fontWeight: 700 }, children: [
+              }, style: { borderRadius: 8 }, children: selectMode ? "✓ Selecting" : "☐ Select" }),
+              selectMode && selected.size > 0 && /* @__PURE__ */ jsxs("button", { className: "btn btn-sm", onClick: () => handleBulkDelete("movies"), style: { background: "#ef4444", color: "#fff", border: "none", fontWeight: 700, borderRadius: 8 }, children: [
                 "🗑 Delete ",
                 selected.size
               ] }),
-              !selectMode && /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("movie"), children: "+ Add Movie" })
+              !selectMode && /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("movie"), style: { borderRadius: 8, fontWeight: 700 }, children: "+ Add Movie" })
             ] }),
-            selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "8px 14px", background: "rgba(201,151,58,0.07)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.2)" }, children: [
-              /* @__PURE__ */ jsx("input", { type: "checkbox", checked: allSel, onChange: () => allSel ? clearSel() : selectAll(allIds), style: { width: 16, height: 16, cursor: "pointer", accentColor: "var(--gold)" } }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.82rem", color: "var(--gold)", fontWeight: 600 }, children: selected.size > 0 ? `${selected.size} of ${filteredMovies.length} selected` : `Select all ${filteredMovies.length} movies` }),
-              selected.size > 0 && /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: clearSel, style: { marginLeft: "auto", fontSize: "0.72rem" }, children: "Clear" })
+            selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 16px", background: "rgba(201,151,58,0.08)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.25)" }, children: [
+              /* @__PURE__ */ jsx("input", { type: "checkbox", checked: allSel, onChange: () => allSel ? clearSel() : selectAll(allIds), style: { width: 16, height: 16, cursor: "pointer", accentColor: "#ffd700" } }),
+              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.85rem", color: "#ffd700", fontWeight: 700 }, children: selected.size > 0 ? `${selected.size} of ${filteredMovies.length} selected` : `Select all ${filteredMovies.length} movies` }),
+              selected.size > 0 && /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: clearSel, style: { marginLeft: "auto", fontSize: "0.75rem" }, children: "Clear Selection" })
             ] }),
-            filteredMovies.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "60px 0", color: "var(--muted)" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 12 }, children: "🎬" }),
-              "No movies found."
+            filteredMovies.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "70px 0", color: "#6a6a7c" }, children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 12 }, children: "🎬" }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }, children: "No movies matched your search" })
             ] }) : movieView === "list" ? (
-              /* List View: movie name, release date with edit button, actions */
-              /* @__PURE__ */ jsx("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }, children: /* @__PURE__ */ jsxs("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }, children: [
-                /* @__PURE__ */ jsx("thead", { children: /* @__PURE__ */ jsxs("tr", { style: { background: "var(--bg3)", color: "var(--muted)", textAlign: "left", borderBottom: "1px solid var(--border)" }, children: [
+              /* List View */
+              /* @__PURE__ */ jsx("div", { className: "ap-card-glow", style: { overflow: "hidden" }, children: /* @__PURE__ */ jsxs("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }, children: [
+                /* @__PURE__ */ jsx("thead", { children: /* @__PURE__ */ jsxs("tr", { style: { background: "#14141d", color: "#8a8a9e", textAlign: "left", borderBottom: "1px solid rgba(255,255,255,0.08)" }, children: [
                   selectMode && /* @__PURE__ */ jsx("th", { style: { padding: "12px 16px", width: 40 } }),
                   /* @__PURE__ */ jsx("th", { style: { padding: "12px 20px", fontWeight: 700 }, children: "Movie Name" }),
                   /* @__PURE__ */ jsx("th", { style: { padding: "12px 20px", fontWeight: 700 }, children: "Release Date" }),
@@ -15512,7 +15964,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
                     "tr",
                     {
                       style: {
-                        borderBottom: "1px solid var(--border)",
+                        borderBottom: "1px solid rgba(255,255,255,0.05)",
                         background: isSel ? "rgba(201,151,58,0.08)" : "transparent",
                         transition: "background 0.15s"
                       },
@@ -15523,24 +15975,24 @@ function AdminPortal({ admin, onLogout, onToast }) {
                             type: "checkbox",
                             checked: isSel,
                             onChange: () => toggleSel(m._id),
-                            style: { accentColor: "var(--gold)", cursor: "pointer", width: 16, height: 16 }
+                            style: { accentColor: "#ffd700", cursor: "pointer", width: 16, height: 16 }
                           }
                         ) }),
                         /* @__PURE__ */ jsx(
                           "td",
                           {
-                            style: { padding: "14px 20px", fontWeight: 700, color: "var(--text)", cursor: selectMode ? "pointer" : "default" },
+                            style: { padding: "14px 20px", fontWeight: 700, color: "#f3f3f8", cursor: selectMode ? "pointer" : "default" },
                             onClick: () => selectMode && toggleSel(m._id),
-                            children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: [
-                              m.posterUrl || m.thumbnailUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl || m.thumbnailUrl, alt: m.title, style: { width: 28, height: 40, objectFit: "cover", borderRadius: 4 }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("span", { style: { fontSize: "1.2rem" }, children: "🎬" }),
+                            children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 14 }, children: [
+                              m.posterUrl || m.thumbnailUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl || m.thumbnailUrl, alt: m.title, style: { width: 32, height: 44, objectFit: "cover", borderRadius: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: 32, height: 44, background: "#1c1c28", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }, children: "🎬" }),
                               /* @__PURE__ */ jsxs("div", { children: [
-                                /* @__PURE__ */ jsx("span", { style: { color: "var(--gold)" }, children: m.title }),
-                                m.verdict && m.verdict !== "Upcoming" && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", marginLeft: 8, color: verdictColor(m.verdict), background: "var(--bg3)", padding: "1px 6px", borderRadius: 8 }, children: m.verdict })
+                                /* @__PURE__ */ jsx("span", { style: { color: "#ffd700", fontSize: "0.95rem" }, children: m.title }),
+                                m.verdict && m.verdict !== "Upcoming" && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", marginLeft: 8, color: verdictColor(m.verdict), background: "#181824", border: `1px solid ${verdictColor(m.verdict)}44`, padding: "1px 7px", borderRadius: 10 }, children: m.verdict })
                               ] })
                             ] })
                           }
                         ),
-                        /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px" }, children: editingDateId === m._id ? /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, background: "var(--bg1)", padding: 8, borderRadius: 8, border: "1px solid var(--border)" }, onClick: (e) => e.stopPropagation(), children: [
+                        /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px" }, children: editingDateId === m._id ? /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6, background: "#14141d", padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)" }, onClick: (e) => e.stopPropagation(), children: [
                           /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8 }, children: [
                             /* @__PURE__ */ jsxs("label", { style: { fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }, children: [
                               /* @__PURE__ */ jsx("input", { type: "radio", name: `prec-${m._id}`, value: "full", checked: editingDatePrecision === "full", onChange: () => setEditingDatePrecision("full") }),
@@ -15561,7 +16013,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
                               {
                                 type: "date",
                                 className: "form-input",
-                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg2)", color: "var(--text)" },
+                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "#181824", color: "#f3f3f8" },
                                 value: editingDateValue,
                                 onChange: (e) => setEditingDateValue(e.target.value)
                               }
@@ -15571,7 +16023,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
                               {
                                 type: "month",
                                 className: "form-input",
-                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--bg2)", color: "var(--text)" },
+                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "#181824", color: "#f3f3f8" },
                                 value: editingDateValue,
                                 onChange: (e) => setEditingDateValue(e.target.value)
                               }
@@ -15584,7 +16036,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
                                 max: "2100",
                                 placeholder: "e.g. 2025",
                                 className: "form-input",
-                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "90px", background: "var(--bg2)", color: "var(--text)" },
+                                style: { padding: "3px 8px", fontSize: "0.8rem", width: "90px", background: "#181824", color: "#f3f3f8" },
                                 value: editingDateValue,
                                 onChange: (e) => setEditingDateValue(e.target.value)
                               }
@@ -15610,12 +16062,12 @@ function AdminPortal({ admin, onLogout, onToast }) {
                             )
                           ] })
                         ] }) : /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
-                          /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontSize: "0.85rem" }, children: fmtDate(m.releaseDate, m.releaseDatePrecision) }),
+                          /* @__PURE__ */ jsx("span", { style: { color: "#9292a4", fontSize: "0.85rem" }, children: fmtDate(m.releaseDate, m.releaseDatePrecision) }),
                           !selectMode && /* @__PURE__ */ jsx(
                             "button",
                             {
                               className: "btn btn-ghost btn-sm",
-                              style: { fontSize: "0.72rem", padding: "2px 8px", color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)" },
+                              style: { fontSize: "0.72rem", padding: "2px 8px", color: "#ffd700", border: "1px solid rgba(201,151,58,0.3)" },
                               title: "Edit Release Date",
                               onClick: (e) => {
                                 e.stopPropagation();
@@ -15628,9 +16080,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
                           )
                         ] }) }),
                         /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px", textAlign: "right" }, children: !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end" }, children: [
-                          /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openMovieDetail(m), style: { color: "var(--gold)" }, children: "Manage" }),
+                          /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openMovieDetail(m), style: { color: "#ffd700", fontWeight: 600 }, children: "Manage" }),
                           /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openEdit("movie", m), children: "Edit" }),
-                          /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => handleDelete("movie", m._id, m.title), style: { color: "var(--red)" }, children: "✕" })
+                          /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => handleDelete("movie", m._id, m.title), style: { color: "#ef4444" }, children: "✕" })
                         ] }) })
                       ]
                     },
@@ -15640,48 +16092,48 @@ function AdminPortal({ admin, onLogout, onToast }) {
               ] }) })
             ) : (
               /* Grid View */
-              /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 14 }, children: pagedMovies.map((m) => {
+              /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(154px, 1fr))", gap: 16 }, children: pagedMovies.map((m) => {
                 const img = m.posterUrl || m.thumbnailUrl;
                 const vc = verdictColor(m.verdict);
                 const isSel = selected.has(m._id);
                 return /* @__PURE__ */ jsxs(
                   "div",
                   {
-                    style: { position: "relative", borderRadius: 12, overflow: "hidden", background: "var(--bg2)", border: `2px solid ${isSel ? "var(--gold)" : "var(--border)"}`, cursor: "pointer", transition: "transform 0.15s,border-color 0.15s", display: "flex", flexDirection: "column" },
-                    onMouseEnter: (e) => {
-                      e.currentTarget.style.transform = "translateY(-4px)";
-                      if (!isSel) e.currentTarget.style.borderColor = "rgba(201,151,58,0.6)";
-                    },
-                    onMouseLeave: (e) => {
-                      e.currentTarget.style.transform = "none";
-                      if (!isSel) e.currentTarget.style.borderColor = "var(--border)";
+                    className: "ap-card-glow",
+                    style: {
+                      position: "relative",
+                      overflow: "hidden",
+                      border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.08)"}`,
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column"
                     },
                     onClick: () => selectMode ? toggleSel(m._id) : openMovieDetail(m),
                     children: [
                       selectMode && /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: 8, left: 8, zIndex: 10 }, onClick: (e) => {
                         e.stopPropagation();
                         toggleSel(m._id);
-                      }, children: /* @__PURE__ */ jsx("div", { style: { width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSel ? "var(--gold)" : "rgba(255,255,255,0.8)"}`, background: isSel ? "var(--gold)" : "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center" }, children: isSel && /* @__PURE__ */ jsx("span", { style: { color: "#000", fontSize: "0.75rem", fontWeight: 900 }, children: "✓" }) }) }),
-                      /* @__PURE__ */ jsxs("div", { style: { position: "relative", aspectRatio: "2/3", background: "var(--bg3)", overflow: "hidden" }, children: [
+                      }, children: /* @__PURE__ */ jsx("div", { style: { width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.8)"}`, background: isSel ? "#ffd700" : "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center" }, children: isSel && /* @__PURE__ */ jsx("span", { style: { color: "#000", fontSize: "0.75rem", fontWeight: 900 }, children: "✓" }) }) }),
+                      /* @__PURE__ */ jsxs("div", { style: { position: "relative", aspectRatio: "2/3", background: "#1c1c26", overflow: "hidden" }, children: [
                         img ? /* @__PURE__ */ jsx("img", { src: img, alt: m.title, style: { width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.3s" }, onError: (e) => e.target.style.display = "none", onMouseEnter: (e) => e.target.style.transform = "scale(1.05)", onMouseLeave: (e) => e.target.style.transform = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.5rem" }, children: "🎬" }),
-                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0) 55%)" } }),
-                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: 7, right: 7, fontSize: "0.58rem", fontWeight: 800, padding: "2px 7px", borderRadius: 20, background: "rgba(0,0,0,0.8)", color: vc, border: `1px solid ${vc}55`, textTransform: "uppercase", letterSpacing: "0.04em" }, children: m.verdict || "Upcoming" }),
-                        /* @__PURE__ */ jsxs("div", { style: { position: "absolute", bottom: 0, left: 0, right: 0, padding: "6px 9px" }, children: [
-                          /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.8rem", lineHeight: 1.3, textShadow: "0 1px 6px rgba(0,0,0,0.9)" }, children: m.title }),
-                          /* @__PURE__ */ jsx("div", { style: { fontSize: "0.63rem", color: "rgba(255,255,255,0.5)", marginTop: 1 }, children: fmtDate(m.releaseDate) })
+                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 55%)" } }),
+                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: 7, right: 7, fontSize: "0.6rem", fontWeight: 800, padding: "2px 8px", borderRadius: 20, background: "rgba(0,0,0,0.85)", color: vc, border: `1px solid ${vc}55`, textTransform: "uppercase", letterSpacing: "0.04em" }, children: m.verdict || "Upcoming" }),
+                        /* @__PURE__ */ jsxs("div", { style: { position: "absolute", bottom: 0, left: 0, right: 0, padding: "8px 10px" }, children: [
+                          /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.85rem", lineHeight: 1.3, textShadow: "0 1px 6px rgba(0,0,0,0.9)", color: "#fff" }, children: m.title }),
+                          /* @__PURE__ */ jsx("div", { style: { fontSize: "0.68rem", color: "rgba(255,255,255,0.6)", marginTop: 1 }, children: fmtDate(m.releaseDate) })
                         ] })
                       ] }),
-                      !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", borderTop: "1px solid var(--border)" }, onClick: (e) => e.stopPropagation(), children: [
-                        [["Manage", () => openMovieDetail(m), "var(--gold)"], ["Edit", () => openEdit("movie", m), "var(--text)"]].map(([lbl, fn, hc]) => /* @__PURE__ */ jsx(
+                      !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", borderTop: "1px solid rgba(255,255,255,0.08)", background: "#13131b" }, onClick: (e) => e.stopPropagation(), children: [
+                        [["Manage", () => openMovieDetail(m), "#ffd700"], ["Edit", () => openEdit("movie", m), "#fff"]].map(([lbl, fn, hc]) => /* @__PURE__ */ jsx(
                           "button",
                           {
-                            style: { flex: 1, padding: "7px 0", background: "none", border: "none", cursor: "pointer", fontSize: "0.67rem", color: "var(--muted)", borderRight: "1px solid var(--border)", transition: "color 0.1s,background 0.1s" },
+                            style: { flex: 1, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", color: "#8a8a9e", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s, background 0.1s", fontWeight: 600 },
                             onMouseEnter: (e) => {
                               e.currentTarget.style.color = hc;
-                              e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                              e.currentTarget.style.background = "rgba(255,255,255,0.05)";
                             },
                             onMouseLeave: (e) => {
-                              e.currentTarget.style.color = "var(--muted)";
+                              e.currentTarget.style.color = "#8a8a9e";
                               e.currentTarget.style.background = "none";
                             },
                             onClick: fn,
@@ -15692,8 +16144,8 @@ function AdminPortal({ admin, onLogout, onToast }) {
                         /* @__PURE__ */ jsx(
                           "button",
                           {
-                            style: { padding: "7px 10px", background: "none", border: "none", cursor: "pointer", fontSize: "0.67rem", color: "var(--red)", transition: "background 0.1s" },
-                            onMouseEnter: (e) => e.currentTarget.style.background = "rgba(220,50,50,0.12)",
+                            style: { padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", color: "#ef4444", transition: "background 0.1s" },
+                            onMouseEnter: (e) => e.currentTarget.style.background = "rgba(239,68,68,0.15)",
                             onMouseLeave: (e) => e.currentTarget.style.background = "none",
                             onClick: () => handleDelete("movie", m._id, m.title),
                             children: "✕"
@@ -15709,7 +16161,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
             !yearFilter && /* @__PURE__ */ jsx(Pagination, { page: moviePage, total: filteredMovies.length, perPage: PG.movies, onChange: setMoviePage })
           ] });
         })(),
-        tab === "movies" && detailMovie && /* @__PURE__ */ jsx("div", { style: { padding: "0 28px 40px" }, children: /* @__PURE__ */ jsx(
+        tab === "movies" && detailMovie && /* @__PURE__ */ jsx("div", { style: { padding: "0 32px 40px" }, children: /* @__PURE__ */ jsx(
           AdminMovieDetail,
           {
             movie: detailMovie,
@@ -15728,8 +16180,8 @@ function AdminPortal({ admin, onLogout, onToast }) {
             if (!((_b2 = (_a2 = m.media) == null ? void 0 : _a2.songs) == null ? void 0 : _b2.length)) return;
             const matched = m.media.songs.map((s, i) => ({ ...s, _i: i })).filter(
               (s) => {
-                var _a3, _b3, _c;
-                return !q2 || ((_a3 = s.title) == null ? void 0 : _a3.toLowerCase().includes(q2)) || ((_b3 = s.singer) == null ? void 0 : _b3.toLowerCase().includes(q2)) || ((_c = m.title) == null ? void 0 : _c.toLowerCase().includes(q2));
+                var _a3, _b3, _c2;
+                return !q2 || ((_a3 = s.title) == null ? void 0 : _a3.toLowerCase().includes(q2)) || ((_b3 = s.singer) == null ? void 0 : _b3.toLowerCase().includes(q2)) || ((_c2 = m.title) == null ? void 0 : _c2.toLowerCase().includes(q2));
               }
             );
             if (!matched.length) return;
@@ -15740,42 +16192,44 @@ function AdminPortal({ admin, onLogout, onToast }) {
           });
           const allSongIds = allRowIds.flat();
           const pagedRows = allRows.slice((songPage - 1) * PG.songs, songPage * PG.songs);
-          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 28px 40px" }, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 50, background: "var(--bg1)", padding: "13px 28px", margin: "0 -28px 22px", boxShadow: "0 2px 16px rgba(0,0,0,0.45)" }, children: [
-              /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 800 }, children: "Songs" }),
-              /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", padding: "2px 9px", borderRadius: 12, fontWeight: 600 }, children: [
-                allSongIds.length,
-                " total"
+          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 32px 40px" }, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ap-sticky-bar", style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 900 }, children: "Songs & Media" }),
+                /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }, children: [
+                  allSongIds.length,
+                  " total tracks"
+                ] })
               ] }),
               /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
               /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
-                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--muted)", pointerEvents: "none" }, children: "🔍" }),
-                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 200 }, placeholder: "Search songs…", value: search, onChange: (e) => setQ(e.target.value) })
+                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }, children: "🔍" }),
+                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }, placeholder: "Search songs or singer…", value: search, onChange: (e) => setQ(e.target.value) })
               ] }),
               /* @__PURE__ */ jsx("button", { className: `btn btn-sm ${selectMode ? "btn-gold" : "btn-outline"}`, onClick: () => {
                 setSelectMode((s) => !s);
                 setSelected(/* @__PURE__ */ new Set());
-              }, children: selectMode ? "✓ Selecting" : "☐ Select" }),
-              selectMode && selected.size > 0 && /* @__PURE__ */ jsxs("button", { className: "btn btn-sm", onClick: () => handleBulkDelete("songs"), style: { background: "var(--red)", color: "#fff", border: "none", fontWeight: 700 }, children: [
+              }, style: { borderRadius: 8 }, children: selectMode ? "✓ Selecting" : "☐ Select" }),
+              selectMode && selected.size > 0 && /* @__PURE__ */ jsxs("button", { className: "btn btn-sm", onClick: () => handleBulkDelete("songs"), style: { background: "#ef4444", color: "#fff", border: "none", fontWeight: 700, borderRadius: 8 }, children: [
                 "🗑 Delete ",
                 selected.size
               ] }),
-              !selectMode && /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("song"), children: "+ Add Song" })
+              !selectMode && /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("song"), style: { borderRadius: 8, fontWeight: 700 }, children: "+ Add Song" })
             ] }),
-            selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "8px 14px", background: "rgba(201,151,58,0.07)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.2)" }, children: [
+            selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 16px", background: "rgba(201,151,58,0.08)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.25)" }, children: [
               /* @__PURE__ */ jsx("input", { type: "checkbox", checked: allSongIds.length > 0 && allSongIds.every((id) => selected.has(id)), onChange: () => {
                 const a = allSongIds.every((id) => selected.has(id));
                 a ? clearSel() : selectAll(allSongIds);
-              }, style: { width: 16, height: 16, cursor: "pointer", accentColor: "var(--gold)" } }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.82rem", color: "var(--gold)", fontWeight: 600 }, children: selected.size > 0 ? `${selected.size} songs selected` : `Select all ${allSongIds.length} songs` }),
-              selected.size > 0 && /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: clearSel, style: { marginLeft: "auto", fontSize: "0.72rem" }, children: "Clear" })
+              }, style: { width: 16, height: 16, cursor: "pointer", accentColor: "#ffd700" } }),
+              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.85rem", color: "#ffd700", fontWeight: 700 }, children: selected.size > 0 ? `${selected.size} songs selected` : `Select all ${allSongIds.length} songs` }),
+              selected.size > 0 && /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: clearSel, style: { marginLeft: "auto", fontSize: "0.75rem" }, children: "Clear Selection" })
             ] }),
-            allRows.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "60px 0", color: "var(--muted)" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 12 }, children: "🎵" }),
-              "No songs found."
-            ] }) : /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 12 }, children: pagedRows.map(({ m, matched, songIds, allMovieSel }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 4 }, children: [
-              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "var(--bg2)", borderRadius: "10px 10px 0 0", border: "1px solid var(--border)", borderBottom: "none" }, children: [
-                m.posterUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl, alt: m.title, style: { width: 34, height: 48, objectFit: "cover", borderRadius: 4, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: 34, height: 48, background: "var(--bg3)", borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }, children: "🎬" }),
+            allRows.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "70px 0", color: "#6a6a7c" }, children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 12 }, children: "🎵" }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }, children: "No tracks matched your search" })
+            ] }) : /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 14 }, children: pagedRows.map(({ m, matched, songIds, allMovieSel }) => /* @__PURE__ */ jsxs("div", { className: "ap-card-glow", style: { overflow: "hidden" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", background: "#161622", borderBottom: "1px solid rgba(255,255,255,0.06)" }, children: [
+                m.posterUrl ? /* @__PURE__ */ jsx("img", { src: m.posterUrl, alt: m.title, style: { width: 36, height: 50, objectFit: "cover", borderRadius: 4, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: 36, height: 50, background: "#222230", borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }, children: "🎬" }),
                 selectMode && /* @__PURE__ */ jsx(
                   "input",
                   {
@@ -15786,54 +16240,54 @@ function AdminPortal({ admin, onLogout, onToast }) {
                       songIds.forEach((id) => allMovieSel ? n.delete(id) : n.add(id));
                       return n;
                     }),
-                    style: { width: 16, height: 16, cursor: "pointer", accentColor: "var(--gold)", flexShrink: 0 }
+                    style: { width: 16, height: 16, cursor: "pointer", accentColor: "#ffd700", flexShrink: 0 }
                   }
                 ),
                 /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                  /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.9rem" }, children: m.title }),
-                  /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.68rem", color: "var(--muted)", marginTop: 1 }, children: [
-                    /* @__PURE__ */ jsx("span", { style: { color: "var(--gold)" }, children: matched.length }),
+                  /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.95rem", color: "#fff" }, children: m.title }),
+                  /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "#8a8a9e", marginTop: 2 }, children: [
+                    /* @__PURE__ */ jsx("span", { style: { color: "#ffd700", fontWeight: 700 }, children: matched.length }),
                     " track",
                     matched.length !== 1 ? "s" : ""
                   ] })
                 ] }),
-                /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { fontSize: "0.72rem", opacity: 0.7 }, onClick: () => openMovieDetail(m), children: "Open →" })
+                /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { fontSize: "0.75rem", color: "#ffd700" }, onClick: () => openMovieDetail(m), children: "Open Movie →" })
               ] }),
-              /* @__PURE__ */ jsx("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderTop: "1px solid rgba(255,255,255,0.05)", borderRadius: "0 0 10px 10px", overflow: "hidden" }, children: matched.map((s, rowIdx) => {
+              /* @__PURE__ */ jsx("div", { children: matched.map((s, rowIdx) => {
                 const thumb = s.ytId ? `https://img.youtube.com/vi/${s.ytId}/mqdefault.jpg` : null;
                 const songId = `${m._id}::${s._i}`;
                 const isSel = selected.has(songId);
                 return /* @__PURE__ */ jsxs(
                   "div",
                   {
-                    style: { display: "flex", alignItems: "center", borderBottom: rowIdx < matched.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", background: isSel ? "rgba(201,151,58,0.08)" : "transparent", cursor: "pointer", transition: "background 0.12s" },
+                    style: { display: "flex", alignItems: "center", borderBottom: rowIdx < matched.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", background: isSel ? "rgba(201,151,58,0.08)" : "transparent", cursor: "pointer", transition: "background 0.12s", padding: "6px 0" },
                     onClick: () => selectMode ? toggleSel(songId) : null,
                     onMouseEnter: (e) => {
-                      if (!isSel) e.currentTarget.style.background = "rgba(255,255,255,0.025)";
+                      if (!isSel) e.currentTarget.style.background = "rgba(255,255,255,0.03)";
                     },
                     onMouseLeave: (e) => {
                       if (!isSel) e.currentTarget.style.background = "transparent";
                     },
                     children: [
-                      /* @__PURE__ */ jsx("div", { style: { width: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: "0.75rem", fontWeight: 600 }, children: selectMode ? /* @__PURE__ */ jsx("div", { style: { width: 18, height: 18, borderRadius: 4, border: `2px solid ${isSel ? "var(--gold)" : "rgba(255,255,255,0.25)"}`, background: isSel ? "var(--gold)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }, onClick: (e) => {
+                      /* @__PURE__ */ jsx("div", { style: { width: 48, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#6a6a7c", fontSize: "0.78rem", fontWeight: 700 }, children: selectMode ? /* @__PURE__ */ jsx("div", { style: { width: 18, height: 18, borderRadius: 4, border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.25)"}`, background: isSel ? "#ffd700" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }, onClick: (e) => {
                         e.stopPropagation();
                         toggleSel(songId);
                       }, children: isSel && /* @__PURE__ */ jsx("span", { style: { color: "#000", fontSize: "0.65rem", fontWeight: 900 }, children: "✓" }) }) : rowIdx + 1 }),
-                      /* @__PURE__ */ jsx("div", { style: { width: 52, height: 52, flexShrink: 0, overflow: "hidden", position: "relative", background: "var(--bg3)" }, children: thumb ? /* @__PURE__ */ jsx("img", { src: thumb, alt: s.title, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => e.target.style.opacity = "0.2" }) : /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", color: "var(--muted)" }, children: "♪" }) }),
-                      /* @__PURE__ */ jsxs("div", { style: { flex: 1, padding: "0 14px", minWidth: 0 }, children: [
-                        /* @__PURE__ */ jsx("div", { style: { fontWeight: 600, fontSize: "0.86rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: s.title }),
-                        s.singer && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.7rem", color: "var(--gold)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: [
+                      /* @__PURE__ */ jsx("div", { style: { width: 56, height: 56, flexShrink: 0, overflow: "hidden", position: "relative", background: "#1c1c28", borderRadius: 6 }, children: thumb ? /* @__PURE__ */ jsx("img", { src: thumb, alt: s.title, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => e.target.style.opacity = "0.2" }) : /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", color: "#6a6a7c" }, children: "♪" }) }),
+                      /* @__PURE__ */ jsxs("div", { style: { flex: 1, padding: "0 16px", minWidth: 0 }, children: [
+                        /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: "0.9rem", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: s.title }),
+                        s.singer && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "#ffd700", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: [
                           "🎤 ",
                           s.singer
                         ] }),
-                        s.musicDirector && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.65rem", color: "var(--muted)", marginTop: 1 }, children: [
+                        s.musicDirector && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.68rem", color: "#8a8a9e", marginTop: 1 }, children: [
                           "🎼 ",
                           s.musicDirector
                         ] })
                       ] }),
-                      !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 4, padding: "0 12px", flexShrink: 0 }, children: [
-                        s.ytId && /* @__PURE__ */ jsx("a", { href: `https://youtube.com/watch?v=${s.ytId}`, target: "_blank", rel: "noreferrer", className: "btn btn-ghost btn-sm", style: { fontSize: "0.68rem", padding: "3px 7px" }, onClick: (e) => e.stopPropagation(), children: "YT ↗" }),
-                        /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { fontSize: "0.68rem", padding: "3px 7px", color: "var(--red)" }, onClick: (e) => {
+                      !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 6, padding: "0 16px", flexShrink: 0 }, children: [
+                        s.ytId && /* @__PURE__ */ jsx("a", { href: `https://youtube.com/watch?v=${s.ytId}`, target: "_blank", rel: "noreferrer", className: "btn btn-ghost btn-sm", style: { fontSize: "0.72rem", padding: "3px 8px" }, onClick: (e) => e.stopPropagation(), children: "YouTube ↗" }),
+                        /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { fontSize: "0.72rem", padding: "3px 8px", color: "#ef4444" }, onClick: (e) => {
                           e.stopPropagation();
                           handleDelete("song", s._i, s.title, m._id);
                         }, children: "✕" })
@@ -15849,35 +16303,37 @@ function AdminPortal({ admin, onLogout, onToast }) {
         })(),
         tab === "cast" && (loadingSecondary ? /* @__PURE__ */ jsx(Spinner, {}) : (() => {
           const pagedCast = filteredCast.slice((castPage - 1) * PG.cast, castPage * PG.cast);
-          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 28px 40px" }, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 50, background: "var(--bg1)", padding: "13px 28px", margin: "0 -28px 22px", boxShadow: "0 2px 16px rgba(0,0,0,0.45)" }, children: [
-              /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 800 }, children: "Cast & Crew" }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", padding: "2px 9px", borderRadius: 12, fontWeight: 600 }, children: filteredCast.length !== cast.length ? `${filteredCast.length} / ${cast.length}` : `${cast.length} total` }),
+          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 32px 40px" }, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ap-sticky-bar", style: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 900 }, children: "Cast & Crew Registry" }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }, children: filteredCast.length !== cast.length ? `${filteredCast.length} / ${cast.length}` : `${cast.length} total` })
+              ] }),
               /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
               /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
-                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--muted)", pointerEvents: "none" }, children: "🔍" }),
-                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 200 }, placeholder: "Search cast…", value: search, onChange: (e) => setQ(e.target.value) })
+                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }, children: "🔍" }),
+                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }, placeholder: "Search person by name…", value: search, onChange: (e) => setQ(e.target.value) })
               ] }),
-              /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("cast"), children: "+ Add Person" })
+              /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("cast"), style: { borderRadius: 8, fontWeight: 700 }, children: "+ Add Person" })
             ] }),
-            filteredCast.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "60px 0", color: "var(--muted)" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 12 }, children: "🎭" }),
-              "No cast found."
+            filteredCast.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "70px 0", color: "#6a6a7c" }, children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 12 }, children: "🎭" }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }, children: "No cast or crew found" })
             ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
               ["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer", "Other"].map((typeLabel) => {
                 const group = pagedCast.filter((c) => (c.type || "Other") === typeLabel || typeLabel === "Other" && !["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer"].includes(c.type));
                 if (!group.length) return null;
-                return /* @__PURE__ */ jsxs("div", { style: { marginBottom: 32 }, children: [
-                  /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }, children: [
-                    /* @__PURE__ */ jsx("div", { style: { height: 1, flex: 1, background: "var(--border)" } }),
-                    /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--gold)", whiteSpace: "nowrap", padding: "0 6px" }, children: [
+                return /* @__PURE__ */ jsxs("div", { style: { marginBottom: 36 }, children: [
+                  /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }, children: [
+                    /* @__PURE__ */ jsx("div", { style: { height: 1, flex: 1, background: "rgba(255,255,255,0.08)" } }),
+                    /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#ffd700", whiteSpace: "nowrap", padding: "0 6px" }, children: [
                       typeLabel,
                       "s — ",
                       group.length
                     ] }),
-                    /* @__PURE__ */ jsx("div", { style: { height: 1, flex: 1, background: "var(--border)" } })
+                    /* @__PURE__ */ jsx("div", { style: { height: 1, flex: 1, background: "rgba(255,255,255,0.08)" } })
                   ] }),
-                  /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 14 }, children: group.map((c) => {
+                  /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(154px, 1fr))", gap: 16 }, children: group.map((c) => {
                     const movieCount = movies.filter((m) => {
                       var _a2;
                       return (_a2 = m.cast) == null ? void 0 : _a2.some((mc) => {
@@ -15888,46 +16344,33 @@ function AdminPortal({ admin, onLogout, onToast }) {
                     return /* @__PURE__ */ jsxs(
                       "div",
                       {
-                        style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s,transform 0.15s", cursor: "pointer" },
-                        onMouseEnter: (e) => {
-                          e.currentTarget.style.borderColor = "var(--gold)";
-                          e.currentTarget.style.transform = "translateY(-3px)";
-                        },
-                        onMouseLeave: (e) => {
-                          e.currentTarget.style.borderColor = "var(--border)";
-                          e.currentTarget.style.transform = "none";
-                        },
+                        className: "ap-card-glow",
+                        style: { overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column" },
                         children: [
-                          /* @__PURE__ */ jsxs("div", { style: { width: "100%", aspectRatio: "1/1", background: "var(--bg3)", overflow: "hidden", position: "relative" }, children: [
-                            c.photo ? /* @__PURE__ */ jsx("img", { src: c.photo, alt: c.name, style: { width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.8rem", color: "var(--muted)" }, children: "👤" }),
-                            /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(0,0,0,0.82) 0%,transparent 50%)" } }),
-                            /* @__PURE__ */ jsx("div", { style: { position: "absolute", bottom: 8, left: 8 }, children: /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, color: "var(--gold)", background: "rgba(0,0,0,0.7)", padding: "2px 7px", borderRadius: 10, border: "1px solid rgba(201,151,58,0.4)" }, children: c.type || "Actor" }) })
+                          /* @__PURE__ */ jsxs("div", { style: { width: "100%", aspectRatio: "1/1", background: "#1c1c26", overflow: "hidden", position: "relative" }, children: [
+                            c.photo ? /* @__PURE__ */ jsx("img", { src: c.photo, alt: c.name, style: { width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }, onError: (e) => e.target.style.display = "none" }) : /* @__PURE__ */ jsx("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.8rem", color: "#6a6a7c" }, children: "👤" }),
+                            /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%)" } }),
+                            /* @__PURE__ */ jsx("div", { style: { position: "absolute", bottom: 8, left: 8 }, children: /* @__PURE__ */ jsx("span", { style: { fontSize: "0.62rem", fontWeight: 700, color: "#ffd700", background: "rgba(0,0,0,0.75)", padding: "2px 8px", borderRadius: 10, border: "1px solid rgba(201,151,58,0.4)" }, children: c.type || "Actor" }) })
                           ] }),
-                          /* @__PURE__ */ jsxs("div", { style: { padding: "10px 12px 4px" }, children: [
-                            /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: "0.86rem", lineHeight: 1.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: c.name }),
-                            /* @__PURE__ */ jsx("div", { style: { fontSize: "0.67rem", color: "var(--muted)" }, children: movieCount > 0 ? /* @__PURE__ */ jsxs("span", { style: { color: "rgba(201,151,58,0.8)" }, children: [
+                          /* @__PURE__ */ jsxs("div", { style: { padding: "10px 12px 4px", flex: 1 }, children: [
+                            /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.88rem", lineHeight: 1.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#fff" }, children: c.name }),
+                            /* @__PURE__ */ jsx("div", { style: { fontSize: "0.7rem", color: "#8a8a9e" }, children: movieCount > 0 ? /* @__PURE__ */ jsxs("span", { style: { color: "#e5b458" }, children: [
                               "🎬 ",
                               movieCount,
                               " film",
                               movieCount !== 1 ? "s" : ""
                             ] }) : /* @__PURE__ */ jsx("span", { children: "No films" }) })
                           ] }),
-                          /* @__PURE__ */ jsxs("div", { style: { display: "flex", borderTop: "1px solid var(--border)", marginTop: 8 }, children: [
+                          /* @__PURE__ */ jsxs("div", { style: { display: "flex", borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 8, background: "#13131b" }, children: [
                             /* @__PURE__ */ jsx(
                               "a",
                               {
                                 href: `/cast/${c._id}`,
                                 target: "_blank",
                                 rel: "noreferrer",
-                                style: { flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.67rem", color: "var(--muted)", textDecoration: "none", borderRight: "1px solid var(--border)", transition: "color 0.1s,background 0.1s" },
-                                onMouseEnter: (e) => {
-                                  e.currentTarget.style.color = "var(--text)";
-                                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-                                },
-                                onMouseLeave: (e) => {
-                                  e.currentTarget.style.color = "var(--muted)";
-                                  e.currentTarget.style.background = "none";
-                                },
+                                style: { flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "#8a8a9e", textDecoration: "none", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s" },
+                                onMouseEnter: (e) => e.currentTarget.style.color = "#fff",
+                                onMouseLeave: (e) => e.currentTarget.style.color = "#8a8a9e",
                                 children: "View"
                               }
                             ),
@@ -15935,15 +16378,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
                               "button",
                               {
                                 onClick: () => openEdit("cast", c),
-                                style: { flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.67rem", color: "var(--muted)", background: "none", border: "none", cursor: "pointer", borderRight: "1px solid var(--border)", transition: "color 0.1s,background 0.1s" },
-                                onMouseEnter: (e) => {
-                                  e.currentTarget.style.color = "var(--gold)";
-                                  e.currentTarget.style.background = "rgba(201,151,58,0.07)";
-                                },
-                                onMouseLeave: (e) => {
-                                  e.currentTarget.style.color = "var(--muted)";
-                                  e.currentTarget.style.background = "none";
-                                },
+                                style: { flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "#8a8a9e", background: "none", border: "none", cursor: "pointer", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s" },
+                                onMouseEnter: (e) => e.currentTarget.style.color = "#ffd700",
+                                onMouseLeave: (e) => e.currentTarget.style.color = "#8a8a9e",
                                 children: "Edit"
                               }
                             ),
@@ -15951,15 +16388,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
                               "button",
                               {
                                 onClick: () => handleDelete("cast", c._id, c.name),
-                                style: { flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.67rem", color: "var(--muted)", background: "none", border: "none", cursor: "pointer", transition: "color 0.1s,background 0.1s" },
-                                onMouseEnter: (e) => {
-                                  e.currentTarget.style.color = "var(--red)";
-                                  e.currentTarget.style.background = "rgba(220,50,50,0.07)";
-                                },
-                                onMouseLeave: (e) => {
-                                  e.currentTarget.style.color = "var(--muted)";
-                                  e.currentTarget.style.background = "none";
-                                },
+                                style: { flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "#ef4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.1s" },
+                                onMouseEnter: (e) => e.currentTarget.style.background = "rgba(239,68,68,0.15)",
+                                onMouseLeave: (e) => e.currentTarget.style.background = "none",
                                 children: "Del"
                               }
                             )
@@ -15977,104 +16408,91 @@ function AdminPortal({ admin, onLogout, onToast }) {
         })()),
         tab === "productions" && (loadingSecondary ? /* @__PURE__ */ jsx(Spinner, {}) : (() => {
           const pagedProds = filteredProds.slice((prodPage - 1) * PG.prods, prodPage * PG.prods);
-          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 28px 40px" }, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 50, background: "var(--bg1)", padding: "13px 28px", margin: "0 -28px 22px", boxShadow: "0 2px 16px rgba(0,0,0,0.45)" }, children: [
-              /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 800 }, children: "Productions" }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", padding: "2px 9px", borderRadius: 12, fontWeight: 600 }, children: filteredProds.length !== prods.length ? `${filteredProds.length} / ${prods.length}` : `${prods.length} total` }),
+          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 32px 40px" }, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ap-sticky-bar", style: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 900 }, children: "Production Studios" }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }, children: filteredProds.length !== prods.length ? `${filteredProds.length} / ${prods.length}` : `${prods.length} total` })
+              ] }),
               /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
               /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
-                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--muted)", pointerEvents: "none" }, children: "🔍" }),
-                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 200 }, placeholder: "Search productions…", value: search, onChange: (e) => setQ(e.target.value) })
+                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }, children: "🔍" }),
+                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }, placeholder: "Search production house…", value: search, onChange: (e) => setQ(e.target.value) })
               ] }),
-              /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("production"), children: "+ Add Production" })
+              /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("production"), style: { borderRadius: 8, fontWeight: 700 }, children: "+ Add Production" })
             ] }),
-            filteredProds.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "60px 0", color: "var(--muted)" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 12 }, children: "🎥" }),
-              "No productions found."
+            filteredProds.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "70px 0", color: "#6a6a7c" }, children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 12 }, children: "🎥" }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }, children: "No production studios found" })
             ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-              /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 14 }, children: pagedProds.map((p) => {
+              /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 18 }, children: pagedProds.map((p) => {
                 const filmCount = movies.filter((m) => {
                   var _a2;
                   return (_a2 = m.productions) == null ? void 0 : _a2.some((pr) => String(pr._id || pr) === String(p._id));
                 }).length;
-                return /* @__PURE__ */ jsxs(
-                  "div",
-                  {
-                    style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", transition: "transform 0.15s,border-color 0.15s" },
-                    onMouseEnter: (e) => {
-                      e.currentTarget.style.transform = "translateY(-3px)";
-                      e.currentTarget.style.borderColor = "rgba(201,151,58,0.5)";
-                    },
-                    onMouseLeave: (e) => {
-                      e.currentTarget.style.transform = "none";
-                      e.currentTarget.style.borderColor = "var(--border)";
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxs("div", { style: { height: 72, background: "linear-gradient(135deg,rgba(201,151,58,0.12),rgba(201,151,58,0.03))", position: "relative", overflow: "hidden" }, children: [
-                        p.banner && /* @__PURE__ */ jsx("img", { src: p.banner, alt: "", style: { width: "100%", height: "100%", objectFit: "cover", opacity: 0.25 }, onError: (e) => e.target.style.display = "none" }),
-                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(201,151,58,0.4)" }, children: "Production House" }) })
-                      ] }),
-                      /* @__PURE__ */ jsxs("div", { style: { padding: "0 16px 16px", marginTop: -22, position: "relative" }, children: [
-                        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "flex-end", gap: 12, marginBottom: 10 }, children: [
-                          /* @__PURE__ */ jsx("div", { style: { width: 46, height: 46, background: "var(--bg3)", borderRadius: 10, border: "2px solid var(--border)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }, children: p.logo ? /* @__PURE__ */ jsx("img", { src: p.logo, alt: p.name, style: { width: "100%", height: "100%", objectFit: "contain" }, onError: (e) => e.target.style.display = "none" }) : "🎥" }),
-                          /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0, paddingBottom: 2 }, children: [
-                            /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.94rem", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, children: p.name }),
-                            /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.68rem", color: "var(--muted)", marginTop: 2 }, children: [
-                              p.founded && `Est. ${p.founded}`,
-                              p.founded && p.location && " · ",
-                              p.location
-                            ] })
-                          ] })
-                        ] }),
-                        p.bio && /* @__PURE__ */ jsx("p", { style: { fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: 10, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }, children: p.bio }),
-                        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }, children: [
-                          /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.7rem", color: "rgba(201,151,58,0.9)", fontWeight: 700 }, children: [
-                            "🎬 ",
-                            filmCount,
-                            " film",
-                            filmCount !== 1 ? "s" : ""
-                          ] }),
-                          p.website && /* @__PURE__ */ jsx("a", { href: p.website, target: "_blank", rel: "noreferrer", style: { fontSize: "0.68rem", color: "var(--muted)", textDecoration: "none" }, onMouseEnter: (e) => e.currentTarget.style.color = "var(--gold)", onMouseLeave: (e) => e.currentTarget.style.color = "var(--muted)", children: "Website ↗" })
-                        ] }),
-                        /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 12 }, children: [
-                          /* @__PURE__ */ jsx(
-                            "a",
-                            {
-                              href: `/production/${p._id}`,
-                              target: "_blank",
-                              rel: "noreferrer",
-                              style: { flex: 1, textAlign: "center", padding: "7px 0", background: "rgba(201,151,58,0.08)", border: "1px solid rgba(201,151,58,0.25)", borderRadius: 8, fontSize: "0.72rem", color: "var(--gold)", textDecoration: "none", fontWeight: 600, transition: "background 0.12s" },
-                              onMouseEnter: (e) => e.currentTarget.style.background = "rgba(201,151,58,0.18)",
-                              onMouseLeave: (e) => e.currentTarget.style.background = "rgba(201,151,58,0.08)",
-                              children: "View ↗"
-                            }
-                          ),
-                          /* @__PURE__ */ jsx(
-                            "button",
-                            {
-                              style: { flex: 1, padding: "7px 0", background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, fontSize: "0.72rem", color: "var(--text)", cursor: "pointer", transition: "border-color 0.12s" },
-                              onMouseEnter: (e) => e.currentTarget.style.borderColor = "var(--gold)",
-                              onMouseLeave: (e) => e.currentTarget.style.borderColor = "var(--border)",
-                              onClick: () => openEdit("production", p),
-                              children: "Edit"
-                            }
-                          ),
-                          /* @__PURE__ */ jsx(
-                            "button",
-                            {
-                              style: { padding: "7px 12px", background: "rgba(220,50,50,0.07)", border: "1px solid rgba(220,50,50,0.2)", borderRadius: 8, fontSize: "0.72rem", color: "var(--red)", cursor: "pointer", transition: "background 0.12s" },
-                              onMouseEnter: (e) => e.currentTarget.style.background = "rgba(220,50,50,0.18)",
-                              onMouseLeave: (e) => e.currentTarget.style.background = "rgba(220,50,50,0.07)",
-                              onClick: () => handleDelete("production", p._id, p.name),
-                              children: "✕"
-                            }
-                          )
+                return /* @__PURE__ */ jsxs("div", { className: "ap-card-glow", style: { overflow: "hidden" }, children: [
+                  /* @__PURE__ */ jsxs("div", { style: { height: 80, background: "linear-gradient(135deg, rgba(201,151,58,0.18), rgba(20,20,30,0.8))", position: "relative", overflow: "hidden" }, children: [
+                    p.banner && /* @__PURE__ */ jsx("img", { src: p.banner, alt: "", style: { width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }, onError: (e) => e.target.style.display = "none" }),
+                    /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }, children: /* @__PURE__ */ jsx("span", { style: { fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(201,151,58,0.5)" }, children: "Production House" }) })
+                  ] }),
+                  /* @__PURE__ */ jsxs("div", { style: { padding: "0 18px 18px", marginTop: -24, position: "relative" }, children: [
+                    /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 12 }, children: [
+                      /* @__PURE__ */ jsx("div", { style: { width: 48, height: 48, background: "#181824", borderRadius: 10, border: "2px solid rgba(255,255,255,0.1)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", boxShadow: "0 4px 14px rgba(0,0,0,0.6)" }, children: p.logo ? /* @__PURE__ */ jsx("img", { src: p.logo, alt: p.name, style: { width: "100%", height: "100%", objectFit: "contain" }, onError: (e) => e.target.style.display = "none" }) : "🎥" }),
+                      /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0, paddingBottom: 2 }, children: [
+                        /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.98rem", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#fff" }, children: p.name }),
+                        /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "#8a8a9e", marginTop: 2 }, children: [
+                          p.founded && `Est. ${p.founded}`,
+                          p.founded && p.location && " · ",
+                          p.location
                         ] })
                       ] })
-                    ]
-                  },
-                  p._id
-                );
+                    ] }),
+                    p.bio && /* @__PURE__ */ jsx("p", { style: { fontSize: "0.78rem", color: "#9292a4", lineHeight: 1.6, marginBottom: 12, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }, children: p.bio }),
+                    /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }, children: [
+                      /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.72rem", color: "#ffd700", fontWeight: 700 }, children: [
+                        "🎬 ",
+                        filmCount,
+                        " film",
+                        filmCount !== 1 ? "s" : ""
+                      ] }),
+                      p.website && /* @__PURE__ */ jsx("a", { href: p.website, target: "_blank", rel: "noreferrer", style: { fontSize: "0.72rem", color: "#8a8a9e", textDecoration: "none" }, onMouseEnter: (e) => e.currentTarget.style.color = "#ffd700", onMouseLeave: (e) => e.currentTarget.style.color = "#8a8a9e", children: "Website ↗" })
+                    ] }),
+                    /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 14 }, children: [
+                      /* @__PURE__ */ jsx(
+                        "a",
+                        {
+                          href: `/production/${p._id}`,
+                          target: "_blank",
+                          rel: "noreferrer",
+                          style: { flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(201,151,58,0.1)", border: "1px solid rgba(201,151,58,0.3)", borderRadius: 8, fontSize: "0.75rem", color: "#ffd700", textDecoration: "none", fontWeight: 700, transition: "background 0.12s" },
+                          onMouseEnter: (e) => e.currentTarget.style.background = "rgba(201,151,58,0.2)",
+                          onMouseLeave: (e) => e.currentTarget.style.background = "rgba(201,151,58,0.1)",
+                          children: "View ↗"
+                        }
+                      ),
+                      /* @__PURE__ */ jsx(
+                        "button",
+                        {
+                          style: { flex: 1, padding: "8px 0", background: "#181824", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: "0.75rem", color: "#fff", cursor: "pointer", fontWeight: 600, transition: "border-color 0.12s" },
+                          onMouseEnter: (e) => e.currentTarget.style.borderColor = "#ffd700",
+                          onMouseLeave: (e) => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)",
+                          onClick: () => openEdit("production", p),
+                          children: "Edit"
+                        }
+                      ),
+                      /* @__PURE__ */ jsx(
+                        "button",
+                        {
+                          style: { padding: "8px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: "0.75rem", color: "#ef4444", cursor: "pointer", transition: "background 0.12s" },
+                          onMouseEnter: (e) => e.currentTarget.style.background = "rgba(239,68,68,0.2)",
+                          onMouseLeave: (e) => e.currentTarget.style.background = "rgba(239,68,68,0.1)",
+                          onClick: () => handleDelete("production", p._id, p.name),
+                          children: "✕"
+                        }
+                      )
+                    ] })
+                  ] })
+                ] }, p._id);
               }) }),
               /* @__PURE__ */ jsx(Pagination, { page: prodPage, total: filteredProds.length, perPage: PG.prods, onChange: setProdPage })
             ] })
@@ -16084,100 +16502,91 @@ function AdminPortal({ admin, onLogout, onToast }) {
           const pagedNews = filteredNews.slice((newsPage - 1) * PG.news, newsPage * PG.news);
           const allNewsIds = filteredNews.map((n) => n._id);
           const allNewsSel = allNewsIds.length > 0 && allNewsIds.every((id) => selected.has(id));
-          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 28px 40px" }, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 50, background: "var(--bg1)", padding: "13px 28px", margin: "0 -28px 22px", boxShadow: "0 2px 16px rgba(0,0,0,0.45)" }, children: [
-              /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 800 }, children: "News" }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", padding: "2px 9px", borderRadius: 12, fontWeight: 600 }, children: filteredNews.length !== news.length ? `${filteredNews.length} / ${news.length}` : `${news.length} total` }),
+          return /* @__PURE__ */ jsxs("div", { style: { padding: "0 32px 40px" }, children: [
+            /* @__PURE__ */ jsxs("div", { className: "ap-sticky-bar", style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                /* @__PURE__ */ jsx("h2", { style: { fontSize: "1.35rem", margin: 0, fontWeight: 900 }, children: "News & Press Releases" }),
+                /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }, children: filteredNews.length !== news.length ? `${filteredNews.length} / ${news.length}` : `${news.length} total` })
+              ] }),
               /* @__PURE__ */ jsx("div", { style: { flex: 1 } }),
               /* @__PURE__ */ jsxs("div", { style: { position: "relative" }, children: [
-                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--muted)", pointerEvents: "none" }, children: "🔍" }),
-                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 200 }, placeholder: "Search news…", value: search, onChange: (e) => setQ(e.target.value) })
+                /* @__PURE__ */ jsx("span", { style: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }, children: "🔍" }),
+                /* @__PURE__ */ jsx("input", { className: "form-input", style: { paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }, placeholder: "Search news articles…", value: search, onChange: (e) => setQ(e.target.value) })
               ] }),
               /* @__PURE__ */ jsx("button", { className: `btn btn-sm ${selectMode ? "btn-gold" : "btn-outline"}`, onClick: () => {
                 setSelectMode((s) => !s);
                 setSelected(/* @__PURE__ */ new Set());
-              }, children: selectMode ? "✓ Selecting" : "☐ Select" }),
-              selectMode && selected.size > 0 && /* @__PURE__ */ jsxs("button", { className: "btn btn-sm", onClick: () => handleBulkDelete("news"), style: { background: "var(--red)", color: "#fff", border: "none", fontWeight: 700 }, children: [
+              }, style: { borderRadius: 8 }, children: selectMode ? "✓ Selecting" : "☐ Select" }),
+              selectMode && selected.size > 0 && /* @__PURE__ */ jsxs("button", { className: "btn btn-sm", onClick: () => handleBulkDelete("news"), style: { background: "#ef4444", color: "#fff", border: "none", fontWeight: 700, borderRadius: 8 }, children: [
                 "🗑 Delete ",
                 selected.size
               ] }),
-              !selectMode && /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("news"), children: "+ Add Article" })
+              !selectMode && /* @__PURE__ */ jsx("button", { className: "btn btn-gold btn-sm", onClick: () => openCreate("news"), style: { borderRadius: 8, fontWeight: 700 }, children: "+ Add Article" })
             ] }),
-            selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "8px 14px", background: "rgba(201,151,58,0.07)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.2)" }, children: [
-              /* @__PURE__ */ jsx("input", { type: "checkbox", checked: allNewsSel, onChange: () => allNewsSel ? clearSel() : selectAll(allNewsIds), style: { width: 16, height: 16, cursor: "pointer", accentColor: "var(--gold)" } }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.82rem", color: "var(--gold)", fontWeight: 600 }, children: selected.size > 0 ? `${selected.size} of ${filteredNews.length} selected` : `Select all ${filteredNews.length} articles` }),
-              selected.size > 0 && /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: clearSel, style: { marginLeft: "auto", fontSize: "0.72rem" }, children: "Clear" })
+            selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 16px", background: "rgba(201,151,58,0.08)", borderRadius: 10, border: "1px solid rgba(201,151,58,0.25)" }, children: [
+              /* @__PURE__ */ jsx("input", { type: "checkbox", checked: allNewsSel, onChange: () => allNewsSel ? clearSel() : selectAll(allNewsIds), style: { width: 16, height: 16, cursor: "pointer", accentColor: "#ffd700" } }),
+              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.85rem", color: "#ffd700", fontWeight: 700 }, children: selected.size > 0 ? `${selected.size} of ${filteredNews.length} selected` : `Select all ${filteredNews.length} articles` }),
+              selected.size > 0 && /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: clearSel, style: { marginLeft: "auto", fontSize: "0.75rem" }, children: "Clear Selection" })
             ] }),
-            filteredNews.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "60px 0", color: "var(--muted)" }, children: [
-              /* @__PURE__ */ jsx("div", { style: { fontSize: "3rem", marginBottom: 12 }, children: "📰" }),
-              "No news found."
+            filteredNews.length === 0 ? /* @__PURE__ */ jsxs("div", { style: { textAlign: "center", padding: "70px 0", color: "#6a6a7c" }, children: [
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "3.5rem", marginBottom: 12 }, children: "📰" }),
+              /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }, children: "No news articles found" })
             ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-              /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }, children: pagedNews.map((n) => {
+              /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))", gap: 18 }, children: pagedNews.map((n) => {
                 const isSel = selected.has(n._id);
                 return /* @__PURE__ */ jsxs(
                   "div",
                   {
-                    style: { background: "var(--bg2)", border: `2px solid ${isSel ? "var(--gold)" : "var(--border)"}`, borderRadius: 12, overflow: "hidden", cursor: selectMode ? "pointer" : "default", transition: "transform 0.15s,border-color 0.15s" },
+                    className: "ap-card-glow",
+                    style: { border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.08)"}`, overflow: "hidden", cursor: selectMode ? "pointer" : "default" },
                     onClick: () => selectMode && toggleSel(n._id),
-                    onMouseEnter: (e) => {
-                      if (!selectMode) {
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                        e.currentTarget.style.borderColor = "rgba(201,151,58,0.45)";
-                      }
-                    },
-                    onMouseLeave: (e) => {
-                      if (!selectMode) {
-                        e.currentTarget.style.transform = "none";
-                        e.currentTarget.style.borderColor = isSel ? "var(--gold)" : "var(--border)";
-                      }
-                    },
                     children: [
-                      n.imageUrl && /* @__PURE__ */ jsxs("div", { style: { height: 130, overflow: "hidden", position: "relative", background: "var(--bg3)" }, children: [
+                      n.imageUrl && /* @__PURE__ */ jsxs("div", { style: { height: 140, overflow: "hidden", position: "relative", background: "#1c1c28" }, children: [
                         /* @__PURE__ */ jsx("img", { src: n.imageUrl, alt: n.title, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" }),
-                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(0,0,0,0.75),transparent)" } }),
+                        /* @__PURE__ */ jsx("div", { style: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)" } }),
                         selectMode && /* @__PURE__ */ jsx("div", { style: { position: "absolute", top: 10, left: 10 }, onClick: (e) => {
                           e.stopPropagation();
                           toggleSel(n._id);
-                        }, children: /* @__PURE__ */ jsx("div", { style: { width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSel ? "var(--gold)" : "rgba(255,255,255,0.8)"}`, background: isSel ? "var(--gold)" : "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }, children: isSel && /* @__PURE__ */ jsx("span", { style: { color: "#000", fontSize: "0.75rem", fontWeight: 900 }, children: "✓" }) }) }),
-                        /* @__PURE__ */ jsxs("div", { style: { position: "absolute", bottom: 8, left: 10, right: 10, display: "flex", gap: 6, alignItems: "center" }, children: [
-                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: "rgba(201,151,58,0.9)", color: "#000", textTransform: "uppercase", letterSpacing: "0.06em" }, children: n.category || "Update" }),
-                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.62rem", fontWeight: 700, color: n.published ? "#4caf82" : "#e8876a" }, children: n.published ? "● Live" : "○ Draft" })
+                        }, children: /* @__PURE__ */ jsx("div", { style: { width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.8)"}`, background: isSel ? "#ffd700" : "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }, children: isSel && /* @__PURE__ */ jsx("span", { style: { color: "#000", fontSize: "0.75rem", fontWeight: 900 }, children: "✓" }) }) }),
+                        /* @__PURE__ */ jsxs("div", { style: { position: "absolute", bottom: 8, left: 12, right: 12, display: "flex", gap: 8, alignItems: "center" }, children: [
+                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.65rem", fontWeight: 800, padding: "2px 8px", borderRadius: 10, background: "#ffd700", color: "#000", textTransform: "uppercase", letterSpacing: "0.06em" }, children: n.category || "Update" }),
+                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", fontWeight: 700, color: n.published ? "#10b981" : "#f59e0b" }, children: n.published ? "● Published Live" : "○ Draft" })
                         ] })
                       ] }),
-                      /* @__PURE__ */ jsxs("div", { style: { padding: "12px 14px" }, children: [
-                        !n.imageUrl && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }, children: [
-                          selectMode && /* @__PURE__ */ jsx("div", { style: { width: 20, height: 20, borderRadius: 5, border: `2px solid ${isSel ? "var(--gold)" : "rgba(255,255,255,0.3)"}`, background: isSel ? "var(--gold)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }, onClick: (e) => {
+                      /* @__PURE__ */ jsxs("div", { style: { padding: "14px 16px" }, children: [
+                        !n.imageUrl && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }, children: [
+                          selectMode && /* @__PURE__ */ jsx("div", { style: { width: 20, height: 20, borderRadius: 5, border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.3)"}`, background: isSel ? "#ffd700" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }, onClick: (e) => {
                             e.stopPropagation();
                             toggleSel(n._id);
                           }, children: isSel && /* @__PURE__ */ jsx("span", { style: { color: "#000", fontSize: "0.65rem", fontWeight: 900 }, children: "✓" }) }),
-                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: "rgba(201,151,58,0.12)", color: "var(--gold)", border: "1px solid rgba(201,151,58,0.3)", textTransform: "uppercase", letterSpacing: "0.06em" }, children: n.category || "Update" }),
-                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.62rem", fontWeight: 700, color: n.published ? "#4caf82" : "#e8876a", marginLeft: "auto" }, children: n.published ? "● Live" : "○ Draft" })
+                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.65rem", fontWeight: 800, padding: "2px 8px", borderRadius: 10, background: "rgba(201,151,58,0.15)", color: "#ffd700", border: "1px solid rgba(201,151,58,0.3)", textTransform: "uppercase", letterSpacing: "0.06em" }, children: n.category || "Update" }),
+                          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", fontWeight: 700, color: n.published ? "#10b981" : "#f59e0b", marginLeft: "auto" }, children: n.published ? "● Published Live" : "○ Draft" })
                         ] }),
-                        /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: "0.9rem", lineHeight: 1.4, marginBottom: 4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }, children: n.title }),
-                        n.movieTitle && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.68rem", color: "var(--gold)", marginBottom: 4 }, children: [
+                        /* @__PURE__ */ jsx("div", { style: { fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.4, marginBottom: 4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", color: "#fff" }, children: n.title }),
+                        n.movieTitle && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "#ffd700", marginBottom: 4 }, children: [
                           "🎬 ",
                           n.movieTitle
                         ] }),
-                        n.content && /* @__PURE__ */ jsx("div", { style: { fontSize: "0.72rem", color: "var(--muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 10 }, children: n.content }),
-                        !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 6, borderTop: "1px solid var(--border)", paddingTop: 10 }, children: [
+                        n.content && /* @__PURE__ */ jsx("div", { style: { fontSize: "0.78rem", color: "#9292a4", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 12 }, children: n.content }),
+                        !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }, children: [
                           /* @__PURE__ */ jsx(
                             "a",
                             {
                               href: `/news/${n._id}`,
                               target: "_blank",
                               rel: "noreferrer",
-                              style: { flex: 1, textAlign: "center", padding: "6px 0", fontSize: "0.7rem", color: "var(--muted)", textDecoration: "none", background: "var(--bg3)", borderRadius: 7, transition: "color 0.1s" },
-                              onMouseEnter: (e) => e.currentTarget.style.color = "var(--text)",
-                              onMouseLeave: (e) => e.currentTarget.style.color = "var(--muted)",
+                              style: { flex: 1, textAlign: "center", padding: "7px 0", fontSize: "0.75rem", color: "#8a8a9e", textDecoration: "none", background: "#181824", borderRadius: 8, transition: "color 0.1s", fontWeight: 600 },
+                              onMouseEnter: (e) => e.currentTarget.style.color = "#fff",
+                              onMouseLeave: (e) => e.currentTarget.style.color = "#8a8a9e",
                               children: "View ↗"
                             }
                           ),
                           /* @__PURE__ */ jsx(
                             "button",
                             {
-                              style: { flex: 1, padding: "6px 0", fontSize: "0.7rem", color: "var(--muted)", background: "var(--bg3)", border: "none", borderRadius: 7, cursor: "pointer", transition: "color 0.1s" },
-                              onMouseEnter: (e) => e.currentTarget.style.color = "var(--gold)",
-                              onMouseLeave: (e) => e.currentTarget.style.color = "var(--muted)",
+                              style: { flex: 1, padding: "7px 0", fontSize: "0.75rem", color: "#8a8a9e", background: "#181824", border: "none", borderRadius: 8, cursor: "pointer", transition: "color 0.1s", fontWeight: 600 },
+                              onMouseEnter: (e) => e.currentTarget.style.color = "#ffd700",
+                              onMouseLeave: (e) => e.currentTarget.style.color = "#8a8a9e",
                               onClick: (e) => {
                                 e.stopPropagation();
                                 openEdit("news", n);
@@ -16188,9 +16597,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
                           /* @__PURE__ */ jsx(
                             "button",
                             {
-                              style: { padding: "6px 12px", fontSize: "0.7rem", color: "var(--red)", background: "rgba(220,50,50,0.07)", border: "none", borderRadius: 7, cursor: "pointer", transition: "background 0.1s" },
-                              onMouseEnter: (e) => e.currentTarget.style.background = "rgba(220,50,50,0.18)",
-                              onMouseLeave: (e) => e.currentTarget.style.background = "rgba(220,50,50,0.07)",
+                              style: { padding: "7px 14px", fontSize: "0.75rem", color: "#ef4444", background: "rgba(239,68,68,0.1)", border: "none", borderRadius: 8, cursor: "pointer", transition: "background 0.1s" },
+                              onMouseEnter: (e) => e.currentTarget.style.background = "rgba(239,68,68,0.2)",
+                              onMouseLeave: (e) => e.currentTarget.style.background = "rgba(239,68,68,0.1)",
                               onClick: (e) => {
                                 e.stopPropagation();
                                 handleDelete("news", n._id, n.title);
@@ -16229,9 +16638,9 @@ function AdminPortal({ admin, onLogout, onToast }) {
         tab === "settings" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(AdminSettings, { admin, onToast }) })
       ] }) })
     ] }),
-    modal && /* @__PURE__ */ jsx("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && closeModal(), children: /* @__PURE__ */ jsxs("div", { className: "modal", style: { maxWidth: modal.type === "movie" ? 780 : 540, maxHeight: "90vh", overflowY: "auto" }, children: [
-      /* @__PURE__ */ jsxs("div", { className: "modal-header", children: [
-        /* @__PURE__ */ jsx("span", { className: "modal-title", children: modal.type === "movie" ? modal.mode === "create" ? "+ Add New Movie" : "✏️ Edit Movie" : modal.type === "cast" ? modal.mode === "create" ? "+ Add Cast / Crew" : "✏️ Edit Cast Member" : modal.type === "production" ? modal.mode === "create" ? "+ Add Production House" : "✏️ Edit Production" : modal.type === "song" ? modal.mode === "edit" ? "✏️ Edit Song" : "🎵 Add New Song" : modal.mode === "create" ? "+ Add News Article" : "✏️ Edit Article" }),
+    modal && /* @__PURE__ */ jsx("div", { className: "modal-overlay", onClick: (e) => e.target === e.currentTarget && closeModal(), children: /* @__PURE__ */ jsxs("div", { className: "modal", style: { maxWidth: modal.type === "movie" ? 820 : 560, maxHeight: "90vh", overflowY: "auto", background: "#111118", border: "1px solid rgba(201,151,58,0.35)", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }, children: [
+      /* @__PURE__ */ jsxs("div", { className: "modal-header", style: { borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 16 }, children: [
+        /* @__PURE__ */ jsx("span", { className: "modal-title", style: { color: "#ffd700", fontWeight: 800 }, children: modal.type === "movie" ? modal.mode === "create" ? "+ Add New Movie" : "✏️ Edit Movie" : modal.type === "cast" ? modal.mode === "create" ? "+ Add Cast / Crew" : "✏️ Edit Cast Member" : modal.type === "production" ? modal.mode === "create" ? "+ Add Production House" : "✏️ Edit Production" : modal.type === "song" ? modal.mode === "edit" ? "✏️ Edit Song" : "🎵 Add New Song" : modal.mode === "create" ? "+ Add News Article" : "✏️ Edit Article" }),
         /* @__PURE__ */ jsx("button", { className: "modal-close", onClick: closeModal, children: "×" })
       ] }),
       /* @__PURE__ */ jsxs("div", { style: { padding: "20px 0 4px" }, children: [
