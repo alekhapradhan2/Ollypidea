@@ -6,14 +6,14 @@ import { ImageUploadInput } from "../components/UI";
 // Lazy-load heavy panel components — only fetched when the user opens that tab
 const BlogGenerator = lazy(() => import("./BlogGenerator"));
 const BoxOfficePanel = lazy(() => import("./BoxOfficePanel"));
-const BMSTrackerPanel = lazy(() => import("./BMSTrackerPanel"));
 const MergePanel = lazy(() => import("./MergePanel"));
-const AutoIndexPanel = lazy(() => import("./AutoIndexPanel"));
 const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
-const PosterGeneratorPanel = lazy(() => import("./PosterGeneratorPanel"));
-const ModelBlogPanel = lazy(() => import("./ModelBlogPanel"));
-const BlogSuggestionsPanel = lazy(() => import("./BlogSuggestionsPanel"));
 const UserReviewsPanel = lazy(() => import("./UserReviewsPanel"));
+const CommunityPanel = lazy(() => import("./CommunityPanel"));
+
+
+
+
 
 
 
@@ -696,11 +696,11 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
         status: (form.ottReleaseDate && form.ottReleaseDate !== "TBA" && new Date(form.ottReleaseDate) <= new Date()) ? "Streaming" : "Upcoming",
         watchUrl: form.streamingUrl,
         posterUrl: form.ott?.posterUrl || "",
-        languages: typeof form.ott?.languages === "string" ? form.ott.languages.split(",").map(x=>x.trim()).filter(Boolean) : form.ott?.languages || [],
-        subtitles: typeof form.ott?.subtitles === "string" ? form.ott.subtitles.split(",").map(x=>x.trim()).filter(Boolean) : form.ott?.subtitles || [],
+        languages: typeof form.ott?.languages === "string" ? form.ott.languages.split(",").map(x => x.trim()).filter(Boolean) : form.ott?.languages || [],
+        subtitles: typeof form.ott?.subtitles === "string" ? form.ott.subtitles.split(",").map(x => x.trim()).filter(Boolean) : form.ott?.subtitles || [],
         runtime: form.ott?.runtime || "",
         quality: form.ott?.quality || "",
-        countries: typeof form.ott?.countries === "string" ? form.ott.countries.split(",").map(x=>x.trim()).filter(Boolean) : form.ott?.countries || []
+        countries: typeof form.ott?.countries === "string" ? form.ott.countries.split(",").map(x => x.trim()).filter(Boolean) : form.ott?.countries || []
       },
       productions: productions.map(p => String(p._id)).filter(isOid),
       cast: castPayload,
@@ -991,15 +991,15 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
                   </div>
                 )}
               </div>
-              
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div className="form-group">
                   <label className="form-label">Streaming Languages <span style={{ color: "var(--muted)", fontWeight: 400 }}>(comma separated)</span></label>
-                  <input className="form-input" value={typeof form.ott?.languages === "string" ? form.ott.languages : (form.ott?.languages||[]).join(", ")} onChange={e => set("ott", { ...form.ott, languages: e.target.value })} placeholder="Odia, Hindi" />
+                  <input className="form-input" value={typeof form.ott?.languages === "string" ? form.ott.languages : (form.ott?.languages || []).join(", ")} onChange={e => set("ott", { ...form.ott, languages: e.target.value })} placeholder="Odia, Hindi" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Subtitles <span style={{ color: "var(--muted)", fontWeight: 400 }}>(comma separated)</span></label>
-                  <input className="form-input" value={typeof form.ott?.subtitles === "string" ? form.ott.subtitles : (form.ott?.subtitles||[]).join(", ")} onChange={e => set("ott", { ...form.ott, subtitles: e.target.value })} placeholder="English, Odia" />
+                  <input className="form-input" value={typeof form.ott?.subtitles === "string" ? form.ott.subtitles : (form.ott?.subtitles || []).join(", ")} onChange={e => set("ott", { ...form.ott, subtitles: e.target.value })} placeholder="English, Odia" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">OTT Runtime</label>
@@ -2368,205 +2368,14 @@ function EnquiriesPanel({ enquiries, setEnquiries, onToast, setConfirm }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-// ANALYTICS PANEL
-// ════════════════════════════════════════════════════════════════
-function AnalyticsPanel({ onToast }) {
-  const [data, setData] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [clearing, setClearing] = React.useState(false);
 
-  const load = () => {
-    setLoading(true);
-    API.adminGetAnalytics()
-      .then(d => setData(d))
-      .catch(e => onToast?.(e.message, "error"))
-      .finally(() => setLoading(false));
-  };
-
-  React.useEffect(() => { load(); }, []);
-
-  const handleClearOld = async () => {
-    if (!window.confirm("Delete all visitor logs older than 90 days?")) return;
-    setClearing(true);
-    try {
-      const r = await API.adminClearOldLogs();
-      onToast?.(`Cleared ${r.deleted} old logs`);
-      load();
-    } catch (e) { onToast?.(e.message, "error"); }
-    finally { setClearing(false); }
-  };
-
-  if (loading) return <Spinner />;
-  if (!data) return null;
-
-  const { summary, byDevice, byOS, byBrowser, byCountry, topPages, recentVisits, dailyTrend } = data;
-
-  // Build 14-day chart data
-  const maxDay = Math.max(...dailyTrend.map(d => d.count), 1);
-  const last14 = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(Date.now() - (13 - i) * 86400000);
-    const key = d.toISOString().slice(0, 10);
-    const map = Object.fromEntries(dailyTrend.map(x => [x._id, x.count]));
-    return {
-      key,
-      label: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
-      count: map[key] || 0,
-    };
-  });
-
-  const fmtTime = (d) => new Date(d).toLocaleString("en-IN", {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  });
-
-  const StatCard = ({ label, value }) => (
-    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: "20px 24px", flex: 1, minWidth: 130 }}>
-      <div style={{ color: "var(--muted)", fontSize: "0.78rem", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
-      <div style={{ color: "var(--gold)", fontSize: "2rem", fontWeight: 900, lineHeight: 1 }}>{Number(value).toLocaleString()}</div>
-    </div>
-  );
-
-  const Bar = ({ label, count, total, color = "var(--gold)" }) => (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: "0.82rem" }}>
-        <span style={{ color: "var(--text)" }}>{label || "Unknown"}</span>
-        <span style={{ color: "var(--muted)" }}>{count} <span style={{ fontSize: "0.72rem" }}>({total ? Math.round(count / total * 100) : 0}%)</span></span>
-      </div>
-      <div style={{ background: "var(--border)", borderRadius: 4, height: 7 }}>
-        <div style={{ width: `${total ? Math.min(100, count / total * 100) : 0}%`, background: color, height: 7, borderRadius: 4, transition: "width 0.5s ease" }} />
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ color: "var(--gold)", margin: 0, fontSize: "1.4rem", fontWeight: 900 }}>📈 Visitor Analytics</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={load}>↺ Refresh</button>
-          <button className="btn btn-ghost btn-sm" onClick={handleClearOld} disabled={clearing}
-            style={{ color: "var(--red)" }}>{clearing ? "Clearing…" : "🗑 Clear Old Logs"}</button>
-        </div>
-      </div>
-
-      {/* Summary cards */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <StatCard label="Total Visits" value={summary.totalVisits} />
-        <StatCard label="Today" value={summary.todayVisits} />
-        <StatCard label="Last 7 Days" value={summary.weekVisits} />
-        <StatCard label="Last 30 Days" value={summary.monthVisits} />
-      </div>
-
-      {/* 14-day trend chart */}
-      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-        <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 16, fontSize: "0.9rem" }}>📊 Last 14 Days</div>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 90 }}>
-          {last14.map(d => (
-            <div key={d.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-              <div
-                title={`${d.label}: ${d.count} visits`}
-                style={{
-                  width: "100%", borderRadius: "3px 3px 0 0",
-                  background: d.count ? "var(--gold)" : "rgba(255,255,255,0.06)",
-                  height: `${Math.max(3, (d.count / maxDay) * 76)}px`,
-                  transition: "height 0.4s ease", cursor: "default",
-                }}
-              />
-              <div style={{ fontSize: "0.55rem", color: "var(--muted)", writingMode: "vertical-lr", transform: "rotate(180deg)", height: 30, lineHeight: 1 }}>
-                {d.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Breakdown grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px,1fr))", gap: 16 }}>
-
-        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }}>📱 Device</div>
-          {byDevice.length === 0
-            ? <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>No data yet</div>
-            : byDevice.map(d => <Bar key={d._id} label={d._id} count={d.count} total={summary.totalVisits} />)}
-        </div>
-
-        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }}>🖥️ Operating System</div>
-          {byOS.length === 0
-            ? <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>No data yet</div>
-            : byOS.map(d => <Bar key={d._id} label={d._id} count={d.count} total={summary.totalVisits} color="#5ba3f5" />)}
-        </div>
-
-        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }}>🌐 Browser</div>
-          {byBrowser.length === 0
-            ? <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>No data yet</div>
-            : byBrowser.map(d => <Bar key={d._id} label={d._id} count={d.count} total={summary.totalVisits} color="#4caf82" />)}
-        </div>
-
-        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }}>🌍 Top Countries</div>
-          {byCountry.length === 0
-            ? <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>No geo data yet</div>
-            : byCountry.map(d => <Bar key={d._id} label={d._id} count={d.count} total={summary.totalVisits} color="#c084fc" />)}
-        </div>
-
-        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }}>📄 Top Pages</div>
-          {topPages.length === 0
-            ? <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>No data yet</div>
-            : topPages.map(d => (
-              <div key={d._id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: "0.8rem" }}>
-                <span style={{ color: "var(--muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "78%", whiteSpace: "nowrap" }}>{d._id}</span>
-                <span style={{ color: "var(--gold)", fontWeight: 700, flexShrink: 0 }}>{d.count}</span>
-              </div>
-            ))}
-        </div>
-
-      </div>
-
-      {/* Recent visits table */}
-      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-        <div style={{ color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }}>🕐 Recent Visits <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: "0.78rem" }}>(last 50)</span></div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
-            <thead>
-              <tr style={{ color: "var(--muted)", textAlign: "left", borderBottom: "1px solid var(--border)" }}>
-                {["Time", "IP", "Location", "Device", "OS", "Browser", "Page"].map(h => (
-                  <th key={h} style={{ padding: "8px 10px", fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentVisits.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>No visits recorded yet</td></tr>
-              )}
-              {recentVisits.map(v => (
-                <tr key={v._id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={{ padding: "7px 10px", color: "var(--muted)", whiteSpace: "nowrap", fontSize: "0.75rem" }}>{fmtTime(v.visitedAt)}</td>
-                  <td style={{ padding: "7px 10px", fontFamily: "monospace", color: "var(--muted)", fontSize: "0.75rem" }}>{v.ip || "—"}</td>
-                  <td style={{ padding: "7px 10px", color: "var(--text)", fontSize: "0.78rem" }}>{[v.city, v.country].filter(Boolean).join(", ") || "—"}</td>
-                  <td style={{ padding: "7px 10px", color: "var(--muted)" }}>{v.device}</td>
-                  <td style={{ padding: "7px 10px", color: "var(--muted)" }}>{v.os}</td>
-                  <td style={{ padding: "7px 10px", color: "var(--muted)" }}>{v.browser}</td>
-                  <td style={{ padding: "7px 10px", fontFamily: "monospace", color: "var(--gold)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.page}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ════════════════════════════════════════════════════════════════
 // STAFF MANAGEMENT PANEL
 // ════════════════════════════════════════════════════════════════
 const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
+  { key: "community", icon: "🌐", label: "Community Hub (Live)" },
   { key: "movies", icon: "🎬", label: "Movies" },
   { key: "songs", icon: "🎵", label: "Songs" },
   { key: "users", icon: "👥", label: "Users & Reviewers" },
@@ -2575,16 +2384,10 @@ const ALL_MODULES = [
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
   { key: "blog", icon: "✍️", label: "Blog" },
-  { key: "blogsuggestions", icon: "💡", label: "Blog Ideas (Daily)" },
-  { key: "modelblog", icon: "🤖", label: "Model Blog" },
   { key: "boxoffice", icon: "📊", label: "Box Office" },
-  { key: "tracker", icon: "🎟", label: "BMS Tracker" },
   { key: "sacnilk", icon: "🕷️", label: "Sacnilk" },
-  { key: "poster", icon: "🖼️", label: "Poster Generator" },
   { key: "enquiries", icon: "✉️", label: "Enquiries" },
-  { key: "analytics", icon: "📈", label: "Analytics" },
   { key: "merge", icon: "🔀", label: "Merge Duplicates" },
-  { key: "autoindex", icon: "📡", label: "Auto-Indexing" },
   { key: "staff", icon: "👥", label: "Staff Management" },
   { key: "settings", icon: "⚙️", label: "Settings" },
 ];
@@ -2844,7 +2647,7 @@ function StaffPanel({ onToast }) {
                     const isChecked = selectedPerms.has(m.key);
                     return (
                       <label key={m.key} onClick={() => togglePerm(m.key)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 6, background: isChecked ? "rgba(201,151,58,0.1)" : "transparent", border: `1px solid ${isChecked ? "var(--gold)" : "transparent"}`, cursor: "pointer", transition: "all 0.15s" }}>
-                        <input type="checkbox" checked={isChecked} onChange={() => {}} style={{ accentColor: "var(--gold)", cursor: "pointer" }} />
+                        <input type="checkbox" checked={isChecked} onChange={() => { }} style={{ accentColor: "var(--gold)", cursor: "pointer" }} />
                         <span style={{ fontSize: "1rem" }}>{m.icon}</span>
                         <span style={{ fontSize: "0.83rem", fontWeight: isChecked ? 700 : 400, color: isChecked ? "var(--gold)" : "var(--text)" }}>{m.label}</span>
                       </label>
@@ -4082,18 +3885,6 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   <BlogGenerator movies={movies} cast={cast} onToast={onToast} />
                 </Suspense>
               )}
-              {/* ── BLOG SUGGESTIONS ── */}
-              {tab === "blogsuggestions" && (
-                <Suspense fallback={<Spinner />}>
-                  <BlogSuggestionsPanel onNavigateToBlog={() => handleTabChange("blog")} />
-                </Suspense>
-              )}
-              {/* ── MODEL BLOG ── */}
-              {tab === "modelblog" && (
-                <Suspense fallback={<Spinner />}>
-                  <ModelBlogPanel movies={movies} onToast={onToast} />
-                </Suspense>
-              )}
               {/* ── BOX OFFICE ── */}
               {tab === "boxoffice" && (
                 <Suspense fallback={<Spinner />}>
@@ -4101,12 +3892,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 </Suspense>
               )}
 
-              {/* ── BMS TRACKER ── */}
-              {tab === "tracker" && (
-                <Suspense fallback={<Spinner />}>
-                  <BMSTrackerPanel movies={movies} onToast={onToast} />
-                </Suspense>
-              )}
+
 
               {/* ── ENQUIRIES ── */}
               {tab === "enquiries" && (
@@ -4127,14 +3913,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 </Suspense>
               )}
 
-              {/* ── AUTO-INDEXING ── */}
-              {tab === "autoindex" && (
-                <div style={{ padding: 28 }}>
-                  <Suspense fallback={<Spinner />}>
-                    <AutoIndexPanel onToast={onToast} />
-                  </Suspense>
-                </div>
-              )}
+
 
               {tab === "sacnilk" && (
                 <Suspense fallback={<Spinner />}>
@@ -4142,10 +3921,12 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 </Suspense>
               )}
 
-              {/* ── POSTER GENERATOR ── */}
-              {tab === "poster" && (
+
+
+              {/* ── COMMUNITY & PORT 3000 USERS ── */}
+              {tab === "community" && (
                 <Suspense fallback={<Spinner />}>
-                  <PosterGeneratorPanel movies={movies} onToast={onToast} />
+                  <CommunityPanel onToast={onToast} />
                 </Suspense>
               )}
 
@@ -4163,12 +3944,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 </Suspense>
               )}
 
-              {/* ── ANALYTICS ── */}
-              {tab === "analytics" && (
-                <div style={{ padding: 28 }}>
-                  <AnalyticsPanel onToast={onToast} />
-                </div>
-              )}
+
 
               {/* ── STAFF MANAGEMENT ── */}
               {tab === "staff" && <StaffPanel onToast={onToast} />}

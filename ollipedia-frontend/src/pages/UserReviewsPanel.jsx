@@ -226,8 +226,10 @@ export default function UserReviewsPanel({ movies = [], onToast, defaultMode = "
       const positivePct = count > 0 ? Math.round((positiveCount / count) * 100) : 0;
 
       let tier = "First-timer";
-      if (count >= 5) tier = "Cinephile";
+      if (u.role === "admin") tier = "Admin";
+      else if (count >= 5) tier = "Cinephile";
       else if (count >= 2) tier = "Regular";
+      else if (u.isRegisteredCommunity) tier = "Community Member";
 
       return {
         userKey: u.userKey,

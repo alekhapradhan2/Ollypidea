@@ -194,13 +194,6 @@ export const API = {
   adminDeleteBoxOfficeDay: (id, day, trackType = "original") => del(`/admin/movies/${id}/boxoffice-days/${day}?trackType=${trackType}`, _adminToken),
   adminBulkBoxOfficeDays: (id, body, trackType = "original") => post(`/admin/movies/${id}/boxoffice-days/bulk?trackType=${trackType}`, body, _adminToken),
 
-  // ── Admin — BMS Tracker
-  trackerGetSessions: (movieId) => get(`/admin/tracker/sessions/${movieId}`, _adminToken),
-  trackerGetSnapshot: (id) => get(`/admin/tracker/snapshot/${id}`, _adminToken),
-  trackerSaveSnapshot: (body) => post(`/admin/tracker/save-snapshot`, body, _adminToken),
-  trackerDeleteSnapshot: (id) => del(`/admin/tracker/snapshot/${id}`, _adminToken),
-  trackerGetAllActive: () => get(`/admin/tracker/all-active`, _adminToken),
-
   // ── Admin — Sacnilk Tracker
   sacnilkGetConfigs: () => get("/admin/sacnilk/configs", _adminToken),
   sacnilkGetLogs: (movieId) => get(`/admin/sacnilk/logs/${movieId}`, _adminToken),
@@ -210,17 +203,6 @@ export const API = {
   sacnilkScrapeAll: () => post("/admin/sacnilk/scrape-all", undefined, _adminToken),
   sacnilkGenerateFinalBlogDraft: (movieId) => post(`/admin/sacnilk/generate-final-blog-draft/${movieId}`, undefined, _adminToken),
   sacnilkPublishFinalBlog: (movieId, body) => post(`/admin/sacnilk/publish-final-blog/${movieId}`, body, _adminToken),
-
-  // ── Admin — Analytics
-  adminGetAnalytics: () => get("/admin/analytics", _adminToken),
-  adminClearOldLogs: () => del("/admin/analytics/clear", _adminToken),
-
-  // ── Admin — Model Blog (AI Article Generator)
-  modelBlogResearch:    (movieId) => post("/admin/model-blog/research", { movieId }, _adminToken),
-  modelBlogGenerate:    (body)    => post("/admin/model-blog/generate", body, _adminToken),
-  modelBlogLogs:        (movieId) => get(`/admin/model-blog/logs/${movieId}`, _adminToken),
-  modelBlogGetLog:      (logId)   => get(`/admin/model-blog/log/${logId}`, _adminToken),
-  modelBlogMarkPublish: (logId, blogId) => req("PATCH", `/admin/model-blog/log/${logId}/publish`, { blogId }, _adminToken),
 
   // ── Admin — Staff Management
   adminGetStaff:    () => get("/admin/staff", _adminToken),
@@ -244,4 +226,34 @@ export const API = {
     return get(`/admin/reviewers${qp ? `?${qp}` : ""}`, _adminToken);
   },
   adminDeleteReview: (movieId, reviewIdx) => del(`/admin/movies/${movieId}/reviews/${reviewIdx}`, _adminToken),
+
+  // ── Admin — Community & Port 3000 Users Integration
+  adminGetCommunityStats: () => get("/admin/community/stats", _adminToken),
+  adminGetCommunityUsers: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/users${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminGetCommunityUser: (id) => get(`/admin/community/users/${id}`, _adminToken),
+  adminUpdateCommunityUserStatus: (id, status) => req("PATCH", `/admin/community/users/${id}/status`, { status }, _adminToken),
+  adminUpdateCommunityUserRole: (id, role) => req("PATCH", `/admin/community/users/${id}/role`, { role }, _adminToken),
+  adminDeleteCommunityUser: (id) => del(`/admin/community/users/${id}`, _adminToken),
+  adminGetCommunityActivities: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/activities${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminGetCommunityDiscussions: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/discussions${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminUpdateCommunityDiscussion: (id, body) => req("PATCH", `/admin/community/discussions/${id}`, body, _adminToken),
+  adminDeleteCommunityDiscussion: (id) => del(`/admin/community/discussions/${id}`, _adminToken),
+  adminGetCommunityComments: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/comments${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminDeleteCommunityComment: (id) => del(`/admin/community/comments/${id}`, _adminToken),
+  adminGetCommunityVotes: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/votes${qp ? `?${qp}` : ""}`, _adminToken);
+  },
 };

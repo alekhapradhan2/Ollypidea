@@ -31,61 +31,6 @@ app.use(compression()); // gzip — reduces JSON payload by ~70-80%
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "10mb" }));
 
-// ── Passive visitor tracking middleware ──────────────────────────────────────
-// Fires on every public GET /api/* — silently logs IP, device, page, location
-// IMPORTANT: next() is called immediately so the request is never blocked.
-// All tracking (geo lookup + DB write) happens fully in the background.
-const TRACK_SKIP = ["/api/admin", "/api/auth", "/api/cast-auth", "/api/ping", "/blog-uploads"];
-
-app.use((req, _res, next) => {
-  // Call next() first — request is NEVER blocked by tracking
-  next();
-
-  // Skip non-GET and non-API paths
-  if (req.method !== "GET") return;
-  if (TRACK_SKIP.some(p => req.path.startsWith(p))) return;
-  if (!req.path.startsWith("/api/")) return;
-
-  // Run everything asynchronously — response already sent to client
-  (async () => {
-    try {
-      const ua = req.headers["user-agent"] || "";
-      const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-        || req.socket?.remoteAddress || "";
-      const ref = req.headers["referer"] || req.headers["referrer"] || "";
-
-      const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-      const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
-      const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
-
-      const os = /Windows/i.test(ua) ? "Windows"
-        : /Android/i.test(ua) ? "Android"
-          : /iPhone|iPad/i.test(ua) ? "iOS"
-            : /Mac/i.test(ua) ? "macOS"
-              : /Linux/i.test(ua) ? "Linux" : "Other";
-
-      const browser = /Edg\//i.test(ua) ? "Edge"
-        : /OPR\//i.test(ua) ? "Opera"
-          : /Chrome/i.test(ua) ? "Chrome"
-            : /Firefox/i.test(ua) ? "Firefox"
-              : /Safari/i.test(ua) ? "Safari" : "Other";
-
-      const page = req.path.replace(/^\/api/, "") || "/";
-
-      let country = "", city = "";
-      if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
-        try {
-          const geo = await fetch(`http://ip-api.com/json/${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
-          const gd = await geo.json();
-          if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
-        } catch { /* geo timeout — visit still logged without location */ }
-      }
-
-      VisitorLog.create({ ip, country, city, device, os, browser, page, referrer: ref, visitedAt: new Date() }).catch(() => {});
-    } catch { /* never throw */ }
-  })();
-});
-
 // Serve uploaded blog images publicly
 app.use("/blog-uploads", express.static(UPLOADS_DIR));
 
@@ -518,6 +463,88 @@ const Movie = mongoose.model("Movie", MovieSchema);
 const Cast = mongoose.model("Cast", CastSchema);
 const News = mongoose.model("News", NewsSchema);
 const CastMember = mongoose.model("CastMember", CastMemberSchema);
+
+// ── Community Schemas & Models (Ollypedia Port 3000 Integration) ──
+const CommunityUserSchema = new mongoose.Schema({
+  username: { type: String, required: true, trim: true },
+  displayName: { type: String, default: "" },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  passwordHash: { type: String, default: "" },
+  avatar: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  role: { type: String, enum: ["user", "moderator", "admin"], default: "user" },
+  status: { type: String, enum: ["active", "banned", "suspended"], default: "active" },
+  joinedAt: { type: Date, default: Date.now },
+  discussionCount: { type: Number, default: 0 },
+  commentCount: { type: Number, default: 0 },
+  voteCount: { type: Number, default: 0 },
+  likesReceived: { type: Number, default: 0 },
+}, { timestamps: true });
+
+const CommunityActivitySchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "CommunityUser", required: true },
+  type: { type: String, required: true },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie" },
+  referenceId: { type: mongoose.Schema.Types.ObjectId },
+  metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
+}, { timestamps: true });
+
+const DiscussionThreadSchema = new mongoose.Schema({
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie" },
+  movieTitle: { type: String, default: "" },
+  movieSlug: { type: String, default: "" },
+  authorId: { type: mongoose.Schema.Types.ObjectId, ref: "CommunityUser" },
+  author: {
+    username: { type: String, default: "" },
+    displayName: { type: String, default: "" },
+    avatar: { type: String, default: "" },
+  },
+  title: { type: String, required: true, trim: true },
+  content: { type: String, required: true },
+  tags: [{ type: String }],
+  upvotes: { type: Number, default: 0 },
+  commentCount: { type: Number, default: 0 },
+  pinned: { type: Boolean, default: false },
+  locked: { type: Boolean, default: false },
+  status: { type: String, enum: ["active", "hidden", "deleted"], default: "active" },
+}, { timestamps: true });
+
+const DiscussionCommentSchema = new mongoose.Schema({
+  threadId: { type: mongoose.Schema.Types.ObjectId, ref: "DiscussionThread" },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie" },
+  authorId: { type: mongoose.Schema.Types.ObjectId, ref: "CommunityUser" },
+  author: {
+    username: { type: String, default: "" },
+    displayName: { type: String, default: "" },
+    avatar: { type: String, default: "" },
+  },
+  content: { type: String, required: true },
+  parentCommentId: { type: mongoose.Schema.Types.ObjectId, ref: "DiscussionComment", default: null },
+  upvotes: { type: Number, default: 0 },
+  status: { type: String, enum: ["active", "hidden", "deleted"], default: "active" },
+}, { timestamps: true });
+
+const MovieVoteSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "CommunityUser", required: true },
+  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true },
+  voteType: { type: String, required: true },
+}, { timestamps: true });
+
+const CommentReportSchema = new mongoose.Schema({
+  reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: "CommunityUser" },
+  targetType: { type: String, enum: ["thread", "comment"], default: "comment" },
+  targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  reason: { type: String, default: "" },
+  status: { type: String, enum: ["pending", "resolved", "dismissed"], default: "pending" },
+}, { timestamps: true });
+
+const CommunityUser = mongoose.models.CommunityUser || mongoose.model("CommunityUser", CommunityUserSchema, "communityusers");
+const CommunityActivity = mongoose.models.CommunityActivity || mongoose.model("CommunityActivity", CommunityActivitySchema, "communityactivities");
+const DiscussionThread = mongoose.models.DiscussionThread || mongoose.model("DiscussionThread", DiscussionThreadSchema, "discussionthreads");
+const DiscussionComment = mongoose.models.DiscussionComment || mongoose.model("DiscussionComment", DiscussionCommentSchema, "discussioncomments");
+const MovieVote = mongoose.models.MovieVote || mongoose.model("MovieVote", MovieVoteSchema, "movievotes");
+const CommentReport = mongoose.models.CommentReport || mongoose.model("CommentReport", CommentReportSchema, "commentreports");
+
 
 
 // ════════════════════════════════════════════════════════════════
@@ -2599,26 +2626,6 @@ const ContactSchema = new mongoose.Schema({
 const Contact = mongoose.model("Contact", ContactSchema);
 
 // ════════════════════════════════════════════════════════════════
-// VISITOR ANALYTICS SCHEMA
-// ════════════════════════════════════════════════════════════════
-const VisitorLogSchema = new mongoose.Schema({
-  ip: { type: String, default: "" },
-  country: { type: String, default: "" },
-  city: { type: String, default: "" },
-  device: { type: String, default: "" },   // "Mobile" | "Desktop" | "Tablet"
-  os: { type: String, default: "" },   // "Android" | "iOS" | "Windows" etc.
-  browser: { type: String, default: "" },   // "Chrome" | "Safari" etc.
-  page: { type: String, default: "/" },  // e.g. "/movies/abc"
-  referrer: { type: String, default: "" },
-  visitedAt: { type: Date, default: Date.now },
-}, { timestamps: false });
-
-VisitorLogSchema.index({ visitedAt: -1 });
-VisitorLogSchema.index({ ip: 1, visitedAt: 1 });
-
-const VisitorLog = mongoose.model("VisitorLog", VisitorLogSchema);
-
-// ════════════════════════════════════════════════════════════════
 // CAST RESOLUTION HELPER
 // ════════════════════════════════════════════════════════════════
 
@@ -3010,6 +3017,48 @@ app.get("/api/admin/reviews", async (req, res) => {
     let allReviews = [];
     let movieReviewCounts = {};
 
+    // ── Include Community Discussion Comments & Reviews ──
+    try {
+      const commComments = await mongoose.connection.db.collection("discussioncomments").find({ status: { $ne: "deleted" } }).sort({ createdAt: -1 }).toArray();
+      const userIds = commComments.map(c => c.userId).filter(Boolean);
+      const movieIds = commComments.map(c => c.movieId).filter(Boolean);
+
+      const [commUsers, commMovies] = await Promise.all([
+        mongoose.connection.db.collection("communityusers").find({ _id: { $in: userIds } }).toArray(),
+        Movie.find({ _id: { $in: movieIds } }, "title slug posterUrl releaseDate").lean()
+      ]);
+
+      const userMap = new Map(commUsers.map(u => [String(u._id), u]));
+      const movieMap = new Map(commMovies.map(m => [String(m._id), m]));
+
+      commComments.forEach(c => {
+        const u = userMap.get(String(c.userId)) || { displayName: "Community Fan", email: "", username: "fan" };
+        const m = movieMap.get(String(c.movieId)) || { title: "Odia Film", slug: "", posterUrl: "", releaseDate: "" };
+
+        allReviews.push({
+          reviewId: String(c._id),
+          reviewIndex: 0,
+          movieId: String(c.movieId || ""),
+          movieTitle: m.title,
+          moviePoster: m.posterUrl || "",
+          movieSlug: m.slug || "",
+          releaseDate: m.releaseDate || "",
+          user: u.displayName || u.username || "Community User",
+          email: u.email || "",
+          rating: 8.5,
+          text: c.content || "",
+          date: c.createdAt ? new Date(c.createdAt).toISOString() : new Date().toISOString(),
+          likes: c.likeCount || 0,
+          repliesCount: c.replyCount || 0,
+          isCommunity: true,
+        });
+
+        movieReviewCounts[m.title] = (movieReviewCounts[m.title] || 0) + 1;
+      });
+    } catch (commErr) {
+      console.error("Error loading community comments for admin reviews:", commErr);
+    }
+
     movies.forEach(movie => {
       if (Array.isArray(movie.reviews)) {
         movie.reviews.forEach((rev, idx) => {
@@ -3150,6 +3199,69 @@ app.get("/api/admin/reviewers", async (req, res) => {
     const movies = await Movie.find({ "reviews.0": { $exists: true } }, "title slug posterUrl reviews releaseDate").lean();
 
     const usersMap = new Map();
+
+    // ── Include All Registered Community Users ──
+    try {
+      const commUsers = await mongoose.connection.db.collection("communityusers").find({}).toArray();
+      commUsers.forEach(u => {
+        const key = (u.email || u.username || "").toLowerCase();
+        if (!key) return;
+        usersMap.set(key, {
+          userKey: key,
+          name: u.displayName || u.username,
+          email: u.email || "",
+          role: u.role || "user",
+          reviews: [],
+          totalLikes: u.likesReceived || 0,
+          ratingSum: 0,
+          ratings: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+          isRegisteredCommunity: true,
+          voteCount: u.voteCount || 0,
+          discussionCount: u.discussionCount || 0,
+          createdAt: u.createdAt,
+        });
+      });
+
+      // Fetch and attach their discussion comments
+      const commComments = await mongoose.connection.db.collection("discussioncomments").find({ status: { $ne: "deleted" } }).toArray();
+      const movieIds = commComments.map(c => c.movieId).filter(Boolean);
+      const commMovies = await Movie.find({ _id: { $in: movieIds } }, "title slug posterUrl releaseDate").lean();
+      const movieMap = new Map(commMovies.map(m => [String(m._id), m]));
+      const userObjMap = new Map(commUsers.map(u => [String(u._id), u]));
+
+      commComments.forEach(c => {
+        const u = userObjMap.get(String(c.userId));
+        if (!u) return;
+        const key = (u.email || u.username || "").toLowerCase();
+        if (!usersMap.has(key)) return;
+
+        const usr = usersMap.get(key);
+        const m = movieMap.get(String(c.movieId)) || { title: "Odia Film", slug: "", posterUrl: "", releaseDate: "" };
+
+        usr.ratingSum += 8.5;
+        usr.totalLikes += (c.likeCount || 0);
+        usr.ratings[5] = (usr.ratings[5] || 0) + 1;
+
+        usr.reviews.push({
+          reviewId: String(c._id),
+          reviewIndex: 0,
+          movieId: String(c.movieId || ""),
+          movieTitle: m.title,
+          moviePoster: m.posterUrl || "",
+          movieSlug: m.slug || "",
+          releaseDate: m.releaseDate || "",
+          rating: 8.5,
+          normalizedStar: 5,
+          text: c.content || "",
+          date: c.createdAt ? new Date(c.createdAt).toISOString() : new Date().toISOString(),
+          likes: c.likeCount || 0,
+          repliesCount: c.replyCount || 0,
+          isCommunity: true,
+        });
+      });
+    } catch (cErr) {
+      console.error("Error loading community users for reviewers:", cErr);
+    }
 
     movies.forEach(movie => {
       if (!Array.isArray(movie.reviews)) return;
@@ -3858,6 +3970,414 @@ app.delete("/api/admin/staff/:id", adminAuth, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════
+// COMMUNITY & USER MANAGEMENT (PORT 3000 INTEGRATION)
+// ════════════════════════════════════════════════════════════════
+
+// 1. Community Stats
+app.get("/api/admin/community/stats", adminAuth, async (req, res) => {
+  try {
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      totalUsers,
+      activeUsers,
+      bannedUsers,
+      newUsersToday,
+      newUsersThisWeek,
+      totalActivities,
+      totalVotes,
+      totalDiscussions,
+      totalComments,
+      recentSignups,
+      recentActivities
+    ] = await Promise.all([
+      CommunityUser.countDocuments(),
+      CommunityUser.countDocuments({ status: "active" }),
+      CommunityUser.countDocuments({ status: "banned" }),
+      CommunityUser.countDocuments({ createdAt: { $gte: startOfToday } }),
+      CommunityUser.countDocuments({ createdAt: { $gte: oneWeekAgo } }),
+      CommunityActivity.countDocuments(),
+      MovieVote.countDocuments(),
+      DiscussionThread.countDocuments({ status: { $ne: "deleted" } }),
+      DiscussionComment.countDocuments({ status: { $ne: "deleted" } }),
+      CommunityUser.find().sort({ createdAt: -1 }).limit(6).select("-passwordHash").lean(),
+      CommunityActivity.find()
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .populate("userId", "username displayName email avatar")
+        .populate("movieId", "title slug posterUrl releaseDate")
+        .lean()
+    ]);
+
+    // Vote type distribution
+    const voteAgg = await MovieVote.aggregate([
+      { $group: { _id: "$voteType", count: { $sum: 1 } } }
+    ]);
+    const voteDistribution = {};
+    voteAgg.forEach(v => { if (v._id) voteDistribution[v._id] = v.count; });
+
+    res.json({
+      totalUsers,
+      activeUsers,
+      bannedUsers,
+      newUsersToday,
+      newUsersThisWeek,
+      totalActivities,
+      totalVotes,
+      totalDiscussions,
+      totalComments,
+      recentSignups,
+      recentActivities,
+      voteDistribution,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 2. Community Users List (Paginated, Searchable, Filterable)
+app.get("/api/admin/community/users", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+    const { q, status, role, sortBy, order } = req.query;
+
+    const filter = {};
+    if (status && status !== "all") filter.status = status;
+    if (role && role !== "all") filter.role = role;
+    if (q && q.trim()) {
+      const regex = new RegExp(q.trim(), "i");
+      filter.$or = [
+        { username: regex },
+        { displayName: regex },
+        { email: regex }
+      ];
+    }
+
+    const sortField = sortBy || "createdAt";
+    const sortOrder = order === "asc" ? 1 : -1;
+    const sort = { [sortField]: sortOrder };
+
+    const [users, total] = await Promise.all([
+      CommunityUser.find(filter)
+        .select("-passwordHash")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      CommunityUser.countDocuments(filter)
+    ]);
+
+    res.json({
+      users,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 3. Single User Full Profile & Timeline
+app.get("/api/admin/community/users/:id", adminAuth, async (req, res) => {
+  try {
+    const user = await CommunityUser.findById(req.params.id).select("-passwordHash").lean();
+    if (!user) return res.status(404).json({ error: "Community user not found" });
+
+    // Fetch user activities, votes, discussions, and comments in parallel
+    const [activities, votes, discussions, comments] = await Promise.all([
+      CommunityActivity.find({ userId: user._id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate("movieId", "title slug posterUrl releaseDate")
+        .lean(),
+      MovieVote.find({ userId: user._id })
+        .sort({ createdAt: -1 })
+        .populate("movieId", "title slug posterUrl releaseDate verdict")
+        .lean(),
+      DiscussionThread.find({ authorId: user._id })
+        .sort({ createdAt: -1 })
+        .populate("movieId", "title slug posterUrl")
+        .lean(),
+      DiscussionComment.find({ authorId: user._id })
+        .sort({ createdAt: -1 })
+        .populate("movieId", "title slug posterUrl")
+        .lean()
+    ]);
+
+    res.json({
+      user,
+      activities,
+      votes,
+      discussions,
+      comments
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 4. Update User Status (active, banned, suspended)
+app.patch("/api/admin/community/users/:id/status", adminAuth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["active", "banned", "suspended"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+    const user = await CommunityUser.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status } },
+      { new: true }
+    ).select("-passwordHash").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 5. Update User Role (user, moderator, admin)
+app.patch("/api/admin/community/users/:id/role", adminAuth, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!["user", "moderator", "admin"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role value" });
+    }
+    const user = await CommunityUser.findByIdAndUpdate(
+      req.params.id,
+      { $set: { role } },
+      { new: true }
+    ).select("-passwordHash").lean();
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 6. Delete Community User
+app.delete("/api/admin/community/users/:id", adminAuth, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await CommunityUser.findByIdAndDelete(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    await Promise.all([
+      CommunityActivity.deleteMany({ userId }),
+      MovieVote.deleteMany({ userId })
+    ]);
+    res.json({ message: "User and associated data removed successfully", id: userId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 7. Community Live Activities Feed
+app.get("/api/admin/community/activities", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 30));
+    const skip = (page - 1) * limit;
+    const { type, userId, q } = req.query;
+
+    const filter = {};
+    if (type && type !== "all") filter.type = type;
+    if (userId && isOid(userId)) filter.userId = userId;
+    if (q && q.trim()) {
+      filter["metadata.snippet"] = new RegExp(q.trim(), "i");
+    }
+
+    const [activities, total] = await Promise.all([
+      CommunityActivity.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("userId", "username displayName email avatar role status")
+        .populate("movieId", "title slug posterUrl releaseDate")
+        .lean(),
+      CommunityActivity.countDocuments(filter)
+    ]);
+
+    res.json({
+      activities,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 8. Community Discussions (Threads)
+app.get("/api/admin/community/discussions", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+    const { q, movieId, status } = req.query;
+
+    const filter = {};
+    if (status && status !== "all") filter.status = status;
+    if (movieId && isOid(movieId)) filter.movieId = movieId;
+    if (q && q.trim()) {
+      const regex = new RegExp(q.trim(), "i");
+      filter.$or = [{ title: regex }, { content: regex }, { movieTitle: regex }];
+    }
+
+    const [discussions, total] = await Promise.all([
+      DiscussionThread.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("authorId", "username displayName avatar email")
+        .populate("movieId", "title slug posterUrl")
+        .lean(),
+      DiscussionThread.countDocuments(filter)
+    ]);
+
+    res.json({
+      discussions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 9. Update Discussion Thread (Pin / Lock / Status)
+app.patch("/api/admin/community/discussions/:id", adminAuth, async (req, res) => {
+  try {
+    const { pinned, locked, status } = req.body;
+    const update = {};
+    if (pinned !== undefined) update.pinned = Boolean(pinned);
+    if (locked !== undefined) update.locked = Boolean(locked);
+    if (status && ["active", "hidden", "deleted"].includes(status)) update.status = status;
+
+    const doc = await DiscussionThread.findByIdAndUpdate(req.params.id, { $set: update }, { new: true }).lean();
+    if (!doc) return res.status(404).json({ error: "Discussion not found" });
+    res.json(doc);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 10. Delete Discussion Thread
+app.delete("/api/admin/community/discussions/:id", adminAuth, async (req, res) => {
+  try {
+    const thread = await DiscussionThread.findByIdAndDelete(req.params.id);
+    if (!thread) return res.status(404).json({ error: "Discussion not found" });
+    await DiscussionComment.deleteMany({ threadId: req.params.id });
+    res.json({ message: "Discussion deleted successfully", id: req.params.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 11. Community Comments List
+app.get("/api/admin/community/comments", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 30));
+    const skip = (page - 1) * limit;
+    const { threadId, movieId, q } = req.query;
+
+    const filter = {};
+    if (threadId && isOid(threadId)) filter.threadId = threadId;
+    if (movieId && isOid(movieId)) filter.movieId = movieId;
+    if (q && q.trim()) filter.content = new RegExp(q.trim(), "i");
+
+    const [comments, total] = await Promise.all([
+      DiscussionComment.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("authorId", "username displayName avatar email")
+        .populate("threadId", "title")
+        .populate("movieId", "title slug posterUrl")
+        .lean(),
+      DiscussionComment.countDocuments(filter)
+    ]);
+
+    res.json({
+      comments,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 12. Delete Comment
+app.delete("/api/admin/community/comments/:id", adminAuth, async (req, res) => {
+  try {
+    const comment = await DiscussionComment.findByIdAndDelete(req.params.id);
+    if (!comment) return res.status(404).json({ error: "Comment not found" });
+    if (comment.threadId) {
+      await DiscussionThread.findByIdAndUpdate(comment.threadId, { $inc: { commentCount: -1 } });
+    }
+    res.json({ message: "Comment deleted successfully", id: req.params.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 13. Movie Votes List
+app.get("/api/admin/community/votes", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 30));
+    const skip = (page - 1) * limit;
+    const { movieId, userId, voteType } = req.query;
+
+    const filter = {};
+    if (movieId && isOid(movieId)) filter.movieId = movieId;
+    if (userId && isOid(userId)) filter.userId = userId;
+    if (voteType && voteType !== "all") filter.voteType = voteType;
+
+    const [votes, total, agg] = await Promise.all([
+      MovieVote.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("userId", "username displayName email avatar")
+        .populate("movieId", "title slug posterUrl releaseDate verdict")
+        .lean(),
+      MovieVote.countDocuments(filter),
+      MovieVote.aggregate([
+        { $match: filter },
+        { $group: { _id: "$voteType", count: { $sum: 1 } } }
+      ])
+    ]);
+
+    const voteTypeBreakdown = {};
+    agg.forEach(a => { if (a._id) voteTypeBreakdown[a._id] = a.count; });
+
+    res.json({
+      votes,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+      voteTypeBreakdown
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
 // ADMIN STATS
 // ════════════════════════════════════════════════════════════════
 app.get("/api/admin/stats", adminAuth, async (req, res) => {
@@ -4053,8 +4573,7 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
 
     // ── Auto-blog: Movie Details (always) + OTT Release (if OTT info given) + Song First Drops ──
     // autoGenerateMovieDetailsBlog(movie).catch(() => { }); // Disabled on manual add, kept active for cron scraper
-    // ★ Generate a First Drop blog for each song if songs were included at creation time
-    autoGenerateAllSongBlogs(populated).catch(() => { });
+    // autoGenerateAllSongBlogs(populated).catch(() => { }); // Disabled on manual add
     if (movie.streamingOn) {
       autoGenerateOttBlog(movie).catch(() => { });
       // Also trigger "Now Streaming" blog if OTT date has already arrived
@@ -5607,155 +6126,6 @@ app.post("/api/admin/merge/song", adminAuth, async (req, res) => {
     res.json({ success: true, deleted });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
-// ════════════════════════════════════════════════════════════════════════════
-// BMS OCCUPANCY TRACKER — Schema + Routes
-// ════════════════════════════════════════════════════════════════════════════
-
-const OccupancySnapshotSchema = new mongoose.Schema({
-  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie", required: true, index: true },
-  movieTitle: { type: String, default: "" },
-  bmsUrl: { type: String, default: "" },
-  runAt: { type: Date, default: Date.now, index: true },
-  status: { type: String, enum: ["running", "done", "error"], default: "running" },
-  errorMsg: { type: String, default: "" },
-  // Overall aggregates
-  totalShows: { type: Number, default: 0 },
-  totalSeats: { type: Number, default: 0 },
-  totalSold: { type: Number, default: 0 },
-  avgOccupancy: { type: Number, default: 0 }, // 0-100
-  estCollection: { type: Number, default: 0 }, // rupees
-  cityCount: { type: Number, default: 0 },
-  theatreCount: { type: Number, default: 0 },
-  // City-wise breakdown
-  cities: [{
-    name: String,
-    shows: Number,
-    totalSeats: Number,
-    soldSeats: Number,
-    occupancy: Number, // 0-100
-    estCollection: Number,
-    theatres: [{
-      name: String,
-      location: String,
-      shows: Number,
-      totalSeats: Number,
-      soldSeats: Number,
-      occupancy: Number,
-      estCollection: Number,
-    }],
-  }],
-}, { timestamps: true });
-
-const OccupancySnapshot = mongoose.models.OccupancySnapshot ||
-  mongoose.model("OccupancySnapshot", OccupancySnapshotSchema);
-
-// ── GET /api/admin/tracker/sessions/:movieId ─────────────────────────────────
-// Returns last 50 snapshots for a movie (summary only, no cities array)
-app.get("/api/admin/tracker/sessions/:movieId", adminAuth, async (req, res) => {
-  try {
-    if (!isOid(req.params.movieId)) return res.status(400).json({ error: "Invalid ID" });
-    const snaps = await OccupancySnapshot
-      .find({ movieId: req.params.movieId }, "-cities")
-      .sort({ runAt: -1 }).limit(50).lean();
-    res.json(snaps);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── GET /api/admin/tracker/snapshot/:id ──────────────────────────────────────
-// Returns a single snapshot with full city/theatre breakdown
-app.get("/api/admin/tracker/snapshot/:id", adminAuth, async (req, res) => {
-  try {
-    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
-    const snap = await OccupancySnapshot.findById(req.params.id).lean();
-    if (!snap) return res.status(404).json({ error: "Snapshot not found" });
-    res.json(snap);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── POST /api/admin/tracker/save-snapshot ────────────────────────────────────
-// Frontend sends scraped data; backend stores it and optionally updates boxOfficeDays
-app.post("/api/admin/tracker/save-snapshot", adminAuth, async (req, res) => {
-  try {
-    const { movieId, bmsUrl, cities = [], status = "done", errorMsg = "" } = req.body;
-    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
-
-    const movie = await Movie.findById(movieId, "title").lean();
-    if (!movie) return res.status(404).json({ error: "Movie not found" });
-
-    // Aggregate totals from cities
-    let totalShows = 0, totalSeats = 0, totalSold = 0, estCollection = 0;
-    const theatreSet = new Set();
-    const processedCities = (cities || []).map(city => {
-      let cShows = 0, cSeats = 0, cSold = 0, cColl = 0;
-      const theatres = (city.theatres || []).map(th => {
-        theatreSet.add(`${city.name}::${th.name}`);
-        cShows += (th.shows || 0);
-        cSeats += (th.totalSeats || 0);
-        cSold += (th.soldSeats || 0);
-        cColl += (th.estCollection || 0);
-        const occ = th.totalSeats > 0 ? Math.round((th.soldSeats / th.totalSeats) * 100) : 0;
-        return { ...th, occupancy: occ };
-      });
-      cShows = city.shows || cShows;
-      cSeats = city.totalSeats || cSeats;
-      cSold = city.soldSeats || cSold;
-      cColl = city.estCollection || cColl;
-      const occ = cSeats > 0 ? Math.round((cSold / cSeats) * 100) : 0;
-      totalShows += cShows;
-      totalSeats += cSeats;
-      totalSold += cSold;
-      estCollection += cColl;
-      return {
-        name: city.name, shows: cShows, totalSeats: cSeats, soldSeats: cSold,
-        occupancy: occ, estCollection: cColl, theatres
-      };
-    });
-
-    const avgOccupancy = totalSeats > 0 ? Math.round((totalSold / totalSeats) * 100) : 0;
-
-    const snap = await OccupancySnapshot.create({
-      movieId, movieTitle: movie.title, bmsUrl: bmsUrl || "",
-      runAt: new Date(), status, errorMsg,
-      totalShows, totalSeats, totalSold, avgOccupancy,
-      estCollection, cityCount: processedCities.length,
-      theatreCount: theatreSet.size, cities: processedCities,
-    });
-
-    res.status(201).json({ success: true, snapshotId: snap._id, avgOccupancy, estCollection });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── DELETE /api/admin/tracker/snapshot/:id ───────────────────────────────────
-app.delete("/api/admin/tracker/snapshot/:id", adminAuth, async (req, res) => {
-  try {
-    if (!isOid(req.params.id)) return res.status(400).json({ error: "Invalid ID" });
-    await OccupancySnapshot.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── GET /api/admin/tracker/all-active ────────────────────────────────────────
-// Returns movies released in last 30 days with their latest snapshot summary
-app.get("/api/admin/tracker/all-active", adminAuth, async (req, res) => {
-  try {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const movies = await Movie
-      .find({ releaseDate: { $gte: cutoff.toISOString().slice(0, 10) }, status: { $ne: "Upcoming" } },
-        "title slug posterUrl thumbnailUrl releaseDate")
-      .sort({ releaseDate: -1 }).lean();
-
-    // Attach latest snapshot to each movie
-    const result = await Promise.all(movies.map(async (m) => {
-      const latest = await OccupancySnapshot
-        .findOne({ movieId: m._id, status: "done" }, "-cities")
-        .sort({ runAt: -1 }).lean();
-      return { ...m, latestSnapshot: latest || null };
-    }));
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 
 //  SACNILK SCRAPER — Schema + Routes + Cron
 //  Paste this entire block into server.js, just before the app.listen() call.
@@ -10598,894 +10968,7 @@ cron.schedule("30 6 * * *", async () => {
 
 console.log("✅ Sacnilk cron scheduled: daily at 8:00 AM IST");
 
-
-
-// ════════════════════════════════════════════════════════════════
-// VISITOR ANALYTICS — PUBLIC + ADMIN ROUTES
-// ════════════════════════════════════════════════════════════════
-
-// POST /api/track — called by Next.js VisitorTracker component on every page view
-app.post("/api/track", async (req, res) => {
-  res.json({ ok: true }); // respond immediately, never block the user
-
-  try {
-    const ua = req.headers["user-agent"] || "";
-    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim()
-      || req.socket?.remoteAddress || "";
-    const { page = "/", referrer = "" } = req.body;
-
-    const isMobile = /Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-    const isTablet = /iPad|Tablet|PlayBook/i.test(ua);
-    const device = isTablet ? "Tablet" : isMobile ? "Mobile" : "Desktop";
-
-    const os = /Windows/i.test(ua) ? "Windows"
-      : /Android/i.test(ua) ? "Android"
-        : /iPhone|iPad/i.test(ua) ? "iOS"
-          : /Mac/i.test(ua) ? "macOS"
-            : /Linux/i.test(ua) ? "Linux" : "Other";
-
-    const browser = /Edg\//i.test(ua) ? "Edge"
-      : /OPR\//i.test(ua) ? "Opera"
-        : /Chrome/i.test(ua) ? "Chrome"
-          : /Firefox/i.test(ua) ? "Firefox"
-            : /Safari/i.test(ua) ? "Safari" : "Other";
-
-    let country = "", city = "";
-    if (ip && ip !== "::1" && ip !== "127.0.0.1" && !ip.startsWith("::ffff:127")) {
-      try {
-        const geo = await fetch(`http://ip-api.com/json/\${ip}?fields=country,city,status`, { signal: AbortSignal.timeout(2000) });
-        const gd = await geo.json();
-        if (gd.status === "success") { country = gd.country || ""; city = gd.city || ""; }
-      } catch { /* geo timeout */ }
-    }
-
-    await VisitorLog.create({ ip, country, city, device, os, browser, page, referrer, visitedAt: new Date() });
-  } catch { /* never throw */ }
-});
-
-// GET /api/admin/analytics — full analytics dashboard data
-app.get("/api/admin/analytics", adminAuth, async (req, res) => {
-  try {
-    const now = new Date();
-    const day = new Date(now); day.setHours(0, 0, 0, 0);
-    const week = new Date(now); week.setDate(now.getDate() - 7);
-    const month = new Date(now); month.setDate(now.getDate() - 30);
-
-    const [
-      totalVisits, todayVisits, weekVisits, monthVisits,
-      byDevice, byOS, byBrowser, byCountry, topPages, recentVisits, dailyTrend,
-    ] = await Promise.all([
-      VisitorLog.countDocuments(),
-      VisitorLog.countDocuments({ visitedAt: { $gte: day } }),
-      VisitorLog.countDocuments({ visitedAt: { $gte: week } }),
-      VisitorLog.countDocuments({ visitedAt: { $gte: month } }),
-
-      VisitorLog.aggregate([{ $group: { _id: "$device", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
-      VisitorLog.aggregate([{ $group: { _id: "$os", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
-      VisitorLog.aggregate([{ $group: { _id: "$browser", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
-      VisitorLog.aggregate([
-        { $match: { country: { $ne: "" } } },
-        { $group: { _id: "$country", count: { $sum: 1 } } },
-        { $sort: { count: -1 } }, { $limit: 10 },
-      ]),
-      VisitorLog.aggregate([
-        { $group: { _id: "$page", count: { $sum: 1 } } },
-        { $sort: { count: -1 } }, { $limit: 10 },
-      ]),
-      VisitorLog.find().sort({ visitedAt: -1 }).limit(50).lean(),
-      VisitorLog.aggregate([
-        { $match: { visitedAt: { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) } } },
-        {
-          $group: {
-            _id: { $dateToString: { format: "%Y-%m-%d", date: "$visitedAt", timezone: "Asia/Kolkata" } },
-            count: { $sum: 1 },
-          }
-        },
-        { $sort: { _id: 1 } },
-      ]),
-    ]);
-
-    res.json({
-      summary: { totalVisits, todayVisits, weekVisits, monthVisits },
-      byDevice, byOS, byBrowser, byCountry, topPages, recentVisits, dailyTrend,
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /api/admin/analytics/clear — remove logs older than 90 days
-app.delete("/api/admin/analytics/clear", adminAuth, async (req, res) => {
-  try {
-    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    const result = await VisitorLog.deleteMany({ visitedAt: { $lt: cutoff } });
-    res.json({ deleted: result.deletedCount });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // ════════════════════════════════════════════════════════════════════════════
-// MODEL BLOG — AI-POWERED ARTICLE GENERATION MODULE
-// New routes only — no existing routes modified.
-// ════════════════════════════════════════════════════════════════════════════
-
-// ── Schema ────────────────────────────────────────────────────────────────────
-const ModelBlogLogSchema = new mongoose.Schema({
-  movieId: { type: mongoose.Schema.Types.ObjectId, ref: "Movie", index: true },
-  movieTitle: { type: String, default: "" },
-  prompt: { type: String, default: "" },
-  generatedHTML: { type: String, default: "" },
-  seoData: { type: mongoose.Schema.Types.Mixed, default: {} },
-  sources: [{ name: String, url: String, type: String }],
-  confidence: { type: Number, default: 0 },
-  llmModel: { type: String, default: "" },
-  generationTime: { type: Number, default: 0 },  // ms
-  publishedBlogId: { type: mongoose.Schema.Types.ObjectId, ref: "Blog", default: null },
-  status: { type: String, enum: ["draft", "published", "error"], default: "draft" },
-  errorMsg: { type: String, default: "" },
-}, { timestamps: true });
-const ModelBlogLog = mongoose.model("ModelBlogLog", ModelBlogLogSchema);
-
-// ── Provider abstraction helper ───────────────────────────────────────────────
-async function callModelBlogLLM(systemPrompt, userPrompt, maxTokens = 3000) {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const groqKey = process.env.GROQ_API_KEY;
-
-  if (openaiKey) {
-    // USE OPENAI (GPT-4o) - Highest Accuracy
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}` },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-        max_tokens: maxTokens,
-        temperature: 0.7
-      })
-    });
-    if (!res.ok) throw new Error(`OpenAI Error: ${await res.text()}`);
-    const data = await res.json();
-    return data.choices[0].message.content;
-  }
-
-  if (geminiKey) {
-    // USE GEMINI (Google Flash Latest) - High Speed, 15 RPM Limit, Free
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${geminiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: systemPrompt + "\n\n" + userPrompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 }
-      })
-    });
-    if (!res.ok) throw new Error(`Gemini Error: ${await res.text()}`);
-    const data = await res.json();
-    return data.candidates[0].content.parts[0].text;
-  }
-
-  if (groqKey) {
-    // USE GROQ (Llama) - Fast Fallback
-    const model = process.env.GROQ_MODEL_BLOG || "llama-3.3-70b-versatile";
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${groqKey}` },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        temperature: 0.72,
-        top_p: 0.92,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-      signal: AbortSignal.timeout(55000),
-    });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      throw new Error(`Groq API error ${res.status}: ${errBody.slice(0, 200)}`);
-    }
-    const data = await res.json();
-    return (data?.choices?.[0]?.message?.content || "").trim();
-  }
-
-  throw new Error("No API Key configured. Please add OPENAI_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY to your .env file.");
-}
-
-// ── HTML sanitizer (strip script/event attrs) ─────────────────────────────────
-function sanitizeGeneratedHTML(html) {
-  return (html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    .replace(/\s+on\w+\s*=\s*(['"])[^'"]*\1/gi, "")
-    .replace(/javascript\s*:/gi, "")
-    .trim();
-}
-
-// ── Wikipedia page fetch helper ───────────────────────────────────────────────
-async function fetchWikiSummary(title) {
-  try {
-    const res = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (!res.ok) return null;
-    const d = await res.json();
-    return d.extract ? d : null;
-  } catch { return null; }
-}
-
-async function wikiSearch(query, limit = 3) {
-  try {
-    const res = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=${limit}&format=json&origin=*`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    const d = await res.json();
-    return d?.query?.search || [];
-  } catch { return []; }
-}
-
-// ── Deep Wikipedia research — returns { sources, facts, confidence } ───────────
-// Tries multiple search strategies until confidence >= 90 OR all strategies exhausted.
-async function deepResearch(movie) {
-  const sources = [];
-  const facts = [];
-  const seenUrls = new Set();
-  const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "";
-
-  function addFact(extract, srcName, srcUrl) {
-    if (!extract || facts.some(f => f.slice(0, 60) === extract.slice(0, 60))) return;
-    facts.push(extract.slice(0, 700));
-    if (!seenUrls.has(srcUrl)) {
-      sources.push({ name: srcName, url: srcUrl, type: "wikipedia" });
-      seenUrls.add(srcUrl);
-    }
-  }
-
-  // Strategy 1: Direct title + film searches
-  const queries = [
-    `${movie.title} film`,
-    `${movie.title} Odia film`,
-    `${movie.title} ${year} film`,
-    `${movie.title} Ollywood`,
-    movie.director ? `${movie.director} director Odia` : null,
-    movie.director ? `${movie.director} filmmaker` : null,
-  ].filter(Boolean);
-
-  for (const q of queries) {
-    const hits = await wikiSearch(q, 2);
-    for (const hit of hits.slice(0, 2)) {
-      const sum = await fetchWikiSummary(hit.title);
-      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title}`, sum.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`);
-    }
-  }
-
-  // Strategy 2: Search for lead actors on Wikipedia
-  const actors = (movie.cast || []).filter(c => c.type === "Actor" || c.type === "Actress").slice(0, 3);
-  for (const actor of actors) {
-    const hits = await wikiSearch(`${actor.name} Indian actor Odisha`, 1);
-    for (const hit of hits.slice(0, 1)) {
-      const sum = await fetchWikiSummary(hit.title);
-      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Cast)`, sum.content_urls?.desktop?.page || "");
-    }
-  }
-
-  // Strategy 3: Ollywood / Odia film industry context
-  const contextHits = await wikiSearch("Odia cinema Ollywood film industry", 1);
-  for (const hit of contextHits.slice(0, 1)) {
-    const sum = await fetchWikiSummary(hit.title);
-    if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Industry Context)`, sum.content_urls?.desktop?.page || "");
-  }
-
-  // Strategy 4: Music director
-  if (movie.media?.songs?.[0]?.musicDirector) {
-    const md = movie.media.songs[0].musicDirector;
-    const hits = await wikiSearch(`${md} music composer Odia`, 1);
-    for (const hit of hits.slice(0, 1)) {
-      const sum = await fetchWikiSummary(hit.title);
-      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Music)`, sum.content_urls?.desktop?.page || "");
-    }
-  }
-
-  // Strategy 5: Genre context (e.g. Odia action film, Odia romantic film)
-  const genre = (movie.genre || [])[0];
-  if (genre) {
-    const hits = await wikiSearch(`${genre} Odia film Ollywood`, 1);
-    for (const hit of hits.slice(0, 1)) {
-      const sum = await fetchWikiSummary(hit.title);
-      if (sum?.extract) addFact(sum.extract, `Wikipedia — ${sum.title} (Genre)`, sum.content_urls?.desktop?.page || "");
-    }
-  }
-
-  // ── Confidence scoring ─────────────────────────────────────────────────────
-  // Each field contributes; Wikipedia facts add significant weight.
-  let confidence = 40; // base (we always have DB)
-  if (movie.title) confidence += 5;
-  if (movie.synopsis?.length > 100) confidence += 10;
-  if (movie.synopsis?.length > 30 && confidence < 95) confidence += 3;
-  if ((movie.cast || []).length >= 3) confidence += 8;
-  if ((movie.cast || []).length >= 1) confidence += 3;
-  if (movie.director) confidence += 5;
-  if (movie.producer) confidence += 3;
-  if (movie.releaseDate) confidence += 4;
-  if (movie.genre?.length) confidence += 3;
-  if (movie.runtime) confidence += 2;
-  if (movie.streamingOn) confidence += 2;
-  if (movie.boxOffice?.total && movie.boxOffice.total !== "TBA") confidence += 4;
-  if (movie.boxOfficeDays?.length > 0) confidence += 4;
-  if ((movie.media?.songs || []).length > 0) confidence += 3;
-  if (movie.imdbRating) confidence += 3;
-  if (movie.budget) confidence += 2;
-  // Each Wikipedia fact source: +4 each, capped
-  confidence += Math.min(facts.length * 4, 20);
-  confidence = Math.min(confidence, 98);
-
-  return { sources, facts, confidence };
-}
-
-// ── POST /api/admin/model-blog/research ──────────────────────────────────────
-// Fetch full movie data from DB + run deep multi-strategy Wikipedia research.
-// Retries up to 2 extra passes if confidence < 90.
-// Returns: { movie, research: { sources, facts, confidence } }
-app.post("/api/admin/model-blog/research", adminAuth, async (req, res) => {
-  try {
-    const { movieId } = req.body;
-    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
-
-    // ── Populate only fields that exist in MovieSchema ──────────────────────
-    const movie = await Movie.findById(movieId)
-      .populate("cast.castId", "name type photo bio")
-      .populate("productionId", "name logo website")
-      .populate("collaborators", "name")
-      .populate("news", "title content category createdAt")
-      .lean();
-    if (!movie) return res.status(404).json({ error: "Movie not found" });
-
-    // Attach existing blogs for this movie
-    const existingBlogs = await Blog.find({ movieId }, "title slug category published createdAt").lean();
-    movie._existingBlogs = existingBlogs;
-
-    // ── Deep research pass ──────────────────────────────────────────────────
-    let research = await deepResearch(movie);
-
-    // Retry up to 2 more passes if still below 90%
-    if (research.confidence < 90) {
-      const extra = await deepResearch(movie);
-      // Merge unique facts/sources
-      for (const f of extra.facts) {
-        if (!research.facts.some(ef => ef.slice(0, 60) === f.slice(0, 60))) research.facts.push(f);
-      }
-      for (const s of extra.sources) {
-        if (!research.sources.some(es => es.url === s.url)) research.sources.push(s);
-      }
-      // Recalculate confidence with merged facts
-      let c = research.confidence;
-      c += Math.min((extra.facts.length - research.facts.length + extra.facts.length) * 2, 10);
-      research.confidence = Math.min(c, 98);
-    }
-
-    res.json({
-      movie,
-      research: {
-        sources: research.sources,
-        facts: research.facts,
-        confidence: research.confidence,
-        researchTime: Date.now(),
-        retried: research.confidence < 90,
-      },
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── POST /api/admin/model-blog/generate ──────────────────────────────────────
-// Full AI generation pipeline: build context → Pass 1 (SEO/outline JSON) →
-//   Pass 2 (full HTML article) → Pass 3 (humanization).
-// Returns: { html, seo, faqs, confidence, logId }
-app.post("/api/admin/model-blog/generate", adminAuth, async (req, res) => {
-  const startTime = Date.now();
-  const { movieId, prompt: adminPrompt, research } = req.body;
-  if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
-
-  let logDoc = null;
-  try {
-    const movie = await Movie.findById(movieId).lean();
-    if (!movie) return res.status(404).json({ error: "Movie not found" });
-    const existingBlogs = await Blog.find({ movieId }, "title slug").lean();
-
-    // ── Build rich context string from DB data ──────────────────────────────
-    const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : "upcoming";
-    const releaseFmt = movie.releaseDate ? new Date(movie.releaseDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : "TBA";
-    const castLines = (movie.cast || []).slice(0, 12).map(c => `  • ${c.name} (${c.type || "Actor"}${c.role ? ` — ${c.role}` : ""})`).join("\n");
-    const songLines = (movie.media?.songs || []).slice(0, 8).map(s => `  • "${s.title}" — ${s.singer || "N/A"} | Music: ${s.musicDirector || "N/A"}`).join("\n");
-    const existingBlogLines = existingBlogs.map(b => `  • "${b.title}" → /blog/${b.slug}`).join("\n");
-    const boxOfficeLines = (movie.boxOfficeDays || []).slice(0, 15).map(d => `  • Day ${d.day}: Net ${d.net || "TBA"} | Gross ${d.gross || "TBA"}`).join("\n");
-    const researchFacts = (research?.facts || []).join("\n\n");
-    const researchSources = (research?.sources || []).map(s => `  • ${s.name}: ${s.url}`).join("\n");
-    const confidence = research?.confidence || 50;
-
-    const contextBlock = `
-=== MOVIE DATA FROM DATABASE ===
-Title:        ${movie.title}
-Year:         ${year}
-Release Date: ${releaseFmt}
-Language:     ${movie.language || "Odia"}
-Genre:        ${(movie.genre || []).join(", ") || "Drama"}
-Category:     ${movie.category || "Feature Film"}
-Runtime:      ${movie.runtime || "N/A"}
-Director:     ${movie.director || "N/A"}
-Producer:     ${movie.producer || "N/A"}
-Budget:       ${movie.budget || "N/A"}
-Synopsis:     ${movie.synopsis || "N/A"}
-Verdict:      ${movie.verdict || "Upcoming"}
-OTT Platform: ${movie.streamingOn || "N/A"}
-OTT Date:     ${movie.ottReleaseDate || "N/A"}
-OTT URL:      ${movie.streamingUrl || "N/A"}
-IMDB Rating:  ${movie.imdbRating || "N/A"} (${movie.imdbVotes || "N/A"} votes)
-Box Office — Opening: ${movie.boxOffice?.opening || "N/A"} | Week 1: ${movie.boxOffice?.firstWeek || "N/A"} | Total: ${movie.boxOffice?.total || "N/A"}
-Box Office Day-by-Day:
-${boxOfficeLines || "  (no day-wise data)"}
-Cast & Crew:
-${castLines || "  (no cast data)"}
-Songs:
-${songLines || "  (no songs data)"}
-Existing Blogs:
-${existingBlogLines || "  (none yet)"}
-=== END MOVIE DATA ===
-${researchFacts ? `\n=== RESEARCH FACTS (Wikipedia) ===\n${researchFacts}\n=== END RESEARCH FACTS ===` : ""}
-${researchSources ? `\nSources:\n${researchSources}` : ""}
-`;
-
-    const customPromptSection = adminPrompt?.trim()
-      ? `\n=== ADMIN INSTRUCTIONS ===\n${adminPrompt}\n=== END ADMIN INSTRUCTIONS ===`
-      : "";
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PASS 1 — PLANNER AGENT (SEO + Outline)
-    // ─────────────────────────────────────────────────────────────────────────
-    const pass1System = `You are an expert SEO strategist and entertainment journalist for Ollypedia, India's leading Odia cinema database.
-Your job is to produce a structured JSON plan for a blog article.
-RULES:
-- Return ONLY a valid JSON object. No markdown fences.
-- All values must match the schema exactly.
-- Do NOT invent facts not present in the data.`;
-
-    const pass1User = `${contextBlock}${customPromptSection}
-
-Generate a complete SEO plan and article outline for the Odia film "${movie.title}" (${year}).
-
-Return ONLY this JSON object (no markdown, no code fences):
-{
-  "seoTitle": "Extremely long, highly descriptive and click-worthy title (80-120 chars)",
-  "metaTitle": "same as seoTitle",
-  "metaDescription": "155-char meta description",
-  "focusKeyword": "primary SEO keyword phrase (5-8 words)",
-  "primaryKeywords": ["array", "of", "5", "keywords"],
-  "secondaryKeywords": ["array", "of", "8", "secondary", "keywords"],
-  "longTailKeywords": ["3 long-tail keyword phrases"],
-  "slug": "url-safe-slug-matching-the-seoTitle-exactly",
-  "ogTitle": "Open Graph title (70 chars max)",
-  "ogDescription": "OG description (200 chars max)",
-  "twitterTitle": "Twitter card title",
-  "twitterDescription": "Twitter card description (200 chars max)",
-  "imageAlt": "descriptive alt text for cover image",
-  "imageTitle": "image title attribute",
-  "canonicalPath": "/blog/slug-here",
-  "readingTime": "estimated minutes as number string e.g. '8'",
-  "articleSections": [
-    { "heading": "Introduction", "instructions": "Write a compelling hook..." },
-    { "heading": "Cast & Characters", "instructions": "Deep dive into..." }
-  ],
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "suggestedInternalLinks": ["movie page /movie/${movie.slug || ""}"],
-  "articleExcerpt": "2-sentence compelling excerpt for blog listing pages"
-}`;
-
-    let seoData = {};
-    try {
-      const pass1Raw = await callModelBlogLLM(pass1System, pass1User, 2000);
-      const jsonMatch = pass1Raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) seoData = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error("PASS 1 ERROR:", e.message);
-      // Fallback SEO data
-      seoData = {
-        seoTitle: `${movie.title} (${year}) — Complete Odia Film Review & Box Office Details`,
-        metaTitle: `${movie.title} (${year}) — Complete Odia Film Review & Box Office Details`,
-        metaDescription: `Complete guide to ${movie.title}, the ${year} Odia film.`,
-        focusKeyword: `${movie.title} Odia film`,
-        slug: `${movie.title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-")}-${year}-review`,
-        canonicalPath: `/blog/${movie.slug || ""}`,
-        articleSections: [
-          { heading: "Introduction", instructions: "Write a 3-paragraph introduction summarizing the film's premise." },
-          { heading: "Cast & Performances", instructions: "Analyze the lead actors and their roles." },
-          { heading: "Conclusion", instructions: "Summarize why audiences should watch it." }
-        ]
-      };
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PASS 2 — WRITER AGENT (Section-by-Section Loop)
-    // ─────────────────────────────────────────────────────────────────────────
-    const pass2System = `You are a senior entertainment journalist for Ollypedia.
-STRICT OUTPUT RULES:
-1. Output ONLY clean, valid HTML for the requested section. Do NOT wrap in <article>.
-2. NO markdown, NO code fences.
-3. Start directly with an <h2> containing the section heading, then write the content.
-4. Write DEEPLY. Each section must have 3-5 massive, detailed paragraphs.
-5. Use <h3> for sub-headings, <ul><li> for lists, <table> for data.
-6. Never hallucinate facts — if something is not in the data, adapt gracefully.
-7. Use natural storytelling.`;
-
-    let articleHTML = "<article class=\"blog-article\">\n";
-    const sections = (Array.isArray(seoData.articleSections) && seoData.articleSections.length > 0)
-      ? seoData.articleSections
-      : [
-        { heading: "Introduction", instructions: "Write a 3-paragraph introduction summarizing the film's premise." },
-        { heading: "Cast & Performances", instructions: "Analyze the lead actors and their roles." },
-        { heading: "Conclusion", instructions: "Summarize why audiences should watch it." }
-      ];
-
-    for (let i = 0; i < sections.length; i++) {
-      const sec = sections[i];
-      const pass2User = `${contextBlock}${customPromptSection}
-SEO Focus Keyword: ${seoData.focusKeyword || movie.title}
-
-TASK: Write ONLY the following section of the article for "${movie.title}" (${year}):
-Section Heading: ${sec.heading}
-Instructions: ${sec.instructions}
-
-Write at least 3-4 highly detailed paragraphs. Output ONLY HTML (starting with <h2>${sec.heading}</h2>).`;
-
-      // 4-second delay before EACH section to completely bypass rate limits
-      await new Promise(r => setTimeout(r, 4000));
-
-      try {
-        let sectionHTML = await callModelBlogLLM(pass2System, pass2User, 1500);
-        // Strip code fences if the model still outputs them
-        sectionHTML = sectionHTML.replace(/^```html/i, "").replace(/```$/i, "").trim();
-        articleHTML += sectionHTML + "\n\n";
-      } catch (e) {
-        console.error(`PASS 2 ERROR on section ${sec.heading}:`, e.message);
-        if (e.message.includes("429") || e.message.includes("Rate Limit") || e.message.includes("quota")) {
-          const provider = process.env.GEMINI_API_KEY ? "Gemini" : (process.env.OPENAI_API_KEY ? "OpenAI" : "Groq");
-          return res.status(429).json({ error: `${provider} API Rate Limit Exceeded during section "${sec.heading}". Please wait 1 minute before generating again.` });
-        }
-        // If a section fails but not a rate limit, just skip it to salvage the rest of the article
-        articleHTML += `<h2>${sec.heading}</h2><p><i>Content temporarily unavailable.</i></p>\n\n`;
-      }
-    }
-    articleHTML += "</article>";
-
-    let finalHTML = articleHTML;
-
-    // Sanitize
-    finalHTML = sanitizeGeneratedHTML(finalHTML);
-
-    const schemaMarkup = JSON.stringify({
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Article",
-          "headline": seoData.seoTitle || movie.title,
-          "description": seoData.metaDescription || "",
-          "author": { "@type": "Organization", "name": "Ollypedia", "url": "https://www.ollypedia.in" },
-          "publisher": { "@type": "Organization", "name": "Ollypedia", "url": "https://www.ollypedia.in", "logo": { "@type": "ImageObject", "url": "https://www.ollypedia.in/logo.png" } },
-          "datePublished": new Date().toISOString(),
-          "dateModified": new Date().toISOString(),
-          "mainEntityOfPage": { "@type": "WebPage", "@id": `https://www.ollypedia.in${seoData.canonicalPath || ""}` },
-          "keywords": (seoData.primaryKeywords || []).concat(seoData.secondaryKeywords || []).join(", "),
-        },
-        {
-          "@type": "Movie",
-          "name": movie.title,
-          "description": movie.synopsis || "",
-          "datePublished": movie.releaseDate || "",
-          "director": movie.director ? { "@type": "Person", "name": movie.director } : undefined,
-          "genre": movie.genre || [],
-          "inLanguage": movie.language || "Odia",
-        },
-        {
-          "@type": "BreadcrumbList",
-          "itemListElement": [
-            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.ollypedia.in" },
-            { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.ollypedia.in/blog" },
-            { "@type": "ListItem", "position": 3, "name": movie.title, "item": `https://www.ollypedia.in${seoData.canonicalPath || ""}` },
-          ],
-        },
-      ],
-    }, null, 2);
-
-    // Inject schema markup at the top
-    const fullHTML = `<script type="application/ld+json">\n${schemaMarkup}\n</script>\n\n${finalHTML}`;
-
-    const generationTime = Date.now() - startTime;
-    const model = process.env.OPENAI_API_KEY ? "gpt-4o" : (process.env.GEMINI_API_KEY ? "gemini-flash-latest" : (process.env.GROQ_MODEL_BLOG || "llama-3.3-70b-versatile"));
-
-    // Save generation log
-    try {
-      logDoc = await ModelBlogLog.create({
-        movieId,
-        movieTitle: movie.title,
-        prompt: adminPrompt || "",
-        generatedHTML: fullHTML,
-        seoData,
-        sources: research?.sources || [],
-        confidence,
-        llmModel: model,
-        generationTime,
-        status: "draft",
-      });
-    } catch { /* log failure is non-fatal */ }
-
-    res.json({
-      html: fullHTML,
-      seo: seoData,
-      confidence,
-      generationTime,
-      logId: logDoc?._id || null,
-      model,
-    });
-  } catch (e) {
-    // Log error
-    try {
-      if (req.body?.movieId && isOid(req.body.movieId)) {
-        const movie = await Movie.findById(req.body.movieId, "title").lean();
-        await ModelBlogLog.create({
-          movieId: req.body.movieId, movieTitle: movie?.title || "",
-          prompt: req.body?.prompt || "", status: "error", errorMsg: e.message,
-          generationTime: Date.now() - startTime,
-        });
-      }
-    } catch { /* silent */ }
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ── GET /api/admin/model-blog/logs/:movieId ───────────────────────────────────
-// Returns previous generation logs for versioning UI
-app.get("/api/admin/model-blog/logs/:movieId", adminAuth, async (req, res) => {
-  try {
-    const { movieId } = req.params;
-    if (!isOid(movieId)) return res.status(400).json({ error: "Invalid movieId" });
-    const logs = await ModelBlogLog.find({ movieId })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .select("-generatedHTML") // omit large HTML from list — full HTML fetched on restore
-      .lean();
-    res.json(logs);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── GET /api/admin/model-blog/logs/:movieId/:logId ────────────────────────────
-// Returns a single log's full generated HTML (for restore)
-app.get("/api/admin/model-blog/log/:logId", adminAuth, async (req, res) => {
-  try {
-    const { logId } = req.params;
-    if (!isOid(logId)) return res.status(400).json({ error: "Invalid logId" });
-    const log = await ModelBlogLog.findById(logId).lean();
-    if (!log) return res.status(404).json({ error: "Log not found" });
-    res.json(log);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── PATCH /api/admin/model-blog/log/:logId/published ─────────────────────────
-// Mark a log as published (called after blog is saved)
-app.patch("/api/admin/model-blog/log/:logId/publish", adminAuth, async (req, res) => {
-  try {
-    const { logId } = req.params;
-    if (!isOid(logId)) return res.status(400).json({ error: "Invalid logId" });
-    const { blogId } = req.body;
-    const log = await ModelBlogLog.findByIdAndUpdate(
-      logId,
-      { status: "published", publishedBlogId: isOid(blogId) ? blogId : null },
-      { new: true }
-    ).lean();
-    if (!log) return res.status(404).json({ error: "Log not found" });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// DAILY BLOG SUGGESTION MODULE ROUTES & CRON
-// ════════════════════════════════════════════════════════════════════════════
-const {
-  BlogSuggestion,
-  BlogSuggestionLog,
-  runBlogSuggestionEngine
-} = require("./blogSuggestionEngine");
-
-// GET /api/blog-suggestions — List suggestions with filter & pagination
-app.get("/api/blog-suggestions", adminAuth, async (req, res) => {
-  try {
-    const { status, category, sourceType, search, page = 1, limit = 20 } = req.query;
-    const query = {};
-    if (status && status !== "all") query.status = status;
-    if (category && category !== "all") query.category = category;
-    if (sourceType && sourceType !== "all") query.sourceType = sourceType;
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { synopsis: { $regex: search, $options: "i" } },
-        { keywords: { $regex: search, $options: "i" } }
-      ];
-    }
-
-    const total = await BlogSuggestion.countDocuments(query);
-    const suggestions = await BlogSuggestion.find(query)
-      .sort({ createdAt: -1 })
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .limit(parseInt(limit))
-      .lean();
-
-    res.json({ suggestions, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/blog-suggestions/generate — Trigger generator manually on demand
-app.post("/api/blog-suggestions/generate", adminAuth, async (req, res) => {
-  try {
-    const result = await runBlogSuggestionEngine({ force: true });
-    res.json({ success: true, count: result.count, suggestions: result.suggestions });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// PATCH /api/blog-suggestions/:id — Update suggestion status (e.g. approve, dismiss)
-app.patch("/api/blog-suggestions/:id", adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    if (!isOid(id)) return res.status(400).json({ error: "Invalid suggestion ID" });
-    if (!["pending", "approved", "converted", "dismissed"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status value" });
-    }
-
-    const updated = await BlogSuggestion.findByIdAndUpdate(id, { status }, { new: true }).lean();
-    if (!updated) return res.status(404).json({ error: "Blog suggestion not found" });
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/blog-suggestions/:id/convert — Convert suggestion into a draft Blog document
-app.post("/api/blog-suggestions/:id/convert", adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!isOid(id)) return res.status(400).json({ error: "Invalid suggestion ID" });
-
-    const suggestion = await BlogSuggestion.findById(id);
-    if (!suggestion) return res.status(404).json({ error: "Blog suggestion not found" });
-
-    // Construct draft blog content HTML
-    const outlineHtml = (suggestion.outline || [])
-      .map(item => `<li><strong>${item}</strong></li>`)
-      .join("");
-    const keyPointsHtml = (suggestion.keyPoints || [])
-      .map(item => `<li>${item}</li>`)
-      .join("");
-
-    const draftContent = `
-<article>
-  <p class="lead"><em>${suggestion.synopsis || suggestion.reason || ""}</em></p>
-  
-  <h2>Article Overview & Objectives</h2>
-  <p>Target Audience: <strong>${suggestion.targetAudience}</strong></p>
-
-  <h2>Key Information & Facts</h2>
-  <ul>
-    ${keyPointsHtml}
-  </ul>
-
-  <h2>Recommended Section Structure</h2>
-  <ol>
-    ${outlineHtml}
-  </ol>
-
-  <h2>Draft Content & Analysis</h2>
-  <p>Write your detailed body paragraph here covering the latest updates in Odia cinema...</p>
-</article>
-`.trim();
-
-    // Create draft blog in Blog collection
-    const newBlog = await Blog.create({
-      title: suggestion.title,
-      content: draftContent,
-      category: suggestion.category,
-      tags: suggestion.keywords || [],
-      published: false, // Save as draft first
-      readTime: Math.max(2, Math.ceil((draftContent.split(/\s+/).length) / 200)),
-      metaDescription: (suggestion.synopsis || "").slice(0, 160),
-      author: "Ollypedia AI Editor",
-    });
-
-    // Update suggestion status
-    suggestion.status = "converted";
-    suggestion.generatedBlogId = newBlog._id;
-    await suggestion.save();
-
-    res.json({ success: true, blog: newBlog, suggestion });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/blog-suggestions/bulk-delete — Delete multiple suggestions at once
-app.post("/api/blog-suggestions/bulk-delete", adminAuth, async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "Array of suggestion IDs is required" });
-    }
-    const validIds = ids.filter(id => isOid(id));
-    const result = await BlogSuggestion.deleteMany({ _id: { $in: validIds } });
-    res.json({ success: true, count: result.deletedCount });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/blog-suggestions/instagram-post — Ingest Instagram Post URL/Caption & generate grounded blog ideas
-app.post("/api/blog-suggestions/instagram-post", adminAuth, async (req, res) => {
-  try {
-    const { caption, postUrl, handle } = req.body;
-    if (!caption && !postUrl) {
-      return res.status(400).json({ error: "Instagram caption text or post URL is required" });
-    }
-
-    const { generateIdeasFromInstagramPost } = require("./blogSuggestionEngine");
-    const ideas = await generateIdeasFromInstagramPost(caption || postUrl, postUrl || "", handle || "ollypedia");
-
-    if (ideas.length === 0) {
-      return res.status(400).json({ error: "Failed to parse blog ideas from Instagram post" });
-    }
-
-    const insertedDocs = await BlogSuggestion.insertMany(ideas);
-    res.json({ success: true, count: insertedDocs.length, suggestions: insertedDocs });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE /api/blog-suggestions/:id — Delete suggestion
-app.delete("/api/blog-suggestions/:id", adminAuth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!isOid(id)) return res.status(400).json({ error: "Invalid suggestion ID" });
-    await BlogSuggestion.findByIdAndDelete(id);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /api/blog-suggestions/cron-status — Get cron schedule status and stats
-app.get("/api/blog-suggestions/cron-status", adminAuth, async (req, res) => {
-  try {
-    const totalPending = await BlogSuggestion.countDocuments({ status: "pending" });
-    const totalApproved = await BlogSuggestion.countDocuments({ status: "approved" });
-    const totalConverted = await BlogSuggestion.countDocuments({ status: "converted" });
-    const totalDismissed = await BlogSuggestion.countDocuments({ status: "dismissed" });
-    const total = await BlogSuggestion.countDocuments({});
-
-    const lastLog = await BlogSuggestionLog.findOne().sort({ createdAt: -1 }).lean();
-
-    res.json({
-      active: false,
-      schedule: "Disabled (Manual Generation Only)",
-      lastRunAt: lastLog ? lastLog.createdAt : null,
-      lastRunStatus: lastLog ? lastLog.status : "Never",
-      lastRunCount: lastLog ? lastLog.generatedCount : 0,
-      stats: { total, pending: totalPending, approved: totalApproved, converted: totalConverted, dismissed: totalDismissed }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-// ════════════════════════════════════════════════════════════════════════════
-
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build
 // command is: cd frontend && npm run build  (or wherever your React app lives)

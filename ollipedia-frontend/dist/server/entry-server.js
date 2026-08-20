@@ -171,12 +171,6 @@ const API = {
   adminUpdateBoxOfficeDay: (id, day, body, trackType = "original") => req("PATCH", `/admin/movies/${id}/boxoffice-days/${day}?trackType=${trackType}`, body, _adminToken),
   adminDeleteBoxOfficeDay: (id, day, trackType = "original") => del(`/admin/movies/${id}/boxoffice-days/${day}?trackType=${trackType}`, _adminToken),
   adminBulkBoxOfficeDays: (id, body, trackType = "original") => post(`/admin/movies/${id}/boxoffice-days/bulk?trackType=${trackType}`, body, _adminToken),
-  // ── Admin — BMS Tracker
-  trackerGetSessions: (movieId) => get(`/admin/tracker/sessions/${movieId}`, _adminToken),
-  trackerGetSnapshot: (id) => get(`/admin/tracker/snapshot/${id}`, _adminToken),
-  trackerSaveSnapshot: (body) => post(`/admin/tracker/save-snapshot`, body, _adminToken),
-  trackerDeleteSnapshot: (id) => del(`/admin/tracker/snapshot/${id}`, _adminToken),
-  trackerGetAllActive: () => get(`/admin/tracker/all-active`, _adminToken),
   // ── Admin — Sacnilk Tracker
   sacnilkGetConfigs: () => get("/admin/sacnilk/configs", _adminToken),
   sacnilkGetLogs: (movieId) => get(`/admin/sacnilk/logs/${movieId}`, _adminToken),
@@ -186,15 +180,6 @@ const API = {
   sacnilkScrapeAll: () => post("/admin/sacnilk/scrape-all", void 0, _adminToken),
   sacnilkGenerateFinalBlogDraft: (movieId) => post(`/admin/sacnilk/generate-final-blog-draft/${movieId}`, void 0, _adminToken),
   sacnilkPublishFinalBlog: (movieId, body) => post(`/admin/sacnilk/publish-final-blog/${movieId}`, body, _adminToken),
-  // ── Admin — Analytics
-  adminGetAnalytics: () => get("/admin/analytics", _adminToken),
-  adminClearOldLogs: () => del("/admin/analytics/clear", _adminToken),
-  // ── Admin — Model Blog (AI Article Generator)
-  modelBlogResearch: (movieId) => post("/admin/model-blog/research", { movieId }, _adminToken),
-  modelBlogGenerate: (body) => post("/admin/model-blog/generate", body, _adminToken),
-  modelBlogLogs: (movieId) => get(`/admin/model-blog/logs/${movieId}`, _adminToken),
-  modelBlogGetLog: (logId) => get(`/admin/model-blog/log/${logId}`, _adminToken),
-  modelBlogMarkPublish: (logId, blogId) => req("PATCH", `/admin/model-blog/log/${logId}/publish`, { blogId }, _adminToken),
   // ── Admin — Staff Management
   adminGetStaff: () => get("/admin/staff", _adminToken),
   adminCreateStaff: (body) => post("/admin/staff", body, _adminToken),
@@ -213,7 +198,36 @@ const API = {
     const qp = new URLSearchParams(params).toString();
     return get(`/admin/reviewers${qp ? `?${qp}` : ""}`, _adminToken);
   },
-  adminDeleteReview: (movieId, reviewIdx) => del(`/admin/movies/${movieId}/reviews/${reviewIdx}`, _adminToken)
+  adminDeleteReview: (movieId, reviewIdx) => del(`/admin/movies/${movieId}/reviews/${reviewIdx}`, _adminToken),
+  // ── Admin — Community & Port 3000 Users Integration
+  adminGetCommunityStats: () => get("/admin/community/stats", _adminToken),
+  adminGetCommunityUsers: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/users${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminGetCommunityUser: (id) => get(`/admin/community/users/${id}`, _adminToken),
+  adminUpdateCommunityUserStatus: (id, status) => req("PATCH", `/admin/community/users/${id}/status`, { status }, _adminToken),
+  adminUpdateCommunityUserRole: (id, role) => req("PATCH", `/admin/community/users/${id}/role`, { role }, _adminToken),
+  adminDeleteCommunityUser: (id) => del(`/admin/community/users/${id}`, _adminToken),
+  adminGetCommunityActivities: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/activities${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminGetCommunityDiscussions: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/discussions${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminUpdateCommunityDiscussion: (id, body) => req("PATCH", `/admin/community/discussions/${id}`, body, _adminToken),
+  adminDeleteCommunityDiscussion: (id) => del(`/admin/community/discussions/${id}`, _adminToken),
+  adminGetCommunityComments: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/comments${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminDeleteCommunityComment: (id) => del(`/admin/community/comments/${id}`, _adminToken),
+  adminGetCommunityVotes: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/community/votes${qp ? `?${qp}` : ""}`, _adminToken);
+  }
 };
 const api = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -12291,14 +12305,10 @@ function PortalCastProfile({ production }) {
 }
 const BlogGenerator = lazy(() => import("./assets/BlogGenerator-fd7iLtte.js"));
 const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-DWba9T8B.js"));
-const BMSTrackerPanel = lazy(() => import("./assets/BMSTrackerPanel-BvRme0rO.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
-const AutoIndexPanel = lazy(() => import("./assets/AutoIndexPanel-ChvN1ZMV.js"));
 const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBhCj4H.js"));
-const PosterGeneratorPanel = lazy(() => import("./assets/PosterGeneratorPanel-C8rzoByl.js"));
-const ModelBlogPanel = lazy(() => import("./assets/ModelBlogPanel-BCcctcEN.js"));
-const BlogSuggestionsPanel = lazy(() => import("./assets/BlogSuggestionsPanel-DD6oYDeL.js"));
-const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-NClKrplC.js"));
+const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-Bu3AylyH.js"));
+const CommunityPanel = lazy(() => import("./assets/CommunityPanel-CUe1gwe6.js"));
 const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
 const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES = [
@@ -14663,162 +14673,9 @@ function EnquiriesPanel({ enquiries, setEnquiries, onToast, setConfirm }) {
     }) })
   ] });
 }
-function AnalyticsPanel({ onToast }) {
-  const [data, setData] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [clearing, setClearing] = React.useState(false);
-  const load = () => {
-    setLoading(true);
-    API.adminGetAnalytics().then((d) => setData(d)).catch((e) => onToast == null ? void 0 : onToast(e.message, "error")).finally(() => setLoading(false));
-  };
-  React.useEffect(() => {
-    load();
-  }, []);
-  const handleClearOld = async () => {
-    if (!window.confirm("Delete all visitor logs older than 90 days?")) return;
-    setClearing(true);
-    try {
-      const r = await API.adminClearOldLogs();
-      onToast == null ? void 0 : onToast(`Cleared ${r.deleted} old logs`);
-      load();
-    } catch (e) {
-      onToast == null ? void 0 : onToast(e.message, "error");
-    } finally {
-      setClearing(false);
-    }
-  };
-  if (loading) return /* @__PURE__ */ jsx(Spinner, {});
-  if (!data) return null;
-  const { summary, byDevice, byOS, byBrowser, byCountry, topPages, recentVisits, dailyTrend } = data;
-  const maxDay = Math.max(...dailyTrend.map((d) => d.count), 1);
-  const last14 = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(Date.now() - (13 - i) * 864e5);
-    const key = d.toISOString().slice(0, 10);
-    const map = Object.fromEntries(dailyTrend.map((x) => [x._id, x.count]));
-    return {
-      key,
-      label: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
-      count: map[key] || 0
-    };
-  });
-  const fmtTime = (d) => new Date(d).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-  const StatCard = ({ label, value }) => /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: "20px 24px", flex: 1, minWidth: 130 }, children: [
-    /* @__PURE__ */ jsx("div", { style: { color: "var(--muted)", fontSize: "0.78rem", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }, children: label }),
-    /* @__PURE__ */ jsx("div", { style: { color: "var(--gold)", fontSize: "2rem", fontWeight: 900, lineHeight: 1 }, children: Number(value).toLocaleString() })
-  ] });
-  const Bar = ({ label, count, total, color = "var(--gold)" }) => /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10 }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: "0.82rem" }, children: [
-      /* @__PURE__ */ jsx("span", { style: { color: "var(--text)" }, children: label || "Unknown" }),
-      /* @__PURE__ */ jsxs("span", { style: { color: "var(--muted)" }, children: [
-        count,
-        " ",
-        /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.72rem" }, children: [
-          "(",
-          total ? Math.round(count / total * 100) : 0,
-          "%)"
-        ] })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx("div", { style: { background: "var(--border)", borderRadius: 4, height: 7 }, children: /* @__PURE__ */ jsx("div", { style: { width: `${total ? Math.min(100, count / total * 100) : 0}%`, background: color, height: 7, borderRadius: 4, transition: "width 0.5s ease" } }) })
-  ] });
-  return /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 24 }, children: [
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }, children: [
-      /* @__PURE__ */ jsx("h2", { style: { color: "var(--gold)", margin: 0, fontSize: "1.4rem", fontWeight: 900 }, children: "📈 Visitor Analytics" }),
-      /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8 }, children: [
-        /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: load, children: "↺ Refresh" }),
-        /* @__PURE__ */ jsx(
-          "button",
-          {
-            className: "btn btn-ghost btn-sm",
-            onClick: handleClearOld,
-            disabled: clearing,
-            style: { color: "var(--red)" },
-            children: clearing ? "Clearing…" : "🗑 Clear Old Logs"
-          }
-        )
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 12, flexWrap: "wrap" }, children: [
-      /* @__PURE__ */ jsx(StatCard, { label: "Total Visits", value: summary.totalVisits }),
-      /* @__PURE__ */ jsx(StatCard, { label: "Today", value: summary.todayVisits }),
-      /* @__PURE__ */ jsx(StatCard, { label: "Last 7 Days", value: summary.weekVisits }),
-      /* @__PURE__ */ jsx(StatCard, { label: "Last 30 Days", value: summary.monthVisits })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-      /* @__PURE__ */ jsx("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 16, fontSize: "0.9rem" }, children: "📊 Last 14 Days" }),
-      /* @__PURE__ */ jsx("div", { style: { display: "flex", alignItems: "flex-end", gap: 3, height: 90 }, children: last14.map((d) => /* @__PURE__ */ jsxs("div", { style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }, children: [
-        /* @__PURE__ */ jsx(
-          "div",
-          {
-            title: `${d.label}: ${d.count} visits`,
-            style: {
-              width: "100%",
-              borderRadius: "3px 3px 0 0",
-              background: d.count ? "var(--gold)" : "rgba(255,255,255,0.06)",
-              height: `${Math.max(3, d.count / maxDay * 76)}px`,
-              transition: "height 0.4s ease",
-              cursor: "default"
-            }
-          }
-        ),
-        /* @__PURE__ */ jsx("div", { style: { fontSize: "0.55rem", color: "var(--muted)", writingMode: "vertical-lr", transform: "rotate(180deg)", height: 30, lineHeight: 1 }, children: d.label })
-      ] }, d.key)) })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px,1fr))", gap: 16 }, children: [
-      /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-        /* @__PURE__ */ jsx("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }, children: "📱 Device" }),
-        byDevice.length === 0 ? /* @__PURE__ */ jsx("div", { style: { color: "var(--muted)", fontSize: "0.82rem" }, children: "No data yet" }) : byDevice.map((d) => /* @__PURE__ */ jsx(Bar, { label: d._id, count: d.count, total: summary.totalVisits }, d._id))
-      ] }),
-      /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-        /* @__PURE__ */ jsx("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }, children: "🖥️ Operating System" }),
-        byOS.length === 0 ? /* @__PURE__ */ jsx("div", { style: { color: "var(--muted)", fontSize: "0.82rem" }, children: "No data yet" }) : byOS.map((d) => /* @__PURE__ */ jsx(Bar, { label: d._id, count: d.count, total: summary.totalVisits, color: "#5ba3f5" }, d._id))
-      ] }),
-      /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-        /* @__PURE__ */ jsx("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }, children: "🌐 Browser" }),
-        byBrowser.length === 0 ? /* @__PURE__ */ jsx("div", { style: { color: "var(--muted)", fontSize: "0.82rem" }, children: "No data yet" }) : byBrowser.map((d) => /* @__PURE__ */ jsx(Bar, { label: d._id, count: d.count, total: summary.totalVisits, color: "#4caf82" }, d._id))
-      ] }),
-      /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-        /* @__PURE__ */ jsx("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }, children: "🌍 Top Countries" }),
-        byCountry.length === 0 ? /* @__PURE__ */ jsx("div", { style: { color: "var(--muted)", fontSize: "0.82rem" }, children: "No geo data yet" }) : byCountry.map((d) => /* @__PURE__ */ jsx(Bar, { label: d._id, count: d.count, total: summary.totalVisits, color: "#c084fc" }, d._id))
-      ] }),
-      /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-        /* @__PURE__ */ jsx("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }, children: "📄 Top Pages" }),
-        topPages.length === 0 ? /* @__PURE__ */ jsx("div", { style: { color: "var(--muted)", fontSize: "0.82rem" }, children: "No data yet" }) : topPages.map((d) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)", fontSize: "0.8rem" }, children: [
-          /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "78%", whiteSpace: "nowrap" }, children: d._id }),
-          /* @__PURE__ */ jsx("span", { style: { color: "var(--gold)", fontWeight: 700, flexShrink: 0 }, children: d.count })
-        ] }, d._id))
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { style: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }, children: [
-      /* @__PURE__ */ jsxs("div", { style: { color: "var(--text)", fontWeight: 700, marginBottom: 14, fontSize: "0.88rem" }, children: [
-        "🕐 Recent Visits ",
-        /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400, fontSize: "0.78rem" }, children: "(last 50)" })
-      ] }),
-      /* @__PURE__ */ jsx("div", { style: { overflowX: "auto" }, children: /* @__PURE__ */ jsxs("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }, children: [
-        /* @__PURE__ */ jsx("thead", { children: /* @__PURE__ */ jsx("tr", { style: { color: "var(--muted)", textAlign: "left", borderBottom: "1px solid var(--border)" }, children: ["Time", "IP", "Location", "Device", "OS", "Browser", "Page"].map((h) => /* @__PURE__ */ jsx("th", { style: { padding: "8px 10px", fontWeight: 600 }, children: h }, h)) }) }),
-        /* @__PURE__ */ jsxs("tbody", { children: [
-          recentVisits.length === 0 && /* @__PURE__ */ jsx("tr", { children: /* @__PURE__ */ jsx("td", { colSpan: 7, style: { padding: 30, textAlign: "center", color: "var(--muted)" }, children: "No visits recorded yet" }) }),
-          recentVisits.map((v) => /* @__PURE__ */ jsxs("tr", { style: { borderBottom: "1px solid var(--border)" }, children: [
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", color: "var(--muted)", whiteSpace: "nowrap", fontSize: "0.75rem" }, children: fmtTime(v.visitedAt) }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", fontFamily: "monospace", color: "var(--muted)", fontSize: "0.75rem" }, children: v.ip || "—" }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", color: "var(--text)", fontSize: "0.78rem" }, children: [v.city, v.country].filter(Boolean).join(", ") || "—" }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", color: "var(--muted)" }, children: v.device }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", color: "var(--muted)" }, children: v.os }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", color: "var(--muted)" }, children: v.browser }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "7px 10px", fontFamily: "monospace", color: "var(--gold)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: v.page })
-          ] }, v._id))
-        ] })
-      ] }) })
-    ] })
-  ] });
-}
 const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
+  { key: "community", icon: "🌐", label: "Community Hub (Live)" },
   { key: "movies", icon: "🎬", label: "Movies" },
   { key: "songs", icon: "🎵", label: "Songs" },
   { key: "users", icon: "👥", label: "Users & Reviewers" },
@@ -14827,16 +14684,10 @@ const ALL_MODULES = [
   { key: "productions", icon: "🎥", label: "Productions" },
   { key: "news", icon: "📰", label: "News" },
   { key: "blog", icon: "✍️", label: "Blog" },
-  { key: "blogsuggestions", icon: "💡", label: "Blog Ideas (Daily)" },
-  { key: "modelblog", icon: "🤖", label: "Model Blog" },
   { key: "boxoffice", icon: "📊", label: "Box Office" },
-  { key: "tracker", icon: "🎟", label: "BMS Tracker" },
   { key: "sacnilk", icon: "🕷️", label: "Sacnilk" },
-  { key: "poster", icon: "🖼️", label: "Poster Generator" },
   { key: "enquiries", icon: "✉️", label: "Enquiries" },
-  { key: "analytics", icon: "📈", label: "Analytics" },
   { key: "merge", icon: "🔀", label: "Merge Duplicates" },
-  { key: "autoindex", icon: "📡", label: "Auto-Indexing" },
   { key: "staff", icon: "👥", label: "Staff Management" },
   { key: "settings", icon: "⚙️", label: "Settings" }
 ];
@@ -16359,10 +16210,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
           ] });
         })()),
         tab === "blog" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BlogGenerator, { movies, cast, onToast }) }),
-        tab === "blogsuggestions" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BlogSuggestionsPanel, { onNavigateToBlog: () => handleTabChange("blog") }) }),
-        tab === "modelblog" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(ModelBlogPanel, { movies, onToast }) }),
         tab === "boxoffice" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BoxOfficePanel, { movies, onToast }) }),
-        tab === "tracker" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BMSTrackerPanel, { movies, onToast }) }),
         tab === "enquiries" && (loadingSecondary ? /* @__PURE__ */ jsx(Spinner, {}) : /* @__PURE__ */ jsx(
           EnquiriesPanel,
           {
@@ -16373,12 +16221,10 @@ function AdminPortal({ admin, onLogout, onToast }) {
           }
         )),
         tab === "merge" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(MergePanel, { movies, onToast }) }),
-        tab === "autoindex" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(AutoIndexPanel, { onToast }) }) }),
         tab === "sacnilk" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(SacnilkScraperPanel, { movies, onToast }) }),
-        tab === "poster" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(PosterGeneratorPanel, { movies, onToast }) }),
+        tab === "community" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(CommunityPanel, { onToast }) }),
         tab === "users" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(UserReviewsPanel, { defaultMode: "users", movies, onToast }) }),
         tab === "reviews" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(UserReviewsPanel, { defaultMode: "reviews", movies, onToast }) }),
-        tab === "analytics" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(AnalyticsPanel, { onToast }) }),
         tab === "staff" && /* @__PURE__ */ jsx(StaffPanel, { onToast }),
         tab === "settings" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(AdminSettings, { admin, onToast }) })
       ] }) })
