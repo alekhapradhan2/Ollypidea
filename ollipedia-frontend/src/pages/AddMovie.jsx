@@ -392,29 +392,25 @@ export default function AddMovie({ production, onToast }) {
                 <input className="form-input" value={form.budget} onChange={e=>set("budget",e.target.value)} placeholder="e.g. ₹2 Crore" />
               </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Genres</label>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                {GENRES.map(g=>(
-                  <button key={g} type="button" className="badge" onClick={()=>toggleGenre(g)}
-                    style={{ cursor:"pointer", borderColor:form.genre.includes(g)?"var(--gold)":"var(--border)", color:form.genre.includes(g)?"var(--gold)":"var(--muted)", background:form.genre.includes(g)?"rgba(201,151,58,0.1)":"transparent" }}>
-                    {form.genre.includes(g)?"✓ ":""}{g}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
+                    <div className="form-group">
               <label className="form-label">Poster URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(portrait 2:3)</span></label>
-              <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" />
+              <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" source="Movie" />
               {form.posterUrl && (
                 <img src={form.posterUrl} alt="poster" style={{ marginTop:8, height:120, borderRadius:4, border:"1px solid var(--border)", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
               )}
             </div>
             <div className="form-group">
-              <label className="form-label">Banner / Thumbnail URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(landscape 16:9 — homepage hero)</span></label>
-              <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" />
+              <label className="form-label">Thumbnail URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(landscape 16:9)</span></label>
+              <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" source="Movie" />
               {form.thumbnailUrl && (
-                <img src={form.thumbnailUrl} alt="banner" style={{ marginTop:8, width:"100%", maxHeight:140, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />
+                <img src={form.thumbnailUrl} alt="thumbnail" style={{ marginTop:8, width:"100%", maxHeight:140, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Banner URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(landscape 16:9 — homepage hero)</span></label>
+              <ImageUploadInput value={form.bannerUrl} onChange={v => set("bannerUrl", v)} placeholder="Wide landscape image URL…" source="Movie" />
+              {form.bannerUrl && (
+                <img src={form.bannerUrl} alt="banner" style={{ marginTop:8, width:"100%", maxHeight:140, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />
               )}
             </div>
             <div className="form-group">

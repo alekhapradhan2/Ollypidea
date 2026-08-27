@@ -14,6 +14,16 @@ const UPLOADS_DIR = path.join(__dirname, "public", "blog-uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const cloudinary = require("cloudinary").v2;
+if (process.env.CLOUDINARY_URL) {
+  try {
+    const uri = process.env.CLOUDINARY_URL.replace('cloudinary://', '');
+    const [auth, cloud_name] = uri.split('@');
+    const [api_key, api_secret] = auth.split(':');
+    cloudinary.config({ cloud_name, api_key, api_secret, secure: true });
+  } catch (err) {
+    console.error("Failed to parse CLOUDINARY_URL:", err.message);
+  }
+}
 const streamifier = require("streamifier");
 
 const blogImageStorage = multer.memoryStorage();
@@ -463,6 +473,28 @@ const Movie = mongoose.model("Movie", MovieSchema);
 const Cast = mongoose.model("Cast", CastSchema);
 const News = mongoose.model("News", NewsSchema);
 const CastMember = mongoose.model("CastMember", CastMemberSchema);
+
+// ── Media Assets Schema & Model (Cloudinary Media Library) ──────────────
+const MediaAssetSchema = new mongoose.Schema({
+  url: { type: String, required: true, trim: true },
+  publicId: { type: String, default: "" },
+  filename: { type: String, default: "" },
+  fileType: { type: String, default: "image" },
+  size: { type: Number, default: 0 },
+  width: { type: Number, default: 0 },
+  height: { type: Number, default: 0 },
+  source: { type: String, default: "Cloudinary Upload" },
+  tags: [{ type: String }],
+  title: { type: String, default: "" },
+  uploadedBy: { type: String, default: "admin" },
+}, { timestamps: true });
+
+MediaAssetSchema.index({ createdAt: -1 });
+MediaAssetSchema.index({ url: 1 });
+MediaAssetSchema.index({ source: 1 });
+MediaAssetSchema.index({ publicId: 1 });
+
+const MediaAsset = mongoose.models.MediaAsset || mongoose.model("MediaAsset", MediaAssetSchema, "mediaassets");
 
 // ── Community Schemas & Models (Ollypedia Port 3000 Integration) ──
 const CommunityUserSchema = new mongoose.Schema({
@@ -5243,6 +5275,322 @@ app.delete("/api/admin/blog/:id", adminAuth, async (req, res) => {
     await Blog.findByIdAndDelete(req.params.id);
     res.json({ message: "Deleted" });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin — Media Upload & Cloudinary Asset Management APIs ────────────────
+
+const uploadBufferToCloudinary = (buffer, folder = "ollypedia_media", filename) => {
+  return new Promise((resolve, reject) => {
+    const opts = { folder, resource_type: "image" };
+    if (filename) opts.public_id = filename.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_") + "_" + Date.now().toString(36);
+    const stream = cloudinary.uploader.upload_stream(opts, (err, result) => {
+      if (err) return reject(err);
+      resolve(result);
+    });
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
+
+// 1. Single / Blog Image Upload (saves to Cloudinary and indexes in MediaAsset)
+app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("image"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No image file received" });
+  try {
+    const source = req.body.source || "Cloudinary Upload";
+    const result = await uploadBufferToCloudinary(req.file.buffer, "ollypedia_media", req.file.originalname);
+    
+    const media = await MediaAsset.create({
+      url: result.secure_url,
+      publicId: result.public_id,
+      filename: req.file.originalname || result.public_id,
+      fileType: req.file.mimetype || "image",
+      size: req.file.size || result.bytes || 0,
+      width: result.width || 0,
+      height: result.height || 0,
+      source,
+      title: req.body.title || req.file.originalname || "",
+      uploadedBy: req.admin?.username || "admin",
+    });
+    res.json({ url: result.secure_url, filename: result.public_id, media });
+  } catch (error) {
+    console.error("Cloudinary / Media Upload Error:", error);
+    res.status(500).json({ error: "Image upload failed: " + (error.message || "Unknown error") });
+  }
+});
+
+// 2. Multi-file or Single Media Upload (accepts field names 'files' or 'image' or 'images')
+app.post("/api/admin/media/upload", adminAuth, blogImageUpload.array("files", 20), async (req, res) => {
+  try {
+    const files = req.files || (req.file ? [req.file] : []);
+    if (!files || !files.length) return res.status(400).json({ error: "No files uploaded" });
+
+    const source = req.body.source || "Cloudinary Upload";
+    const uploadedMedia = [];
+
+    for (const file of files) {
+      const result = await uploadBufferToCloudinary(file.buffer, "ollypedia_media", file.originalname);
+      const asset = await MediaAsset.create({
+        url: result.secure_url,
+        publicId: result.public_id,
+        filename: file.originalname || result.public_id,
+        fileType: file.mimetype || "image",
+        size: file.size || result.bytes || 0,
+        width: result.width || 0,
+        height: result.height || 0,
+        source,
+        title: file.originalname || "",
+        uploadedBy: req.admin?.username || "admin",
+      });
+      uploadedMedia.push(asset);
+    }
+
+    res.json({
+      success: true,
+      count: uploadedMedia.length,
+      media: uploadedMedia,
+      url: uploadedMedia[0]?.url,
+    });
+  } catch (e) {
+    console.error("Media multi-upload error:", e);
+    res.status(500).json({ error: e.message || "Failed to upload media" });
+  }
+});
+
+// 3. Get Paginated Media with Search & Source Filter
+app.get("/api/admin/media", adminAuth, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 36));
+    const skip = (page - 1) * limit;
+    const search = (req.query.search || "").trim();
+    const source = (req.query.source || "").trim();
+
+    const filter = {
+      $or: [
+        { url: { $regex: "cloudinary.com", $options: "i" } },
+        { publicId: { $exists: true, $ne: "" } }
+      ]
+    };
+
+    if (search) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { filename: { $regex: search, $options: "i" } },
+          { title: { $regex: search, $options: "i" } },
+          { url: { $regex: search, $options: "i" } },
+          { publicId: { $regex: search, $options: "i" } },
+          { tags: { $in: [new RegExp(search, "i")] } }
+        ]
+      });
+    }
+
+    if (source && source !== "all") {
+      filter.source = source;
+    }
+
+    const [media, total, sourceStats] = await Promise.all([
+      MediaAsset.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      MediaAsset.countDocuments(filter),
+      MediaAsset.aggregate([
+        { $match: { $or: [{ url: { $regex: "cloudinary.com", $options: "i" } }, { publicId: { $exists: true, $ne: "" } }] } },
+        { $group: { _id: "$source", count: { $sum: 1 } } }
+      ])
+    ]);
+
+    const sourcesCount = { all: total };
+    sourceStats.forEach(s => { if (s._id) sourcesCount[s._id] = s.count; });
+
+    res.json({
+      media,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+      sourcesCount,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 4. Sync ALL Uploads from Cloudinary API into MediaAsset collection (preserves and detects Movie, Cast, Blog, News, Production sources)
+app.post("/api/admin/media/sync-cloudinary", adminAuth, async (req, res) => {
+  try {
+    let allResources = [];
+    let nextCursor = undefined;
+
+    do {
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.api.resources({ type: "upload", max_results: 500, next_cursor: nextCursor }, (err, data) => {
+          if (err) reject(err);
+          else resolve(data);
+        });
+      });
+      if (result.resources && Array.isArray(result.resources)) {
+        allResources.push(...result.resources);
+      }
+      nextCursor = result.next_cursor;
+    } while (nextCursor);
+
+    // Build URL lookups from database catalog to auto-tag sources accurately
+    const [movies, casts, prods, newsList, blogs] = await Promise.all([
+      Movie.find({}, "posterUrl thumbnailUrl bannerUrl").lean(),
+      Cast.find({}, "photo banner").lean(),
+      Production.find({}, "logo banner").lean(),
+      News.find({}, "imageUrl").lean(),
+      Blog.find({}, "coverImage").lean(),
+    ]);
+
+    const movieUrls = new Set();
+    movies.forEach(m => {
+      if (m.posterUrl) movieUrls.add(m.posterUrl.trim());
+      if (m.thumbnailUrl) movieUrls.add(m.thumbnailUrl.trim());
+      if (m.bannerUrl) movieUrls.add(m.bannerUrl.trim());
+    });
+
+    const castUrls = new Set();
+    casts.forEach(c => {
+      if (c.photo) castUrls.add(c.photo.trim());
+      if (c.banner) castUrls.add(c.banner.trim());
+    });
+
+    const prodUrls = new Set();
+    prods.forEach(p => {
+      if (p.logo) prodUrls.add(p.logo.trim());
+      if (p.banner) prodUrls.add(p.banner.trim());
+    });
+
+    const newsUrls = new Set();
+    newsList.forEach(n => {
+      if (n.imageUrl) newsUrls.add(n.imageUrl.trim());
+    });
+
+    const blogUrls = new Set();
+    blogs.forEach(b => {
+      if (b.coverImage) blogUrls.add(b.coverImage.trim());
+    });
+
+    let syncedCount = 0;
+    for (const r of allResources) {
+      const filename = r.display_name || (r.public_id.split("/").pop() + "." + r.format);
+      
+      let detectedSource = "Cloudinary Upload";
+      if (movieUrls.has(r.secure_url) || movieUrls.has(r.url)) detectedSource = "Movie";
+      else if (castUrls.has(r.secure_url) || castUrls.has(r.url)) detectedSource = "Cast";
+      else if (prodUrls.has(r.secure_url) || prodUrls.has(r.url)) detectedSource = "Production";
+      else if (newsUrls.has(r.secure_url) || newsUrls.has(r.url)) detectedSource = "News";
+      else if (blogUrls.has(r.secure_url) || blogUrls.has(r.url) || r.public_id.includes("blog") || (r.asset_folder && r.asset_folder.includes("blog"))) detectedSource = "Blog";
+
+      const existing = await MediaAsset.findOne({
+        $or: [{ publicId: r.public_id }, { url: r.secure_url }, { url: r.url }]
+      });
+
+      const finalSource = (existing && existing.source && existing.source !== "Cloudinary Upload")
+        ? existing.source
+        : detectedSource;
+
+      await MediaAsset.findOneAndUpdate(
+        { $or: [{ publicId: r.public_id }, { url: r.secure_url }] },
+        {
+          $set: {
+            url: r.secure_url,
+            publicId: r.public_id,
+            filename: filename,
+            fileType: "image/" + (r.format || "jpeg"),
+            size: r.bytes || 0,
+            width: r.width || 0,
+            height: r.height || 0,
+            source: finalSource,
+            title: r.display_name || r.public_id.split("/").pop(),
+            uploadedBy: "Cloudinary",
+          },
+          $setOnInsert: {
+            createdAt: new Date(r.created_at || Date.now())
+          }
+        },
+        { upsert: true, new: true }
+      );
+      syncedCount++;
+    }
+
+    const totalAssets = await MediaAsset.countDocuments({
+      $or: [
+        { url: { $regex: "cloudinary.com", $options: "i" } },
+        { publicId: { $exists: true, $ne: "" } }
+      ]
+    });
+
+    res.json({
+      success: true,
+      totalInCloudinary: allResources.length,
+      syncedCount,
+      totalAssets,
+      message: `Successfully refreshed ${syncedCount} Cloudinary assets with full categories!`
+    });
+  } catch (e) {
+    console.error("Cloudinary Sync Error:", e);
+    res.status(500).json({ error: e.message || "Failed to sync with Cloudinary" });
+  }
+});
+
+// 5. Delete Single Media (deletes from Cloudinary and DB)
+app.delete("/api/admin/media/:id", adminAuth, async (req, res) => {
+  try {
+    const asset = await MediaAsset.findById(req.params.id);
+    if (!asset) return res.status(404).json({ error: "Media item not found" });
+
+    if (asset.publicId) {
+      try {
+        await cloudinary.uploader.destroy(asset.publicId);
+      } catch (err) {
+        console.warn("Cloudinary delete warning:", err.message);
+      }
+    }
+
+    await MediaAsset.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: "Media deleted successfully", id: req.params.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 6. Bulk Delete Media
+app.post("/api/admin/media/bulk-delete", adminAuth, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || !ids.length) return res.status(400).json({ error: "No ids provided" });
+
+    const assets = await MediaAsset.find({ _id: { $in: ids } });
+    for (const a of assets) {
+      if (a.publicId) {
+        try {
+          await cloudinary.uploader.destroy(a.publicId);
+        } catch {}
+      }
+    }
+
+    await MediaAsset.deleteMany({ _id: { $in: ids } });
+    res.json({ success: true, deletedCount: assets.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 7. Update Media Metadata
+app.patch("/api/admin/media/:id", adminAuth, async (req, res) => {
+  try {
+    const { title, tags, source } = req.body;
+    const update = {};
+    if (title !== undefined) update.title = title;
+    if (tags !== undefined) update.tags = Array.isArray(tags) ? tags : tags.split(",").map(t => t.trim()).filter(Boolean);
+    if (source !== undefined) update.source = source;
+
+    const updated = await MediaAsset.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!updated) return res.status(404).json({ error: "Media not found" });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Blog Reviews ──────────────────────────────────────────────────

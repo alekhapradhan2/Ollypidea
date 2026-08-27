@@ -1785,7 +1785,7 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               <div className="form-group"><label className="form-label">IMDb Rating</label><input className="form-input" value={editForm.imdbRating||""} onChange={e=>setE("imdbRating",e.target.value)} placeholder="7.5" /></div>
             </div>
             <div className="form-grid">
-              <div className="form-group"><label className="form-label">Poster URL</label><ImageUploadInput value={editForm.posterUrl||""} onChange={v=>setE("posterUrl",v)} /></div>
+              <div className="form-group"><label className="form-label">Poster URL (Portrait 2:3)</label><ImageUploadInput value={editForm.posterUrl||""} onChange={v=>setE("posterUrl",v)} source="Movie" /></div>
               <div className="form-group"><label className="form-label">Verdict</label><select className="form-select" value={editForm.verdict||"Upcoming"} onChange={e=>setE("verdict",e.target.value)}>{VDICT.map(v=><option key={v}>{v}</option>)}</select></div>
             </div>
             <div className="form-group"><label className="form-label">Genres</label>
@@ -1796,7 +1796,8 @@ export default function MovieDetails({ production, onToast, portalMode }) {
               </div>
             </div>
             <div className="form-group"><label className="form-label">Synopsis</label><textarea className="form-textarea" value={editForm.synopsis||""} onChange={e=>setE("synopsis",e.target.value)} style={{minHeight:100}} /></div>
-            <div className="form-group"><label className="form-label">Thumbnail URL</label><ImageUploadInput value={editForm.thumbnailUrl||""} onChange={v=>setE("thumbnailUrl",v)} /></div>
+            <div className="form-group"><label className="form-label">Thumbnail URL (Landscape 16:9)</label><ImageUploadInput value={editForm.thumbnailUrl||""} onChange={v=>setE("thumbnailUrl",v)} source="Movie" /></div>
+            <div className="form-group"><label className="form-label">Banner URL (Hero Background)</label><ImageUploadInput value={editForm.bannerUrl||""} onChange={v=>setE("bannerUrl",v)} placeholder="Wide landscape image URL…" source="Movie" /></div>
           </div>
         )}
 

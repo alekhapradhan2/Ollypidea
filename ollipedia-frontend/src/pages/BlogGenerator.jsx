@@ -1313,7 +1313,7 @@ function EditModal({ article, movies=[], cast=[], onClose, onSaved, onToast }) {
           </div>
           <div style={{ marginBottom:10 }}>
             <label className="bg-field-label">Cover Image URL</label>
-            <ImageUploadInput value={coverImage} onChange={setCoverImage} placeholder="https://…" />
+            <ImageUploadInput value={coverImage} onChange={setCoverImage} placeholder="https://…" source="Blog" />
             {coverImage && (
               <img src={coverImage} alt="cover"
                 style={{ marginTop:6, maxHeight:80, borderRadius:5, border:"1px solid var(--border)", display:"block" }}
@@ -1780,7 +1780,7 @@ function NewBlogModal({ movies=[], cast=[], onClose, onPublished, onToast }) {
       </div>
       <div>
         <label className="bg-field-label">Cover Image URL <span style={{ fontWeight:400, textTransform:"none" }}>(optional)</span></label>
-        <ImageUploadInput value={coverImage} onChange={setCoverImage} placeholder="https://…" />
+        <ImageUploadInput value={coverImage} onChange={setCoverImage} placeholder="https://…" source="Blog" />
         {coverImage && (
           <img src={coverImage} alt="cover"
             style={{ marginTop:6, maxHeight:80, borderRadius:5, border:"1px solid var(--border)", display:"block" }}

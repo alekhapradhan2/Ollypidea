@@ -10,6 +10,7 @@ const MergePanel = lazy(() => import("./MergePanel"));
 const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
 const UserReviewsPanel = lazy(() => import("./UserReviewsPanel"));
 const CommunityPanel = lazy(() => import("./CommunityPanel"));
+const MediaPanel = lazy(() => import("./MediaPanel"));
 
 
 
@@ -839,13 +840,13 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           </div>
           <div className="form-group">
             <label className="form-label">Poster URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(portrait 2:3)</span></label>
-            <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" />
+            <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" source="Movie" />
             {form.posterUrl && <img src={form.posterUrl} alt="poster" style={{ marginTop: 8, height: 100, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }} onError={e => e.target.style.display = "none"} />}
           </div>
           <div className="form-group">
-            <label className="form-label">Banner URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(16:9 landscape)</span></label>
-            <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" />
-            {form.thumbnailUrl && <img src={form.thumbnailUrl} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
+            <label className="form-label">Thumbnail URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(16:9 landscape)</span></label>
+            <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" source="Movie" />
+            {form.thumbnailUrl && <img src={form.thumbnailUrl} alt="thumbnail" style={{ marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
           </div>
           <div className="form-group">
             <label className="form-label">Synopsis</label>
@@ -870,8 +871,8 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Banner URL</label>
-            <input className="form-input" value={form.bannerUrl} onChange={e => set("bannerUrl", e.target.value)} placeholder="Wide landscape image URL…" />
+            <label className="form-label">Banner URL (Hero Background)</label>
+            <ImageUploadInput value={form.bannerUrl} onChange={v => set("bannerUrl", v)} placeholder="Wide landscape image URL…" source="Movie" />
             {form.bannerUrl && <img src={form.bannerUrl} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
           </div>
 
@@ -1165,6 +1166,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
     name: initial?.name || "",
     photo: initial?.photo || "",
+    banner: initial?.banner || "",
     bio: initial?.bio || "",
     dob: initial?.dob || "",
     gender: initial?.gender || "",
@@ -1219,10 +1221,20 @@ function CastForm({ initial, onSave, onCancel, saving }) {
 
       {/* Photo */}
       <div className="form-group">
-        <label className="form-label">Photo URL</label>
-        <input className="form-input" value={form.photo} onChange={e => set("photo", e.target.value)} placeholder="https://…" />
+        <label className="form-label">Profile Photo</label>
+        <ImageUploadInput value={form.photo} onChange={v => set("photo", v)} placeholder="https://…" source="Cast" />
         {form.photo && (
           <img src={form.photo} alt={form.name} style={{ marginTop: 8, width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--gold)" }}
+            onError={e => e.target.style.display = "none"} />
+        )}
+      </div>
+
+      {/* Banner */}
+      <div className="form-group">
+        <label className="form-label">Profile Banner (Landscape 16:9)</label>
+        <ImageUploadInput value={form.banner} onChange={v => set("banner", v)} placeholder="https://…" source="Cast" />
+        {form.banner && (
+          <img src={form.banner} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 90, borderRadius: 6, objectFit: "cover", border: "1px solid var(--border)" }}
             onError={e => e.target.style.display = "none"} />
         )}
       </div>
@@ -1303,7 +1315,13 @@ function ProductionForm({ initial, onSave, onCancel, saving }) {
       </div>
       <div className="form-group">
         <label className="form-label">Logo URL</label>
-        <input className="form-input" value={form.logo} onChange={e => set("logo", e.target.value)} placeholder="https://…" />
+        <ImageUploadInput value={form.logo} onChange={v => set("logo", v)} placeholder="https://…" source="Production" />
+        {form.logo && <img src={form.logo} alt="logo" style={{ marginTop: 8, height: 48, objectFit: "contain", borderRadius: 4, border: "1px solid var(--border)", padding: 2 }} onError={e => e.target.style.display = "none"} />}
+      </div>
+      <div className="form-group">
+        <label className="form-label">Studio Banner URL (Landscape)</label>
+        <ImageUploadInput value={form.banner} onChange={v => set("banner", v)} placeholder="https://…" source="Production" />
+        {form.banner && <img src={form.banner} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
       </div>
       <div className="form-group">
         <label className="form-label">Website</label>
@@ -1406,7 +1424,7 @@ function NewsForm({ initial, onSave, onCancel, saving, movies }) {
         </div>
         <div className="form-group">
           <label className="form-label">Cover Image URL</label>
-          <input className="form-input" value={form.imageUrl} onChange={e => set("imageUrl", e.target.value)} placeholder="https://…" />
+          <ImageUploadInput value={form.imageUrl} onChange={v => set("imageUrl", v)} placeholder="https://…" source="News" />
         </div>
       </div>
       {form.imageUrl && <img src={form.imageUrl} alt="cover" style={{ width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 5, marginBottom: 12, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
@@ -2418,6 +2436,7 @@ const MODULE_GROUPS = [
     title: "Media Catalog",
     items: [
       { key: "movies", icon: "🎬", label: "Movies" },
+      { key: "media", icon: "🖼️", label: "Media Library" },
       { key: "songs", icon: "🎵", label: "Songs" },
       { key: "cast", icon: "🎭", label: "Cast & Crew" },
       { key: "productions", icon: "🎥", label: "Productions" },
@@ -2449,6 +2468,7 @@ const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
   { key: "community", icon: "🌐", label: "Community Hub (Live)" },
   { key: "movies", icon: "🎬", label: "Movies" },
+  { key: "media", icon: "🖼️", label: "Media Library" },
   { key: "songs", icon: "🎵", label: "Songs" },
   { key: "users", icon: "👥", label: "Users & Reviewers" },
   { key: "reviews", icon: "⭐", label: "Reviews" },
@@ -3614,6 +3634,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 36 }}>
                     {[
                       ["🎬", "Total Movies", stats?.movies || movies.length, "movies", "Manage database titles"],
+                      ["🖼️", "Media Library", "Asset Hub", "media", "Images, posters & URLs"],
                       ["🌐", "Community Hub", "Live Feed", "community", "Live user activities"],
                       ["🎵", "Songs & Media", movies.reduce((a, m) => a + (m.media?.songs?.length || 0), 0), "songs", "Soundtracks & videos"],
                       ["🎭", "Cast & Crew", stats?.cast || cast.length, "cast", "Actors, directors & staff"],
@@ -3705,6 +3726,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     <div className="ap-card-glow" style={{ padding: 22 }}>
                       <h3 style={{ fontSize: "1rem", fontWeight: 800, margin: "0 0 16px 0" }}>Quick Actions Launchpad</h3>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        <button className="btn btn-outline btn-sm" onClick={() => handleTabChange("media")} style={{ justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }}>
+                          🖼️ + Upload Media & Images
+                        </button>
                         <button className="btn btn-outline btn-sm" onClick={() => openCreate("movie")} style={{ justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }}>
                           🎬 + Create New Movie
                         </button>
@@ -4506,6 +4530,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   </div>
                 );
               })())}
+
+              {/* ── MEDIA LIBRARY ── */}
+              {tab === "media" && (
+                <Suspense fallback={<Spinner />}>
+                  <MediaPanel onToast={onToast} />
+                </Suspense>
+              )}
 
               {/* ── BLOG ── */}
               {tab === "blog" && (

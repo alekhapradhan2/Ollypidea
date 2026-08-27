@@ -68,7 +68,13 @@ const req = async (method, path, body, token) => {
     headers: { "Content-Type": "application/json", ...authHeader(activeToken) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Server returned non-JSON response (${res.status} ${res.statusText})`);
+  }
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 };
@@ -256,4 +262,31 @@ export const API = {
     const qp = new URLSearchParams(params).toString();
     return get(`/admin/community/votes${qp ? `?${qp}` : ""}`, _adminToken);
   },
+
+  // ── Admin — Media Library & Uploads Module
+  adminGetMedia: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/media${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminUploadMedia: async (formData) => {
+    const activeToken = getAdminToken();
+    const res = await fetch(`${BASE}/admin/media/upload`, {
+      method: "POST",
+      headers: { ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}) },
+      body: formData,
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(`Media upload failed with server status ${res.status}`);
+    }
+    if (!res.ok) throw new Error(data.error || "Media upload failed");
+    return data;
+  },
+  adminSyncCloudinary: () => post("/admin/media/sync-cloudinary", undefined, _adminToken),
+  adminDeleteMedia: (id) => del(`/admin/media/${id}`, _adminToken),
+  adminBulkDeleteMedia: (ids) => post("/admin/media/bulk-delete", { ids }, _adminToken),
+  adminUpdateMedia: (id, body) => patch(`/admin/media/${id}`, body, _adminToken),
 };

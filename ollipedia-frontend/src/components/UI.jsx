@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAdminToken } from "../api/api";
 
 // ── Toast ──
 export function Toast({ message, type = "success", onClose }) {
@@ -19,8 +20,8 @@ export function SafeImg({ src, alt, className, style, fallback }) {
 export function verdictClass(v) {
   if (!v) return "verdict-upcoming";
   const l = v.toLowerCase();
-  if (["hit","super hit","blockbuster"].includes(l)) return "verdict-hit";
-  if (["flop","disaster"].includes(l)) return "verdict-flop";
+  if (["hit", "super hit", "blockbuster"].includes(l)) return "verdict-hit";
+  if (["flop", "disaster"].includes(l)) return "verdict-flop";
   if (l === "average") return "verdict-average";
   return "verdict-upcoming";
 }
@@ -50,11 +51,11 @@ export function MovieCard({ movie, portalMode }) {
   );
 }
 
-// ── Reusable Image Upload Input (Text + File Upload) ──
-import { getAdminToken } from "../api/api";
-export function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input" }) {
+// ── Reusable Image Upload Input (Text + File Upload + Copy) ──
+export function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input", source = "Direct Upload" }) {
   const [uploading, setUploading] = useState(false);
-  const fileRef = React.useRef(null);
+  const [copied, setCopied] = useState(false);
+  const fileRef = useRef(null);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -63,29 +64,97 @@ export function ImageUploadInput({ value, onChange, placeholder = "Enter URL..."
     try {
       const fd = new FormData();
       fd.append("image", file);
+      fd.append("source", source);
       const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
       const res = await fetch(`${API_BASE}/admin/upload-blog-image`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getAdminToken()}` },
-        body: fd
+        body: fd,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Upload failed");
+      }
       const { url } = await res.json();
       onChange(url);
     } catch (err) {
       alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
     }
-    setUploading(false);
-    e.target.value = "";
+  };
+
+  const handleCopy = () => {
+    if (!value) return;
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <input type="text" className={className} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
-      <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={handleFile} />
-      <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} style={{ padding: "8px 12px", border: "1px solid var(--border)", background: "var(--bg3)", color: "var(--text)", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.75rem", whiteSpace: "nowrap" }}>
-        {uploading ? "⏳ Uploading..." : "📤 Upload"}
+    <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
+      <input
+        type="text"
+        className={className}
+        placeholder={placeholder}
+        value={value || ""}
+        onChange={e => onChange(e.target.value)}
+        style={{ flex: 1, minWidth: 0 }}
+      />
+      <input
+        type="file"
+        accept="image/*"
+        ref={fileRef}
+        style={{ display: "none" }}
+        onChange={handleFile}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          title="Copy Image URL"
+          style={{
+            padding: "8px 10px",
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
+            color: copied ? "#10b981" : "var(--text)",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: "0.75rem",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            whiteSpace: "nowrap",
+            transition: "all 0.15s"
+          }}
+        >
+          {copied ? "✓ Copied" : "📋 Copy"}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        style={{
+          padding: "8px 12px",
+          border: "1px solid rgba(201,151,58,0.35)",
+          background: "rgba(201,151,58,0.12)",
+          color: "#ffd700",
+          borderRadius: 6,
+          cursor: uploading ? "not-allowed" : "pointer",
+          fontWeight: 700,
+          fontSize: "0.75rem",
+          whiteSpace: "nowrap",
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          transition: "all 0.15s"
+        }}
+      >
+        {uploading ? "⏳ Uploading…" : "📤 Upload"}
       </button>
     </div>
   );
-}
+}

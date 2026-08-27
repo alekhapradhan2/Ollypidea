@@ -1247,7 +1247,7 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
       ] }),
       /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10 }, children: [
         /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Cover Image URL" }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, placeholder: "https://…" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, placeholder: "https://…", source: "Blog" }),
         coverImage && /* @__PURE__ */ jsx(
           "img",
           {
@@ -1752,7 +1752,7 @@ IMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no 
         "Cover Image URL ",
         /* @__PURE__ */ jsx("span", { style: { fontWeight: 400, textTransform: "none" }, children: "(optional)" })
       ] }),
-      /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, placeholder: "https://…" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, placeholder: "https://…", source: "Blog" }),
       coverImage && /* @__PURE__ */ jsx(
         "img",
         {

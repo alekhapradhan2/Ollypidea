@@ -64,7 +64,13 @@ const req = async (method, path, body, token) => {
     headers: { "Content-Type": "application/json", ...authHeader(activeToken) },
     body: body !== void 0 ? JSON.stringify(body) : void 0
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Server returned non-JSON response (${res.status} ${res.statusText})`);
+  }
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 };
@@ -227,7 +233,33 @@ const API = {
   adminGetCommunityVotes: (params = {}) => {
     const qp = new URLSearchParams(params).toString();
     return get(`/admin/community/votes${qp ? `?${qp}` : ""}`, _adminToken);
-  }
+  },
+  // ── Admin — Media Library & Uploads Module
+  adminGetMedia: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/media${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminUploadMedia: async (formData) => {
+    const activeToken = getAdminToken();
+    const res = await fetch(`${BASE}/admin/media/upload`, {
+      method: "POST",
+      headers: { ...activeToken ? { Authorization: `Bearer ${activeToken}` } : {} },
+      body: formData
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(`Media upload failed with server status ${res.status}`);
+    }
+    if (!res.ok) throw new Error(data.error || "Media upload failed");
+    return data;
+  },
+  adminSyncCloudinary: () => post("/admin/media/sync-cloudinary", void 0, _adminToken),
+  adminDeleteMedia: (id) => del(`/admin/media/${id}`, _adminToken),
+  adminBulkDeleteMedia: (ids) => post("/admin/media/bulk-delete", { ids }, _adminToken),
+  adminUpdateMedia: (id, body) => patch(`/admin/media/${id}`, body, _adminToken)
 };
 const api = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -777,9 +809,10 @@ function MovieCard$3({ movie, portalMode }) {
     ] })
   ] });
 }
-function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input" }) {
+function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input", source = "Direct Upload" }) {
   const [uploading, setUploading] = useState(false);
-  const fileRef = React.useRef(null);
+  const [copied, setCopied] = useState(false);
+  const fileRef = useRef(null);
   const handleFile = async (e) => {
     var _a;
     const file = (_a = e.target.files) == null ? void 0 : _a[0];
@@ -788,28 +821,105 @@ function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", class
     try {
       const fd2 = new FormData();
       fd2.append("image", file);
+      fd2.append("source", source);
       const API_BASE2 = "http://localhost:4000/api";
       const res = await fetch(`${API_BASE2}/admin/upload-blog-image`, {
         method: "POST",
         headers: { Authorization: `Bearer ${getAdminToken()}` },
         body: fd2
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Upload failed");
+      }
       const { url } = await res.json();
       onChange(url);
     } catch (err) {
       alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
     }
-    setUploading(false);
-    e.target.value = "";
   };
-  return /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, alignItems: "center" }, children: [
-    /* @__PURE__ */ jsx("input", { type: "text", className, placeholder, value, onChange: (e) => onChange(e.target.value), style: { flex: 1, minWidth: 0 } }),
-    /* @__PURE__ */ jsx("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: handleFile }),
-    /* @__PURE__ */ jsx("button", { type: "button", onClick: () => {
-      var _a;
-      return (_a = fileRef.current) == null ? void 0 : _a.click();
-    }, disabled: uploading, style: { padding: "8px 12px", border: "1px solid var(--border)", background: "var(--bg3)", color: "var(--text)", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.75rem", whiteSpace: "nowrap" }, children: uploading ? "⏳ Uploading..." : "📤 Upload" })
+  const handleCopy = () => {
+    if (!value) return;
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, alignItems: "center", width: "100%" }, children: [
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "text",
+        className,
+        placeholder,
+        value: value || "",
+        onChange: (e) => onChange(e.target.value),
+        style: { flex: 1, minWidth: 0 }
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        type: "file",
+        accept: "image/*",
+        ref: fileRef,
+        style: { display: "none" },
+        onChange: handleFile
+      }
+    ),
+    value && /* @__PURE__ */ jsx(
+      "button",
+      {
+        type: "button",
+        onClick: handleCopy,
+        title: "Copy Image URL",
+        style: {
+          padding: "8px 10px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: copied ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.06)",
+          color: copied ? "#10b981" : "var(--text)",
+          borderRadius: 6,
+          cursor: "pointer",
+          fontWeight: 700,
+          fontSize: "0.75rem",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          whiteSpace: "nowrap",
+          transition: "all 0.15s"
+        },
+        children: copied ? "✓ Copied" : "📋 Copy"
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      "button",
+      {
+        type: "button",
+        onClick: () => {
+          var _a;
+          return (_a = fileRef.current) == null ? void 0 : _a.click();
+        },
+        disabled: uploading,
+        style: {
+          padding: "8px 12px",
+          border: "1px solid rgba(201,151,58,0.35)",
+          background: "rgba(201,151,58,0.12)",
+          color: "#ffd700",
+          borderRadius: 6,
+          cursor: uploading ? "not-allowed" : "pointer",
+          fontWeight: 700,
+          fontSize: "0.75rem",
+          whiteSpace: "nowrap",
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          transition: "all 0.15s"
+        },
+        children: uploading ? "⏳ Uploading…" : "📤 Upload"
+      }
+    )
   ] });
 }
 const SITE = "Ollipedia";
@@ -2398,7 +2508,7 @@ const Cache = {
     return ((_a = store[key]) == null ? void 0 : _a.data) ?? null;
   }
 };
-const GENRES$3 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Musical", "Biographical", "Devotional", "Horror"];
+const GENRES$2 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Musical", "Biographical", "Devotional", "Horror"];
 const VERDICTS$1 = ["Upcoming", "Blockbuster", "Super Hit", "Hit", "Average", "Flop", "Disaster"];
 const VS = { "Blockbuster": "#95e5b8", "Super Hit": "#95e5b8", "Hit": "#a3e8a0", "Average": "#e8c87a", "Flop": "#e59595", "Disaster": "#e59595", "Upcoming": "#7aaae8" };
 const YEAR_PREVIEW = 16;
@@ -2811,7 +2921,7 @@ function Movies() {
           "🎭 Genre",
           /* @__PURE__ */ jsxs("select", { value: fGenre, onChange: (e) => setFGenre(e.target.value), title: "Genre", children: [
             /* @__PURE__ */ jsx("option", { value: "", children: "All Genres" }),
-            GENRES$3.map((g) => /* @__PURE__ */ jsx("option", { value: g, children: g }, g))
+            GENRES$2.map((g) => /* @__PURE__ */ jsx("option", { value: g, children: g }, g))
           ] })
         ] }) }),
         /* @__PURE__ */ jsx("div", { className: `mv-chip${fVerdict ? " on" : ""}`, children: fVerdict ? /* @__PURE__ */ jsxs(Fragment, { children: [
@@ -2980,7 +3090,7 @@ const fmtDate$5 = (d, precision) => {
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
-const GENRES$2 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
+const GENRES$1 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
 const CATS$2 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const VDICT = ["Upcoming", "Average", "Hit", "Super Hit", "Blockbuster", "Flop", "Disaster"];
 const NCATS = ["Update", "Release", "Trailer", "Song", "Award", "Interview", "Other"];
@@ -4755,8 +4865,8 @@ function MovieDetails({ production, onToast, portalMode }) {
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
-            /* @__PURE__ */ jsx("label", { className: "form-label", children: "Poster URL" }),
-            /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.posterUrl || "", onChange: (v) => setE("posterUrl", v) })
+            /* @__PURE__ */ jsx("label", { className: "form-label", children: "Poster URL (Portrait 2:3)" }),
+            /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.posterUrl || "", onChange: (v) => setE("posterUrl", v), source: "Movie" })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Verdict" }),
@@ -4765,15 +4875,19 @@ function MovieDetails({ production, onToast, portalMode }) {
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Genres" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 }, children: GENRES$2.map((g) => /* @__PURE__ */ jsx("button", { type: "button", className: `btn btn-sm ${(editForm.genre || []).includes(g) ? "btn-gold" : "btn-outline"}`, onClick: () => toggleGenre(g), children: g }, g)) })
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 }, children: GENRES$1.map((g) => /* @__PURE__ */ jsx("button", { type: "button", className: `btn btn-sm ${(editForm.genre || []).includes(g) ? "btn-gold" : "btn-outline"}`, onClick: () => toggleGenre(g), children: g }, g)) })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Synopsis" }),
           /* @__PURE__ */ jsx("textarea", { className: "form-textarea", value: editForm.synopsis || "", onChange: (e) => setE("synopsis", e.target.value), style: { minHeight: 100 } })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
-          /* @__PURE__ */ jsx("label", { className: "form-label", children: "Thumbnail URL" }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.thumbnailUrl || "", onChange: (v) => setE("thumbnailUrl", v) })
+          /* @__PURE__ */ jsx("label", { className: "form-label", children: "Thumbnail URL (Landscape 16:9)" }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.thumbnailUrl || "", onChange: (v) => setE("thumbnailUrl", v), source: "Movie" })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
+          /* @__PURE__ */ jsx("label", { className: "form-label", children: "Banner URL (Hero Background)" }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.bannerUrl || "", onChange: (v) => setE("bannerUrl", v), placeholder: "Wide landscape image URL…", source: "Movie" })
         ] })
       ] }),
       tab === "cast" && /* @__PURE__ */ jsxs("div", { children: [
@@ -10979,7 +11093,6 @@ function Home({ production }) {
     ] })
   ] });
 }
-const GENRES$1 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
 const CATEGORIES$1 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES$1 = ["Actor", "Actress", "Director", "Producer", "Music Director", "Cinematographer", "Choreographer", "Lyricist", "Singer", "Editor", "Other"];
 const STEPS = ["Basic Info", "Cast & Crew", "Collaborators", "Media", "Review & Submit"];
@@ -11068,7 +11181,6 @@ function AddMovie({ production, onToast }) {
     thumbnailUrl: ""
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleGenre = (g) => set("genre", form.genre.includes(g) ? form.genre.filter((x) => x !== g) : [...form.genre, g]);
   const [cast, setCast] = useState([]);
   const [castQuery, setCastQuery] = useState("");
   const [castResults, setCastResults] = useState([]);
@@ -11318,37 +11430,28 @@ function AddMovie({ production, onToast }) {
           ] })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
-          /* @__PURE__ */ jsx("label", { className: "form-label", children: "Genres" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 }, children: GENRES$1.map((g) => /* @__PURE__ */ jsxs(
-            "button",
-            {
-              type: "button",
-              className: "badge",
-              onClick: () => toggleGenre(g),
-              style: { cursor: "pointer", borderColor: form.genre.includes(g) ? "var(--gold)" : "var(--border)", color: form.genre.includes(g) ? "var(--gold)" : "var(--muted)", background: form.genre.includes(g) ? "rgba(201,151,58,0.1)" : "transparent" },
-              children: [
-                form.genre.includes(g) ? "✓ " : "",
-                g
-              ]
-            },
-            g
-          )) })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsxs("label", { className: "form-label", children: [
             "Poster URL ",
             /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(portrait 2:3)" })
           ] }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), placeholder: "https://…" }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), placeholder: "https://…", source: "Movie" }),
           form.posterUrl && /* @__PURE__ */ jsx("img", { src: form.posterUrl, alt: "poster", style: { marginTop: 8, height: 120, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsxs("label", { className: "form-label", children: [
-            "Banner / Thumbnail URL ",
+            "Thumbnail URL ",
+            /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(landscape 16:9)" })
+          ] }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), placeholder: "https://…", source: "Movie" }),
+          form.thumbnailUrl && /* @__PURE__ */ jsx("img", { src: form.thumbnailUrl, alt: "thumbnail", style: { marginTop: 8, width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
+          /* @__PURE__ */ jsxs("label", { className: "form-label", children: [
+            "Banner URL ",
             /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(landscape 16:9 — homepage hero)" })
           ] }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), placeholder: "https://…" }),
-          form.thumbnailUrl && /* @__PURE__ */ jsx("img", { src: form.thumbnailUrl, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.bannerUrl, onChange: (v) => set("bannerUrl", v), placeholder: "Wide landscape image URL…", source: "Movie" }),
+          form.bannerUrl && /* @__PURE__ */ jsx("img", { src: form.bannerUrl, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Synopsis" }),
@@ -12303,12 +12406,13 @@ function PortalCastProfile({ production }) {
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
   ] });
 }
-const BlogGenerator = lazy(() => import("./assets/BlogGenerator-fd7iLtte.js"));
+const BlogGenerator = lazy(() => import("./assets/BlogGenerator-BabxSUgk.js"));
 const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-DWba9T8B.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
 const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBhCj4H.js"));
 const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-Bu3AylyH.js"));
 const CommunityPanel = lazy(() => import("./assets/CommunityPanel-CUe1gwe6.js"));
+const MediaPanel = lazy(() => import("./assets/MediaPanel-DOrQCeDC.js"));
 const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
 const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES = [
@@ -13100,16 +13204,16 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           "Poster URL ",
           /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(portrait 2:3)" })
         ] }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), placeholder: "https://…" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), placeholder: "https://…", source: "Movie" }),
         form.posterUrl && /* @__PURE__ */ jsx("img", { src: form.posterUrl, alt: "poster", style: { marginTop: 8, height: 100, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsxs("label", { className: "form-label", children: [
-          "Banner URL ",
+          "Thumbnail URL ",
           /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(16:9 landscape)" })
         ] }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), placeholder: "https://…" }),
-        form.thumbnailUrl && /* @__PURE__ */ jsx("img", { src: form.thumbnailUrl, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), placeholder: "https://…", source: "Movie" }),
+        form.thumbnailUrl && /* @__PURE__ */ jsx("img", { src: form.thumbnailUrl, alt: "thumbnail", style: { marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsx("label", { className: "form-label", children: "Synopsis" }),
@@ -13134,8 +13238,8 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
         ] })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
-        /* @__PURE__ */ jsx("label", { className: "form-label", children: "Banner URL" }),
-        /* @__PURE__ */ jsx("input", { className: "form-input", value: form.bannerUrl, onChange: (e) => set("bannerUrl", e.target.value), placeholder: "Wide landscape image URL…" }),
+        /* @__PURE__ */ jsx("label", { className: "form-label", children: "Banner URL (Hero Background)" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.bannerUrl, onChange: (v) => set("bannerUrl", v), placeholder: "Wide landscape image URL…", source: "Movie" }),
         form.bannerUrl && /* @__PURE__ */ jsx("img", { src: form.bannerUrl, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13465,6 +13569,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
     name: (initial == null ? void 0 : initial.name) || "",
     photo: (initial == null ? void 0 : initial.photo) || "",
+    banner: (initial == null ? void 0 : initial.banner) || "",
     bio: (initial == null ? void 0 : initial.bio) || "",
     dob: (initial == null ? void 0 : initial.dob) || "",
     gender: (initial == null ? void 0 : initial.gender) || "",
@@ -13509,14 +13614,27 @@ function CastForm({ initial, onSave, onCancel, saving }) {
       ] })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
-      /* @__PURE__ */ jsx("label", { className: "form-label", children: "Photo URL" }),
-      /* @__PURE__ */ jsx("input", { className: "form-input", value: form.photo, onChange: (e) => set("photo", e.target.value), placeholder: "https://…" }),
+      /* @__PURE__ */ jsx("label", { className: "form-label", children: "Profile Photo" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.photo, onChange: (v) => set("photo", v), placeholder: "https://…", source: "Cast" }),
       form.photo && /* @__PURE__ */ jsx(
         "img",
         {
           src: form.photo,
           alt: form.name,
           style: { marginTop: 8, width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--gold)" },
+          onError: (e) => e.target.style.display = "none"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
+      /* @__PURE__ */ jsx("label", { className: "form-label", children: "Profile Banner (Landscape 16:9)" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.banner, onChange: (v) => set("banner", v), placeholder: "https://…", source: "Cast" }),
+      form.banner && /* @__PURE__ */ jsx(
+        "img",
+        {
+          src: form.banner,
+          alt: "banner",
+          style: { marginTop: 8, width: "100%", maxHeight: 90, borderRadius: 6, objectFit: "cover", border: "1px solid var(--border)" },
           onError: (e) => e.target.style.display = "none"
         }
       )
@@ -13589,7 +13707,13 @@ function ProductionForm({ initial, onSave, onCancel, saving }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
       /* @__PURE__ */ jsx("label", { className: "form-label", children: "Logo URL" }),
-      /* @__PURE__ */ jsx("input", { className: "form-input", value: form.logo, onChange: (e) => set("logo", e.target.value), placeholder: "https://…" })
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.logo, onChange: (v) => set("logo", v), placeholder: "https://…", source: "Production" }),
+      form.logo && /* @__PURE__ */ jsx("img", { src: form.logo, alt: "logo", style: { marginTop: 8, height: 48, objectFit: "contain", borderRadius: 4, border: "1px solid var(--border)", padding: 2 }, onError: (e) => e.target.style.display = "none" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
+      /* @__PURE__ */ jsx("label", { className: "form-label", children: "Studio Banner URL (Landscape)" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.banner, onChange: (v) => set("banner", v), placeholder: "https://…", source: "Production" }),
+      form.banner && /* @__PURE__ */ jsx("img", { src: form.banner, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
       /* @__PURE__ */ jsx("label", { className: "form-label", children: "Website" }),
@@ -13702,7 +13826,7 @@ function NewsForm({ initial, onSave, onCancel, saving, movies }) {
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsx("label", { className: "form-label", children: "Cover Image URL" }),
-        /* @__PURE__ */ jsx("input", { className: "form-input", value: form.imageUrl, onChange: (e) => set("imageUrl", e.target.value), placeholder: "https://…" })
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.imageUrl, onChange: (v) => set("imageUrl", v), placeholder: "https://…", source: "News" })
       ] })
     ] }),
     form.imageUrl && /* @__PURE__ */ jsx("img", { src: form.imageUrl, alt: "cover", style: { width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 5, marginBottom: 12, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" }),
@@ -14723,6 +14847,7 @@ const MODULE_GROUPS = [
     title: "Media Catalog",
     items: [
       { key: "movies", icon: "🎬", label: "Movies" },
+      { key: "media", icon: "🖼️", label: "Media Library" },
       { key: "songs", icon: "🎵", label: "Songs" },
       { key: "cast", icon: "🎭", label: "Cast & Crew" },
       { key: "productions", icon: "🎥", label: "Productions" }
@@ -14753,6 +14878,7 @@ const ALL_MODULES = [
   { key: "dashboard", icon: "🏠", label: "Dashboard" },
   { key: "community", icon: "🌐", label: "Community Hub (Live)" },
   { key: "movies", icon: "🎬", label: "Movies" },
+  { key: "media", icon: "🖼️", label: "Media Library" },
   { key: "songs", icon: "🎵", label: "Songs" },
   { key: "users", icon: "👥", label: "Users & Reviewers" },
   { key: "reviews", icon: "⭐", label: "Reviews" },
@@ -15764,6 +15890,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
           /* @__PURE__ */ jsx("h3", { style: { fontSize: "1.05rem", fontWeight: 800, marginBottom: 16, color: "#e2e2ea" }, children: "System Metrics Overview" }),
           /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 36 }, children: [
             ["🎬", "Total Movies", (stats == null ? void 0 : stats.movies) || movies.length, "movies", "Manage database titles"],
+            ["🖼️", "Media Library", "Asset Hub", "media", "Images, posters & URLs"],
             ["🌐", "Community Hub", "Live Feed", "community", "Live user activities"],
             ["🎵", "Songs & Media", movies.reduce((a, m) => {
               var _a2, _b2;
@@ -15837,6 +15964,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
             /* @__PURE__ */ jsxs("div", { className: "ap-card-glow", style: { padding: 22 }, children: [
               /* @__PURE__ */ jsx("h3", { style: { fontSize: "1rem", fontWeight: 800, margin: "0 0 16px 0" }, children: "Quick Actions Launchpad" }),
               /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+                /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => handleTabChange("media"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🖼️ + Upload Media & Images" }),
                 /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("movie"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎬 + Create New Movie" }),
                 /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("song"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎵 + Add New Soundtrack" }),
                 /* @__PURE__ */ jsx("button", { className: "btn btn-outline btn-sm", onClick: () => openCreate("cast"), style: { justifyContent: "flex-start", padding: "10px 14px", fontSize: "0.82rem" }, children: "🎭 + Add Cast / Crew Member" }),
@@ -16618,6 +16746,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
             ] })
           ] });
         })()),
+        tab === "media" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(MediaPanel, { onToast }) }),
         tab === "blog" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BlogGenerator, { movies, cast, onToast }) }),
         tab === "boxoffice" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(BoxOfficePanel, { movies, onToast }) }),
         tab === "enquiries" && (loadingSecondary ? /* @__PURE__ */ jsx(Spinner, {}) : /* @__PURE__ */ jsx(
