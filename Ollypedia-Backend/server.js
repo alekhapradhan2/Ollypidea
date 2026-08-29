@@ -89,6 +89,46 @@ const ytId = (input) => {
 };
 
 /**
+ * normalizeSongTitle — canonical title comparison used for duplicate detection.
+ * Lowercases, strips accents, removes punctuation, and collapses whitespace
+ * so that " Song Name ", "SONG NAME", and "song name" all compare as equal.
+ */
+const normalizeSongTitle = (t) => {
+  if (!t) return "";
+  return String(t)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")   // strip combining accents
+    .replace(/[^\w\s]/g, "")            // remove punctuation
+    .replace(/\s+/g, " ")              // collapse spaces
+    .trim();
+};
+
+/**
+ * isDuplicateSong — returns true if the incoming song already exists in the
+ * given songs array.  Matches on:
+ *   HIGH confidence: same ytId (when both have one)  OR
+ *                    same normalized title + same ytId
+ *   Also catches: same normalized title when neither has a ytId (title-only songs)
+ */
+const isDuplicateSong = (existingSongs, incomingYtId, incomingTitle) => {
+  const normInTitle = normalizeSongTitle(incomingTitle);
+  return (existingSongs || []).some(s => {
+    const existYtId = String(s.ytId || "").trim();
+    const existNormTitle = normalizeSongTitle(s.title);
+    // Match on ytId (strongest signal)
+    if (incomingYtId && existYtId && incomingYtId === existYtId) return true;
+    // Match on normalized title when no ytId is available
+    if (!incomingYtId && !existYtId && normInTitle && existNormTitle && normInTitle === existNormTitle) return true;
+    // Match on both title + ytId
+    if (incomingYtId && existYtId && normInTitle && existNormTitle &&
+        incomingYtId === existYtId && normInTitle === existNormTitle) return true;
+    return false;
+  });
+};
+
+/**
  * parseToRupeesGlobal — canonical currency parser used everywhere in this file.
  *
  * Converts any human-readable currency string to raw rupees (integer).
@@ -3673,7 +3713,15 @@ app.post("/api/movies/:id/songs", auth, async (req, res) => {
     if (!movie) return res.status(404).json({ error: "Not found" });
     if (String(movie.productionId) !== req.prodId) return res.status(403).json({ error: "Forbidden" });
     const sid = ytId(req.body.ytId || req.body.url || "");
-    const song = { title: String(req.body.title || ""), singer: String(req.body.singer || ""), ytId: sid, url: String(req.body.url || ""), thumbnailUrl: sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "" };
+    const songTitle = String(req.body.title || "");
+    // ── Idempotency guard: reject if the same song already exists ──────────
+    if (isDuplicateSong(movie.media?.songs, sid, songTitle)) {
+      return res.status(409).json({
+        error: "Duplicate song: a song with the same YouTube ID or title already exists for this movie.",
+        hint: "If you need to update an existing song, use the PATCH endpoint instead.",
+      });
+    }
+    const song = { title: songTitle, singer: String(req.body.singer || ""), ytId: sid, url: String(req.body.url || ""), thumbnailUrl: sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "" };
     const updated = await Movie.findByIdAndUpdate(req.params.id, { $push: { "media.songs": song } }, { new: true }).populate("productionId", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -4484,13 +4532,26 @@ async function getAdminProd() {
   return p;
 }
 
-// Helper to parse songs with new fields
+// Helper to parse songs with new fields.
+// Also deduplicates the incoming array by (normTitle + ytId) so that a bulk
+// media save cannot introduce duplicates even if the payload contains them.
 function parseSongs(rawSongs) {
   if (!Array.isArray(rawSongs)) return [];
   const safeRefs = (arr) => Array.isArray(arr) ? arr.filter(id => isOid(String(id))) : [];
-  return rawSongs.map(s => {
+  const seen = new Set();
+  const result = [];
+  for (const s of rawSongs) {
     const sid = ytId(s.ytId || s.url || "");
-    return {
+    const normT = normalizeSongTitle(s.title);
+    // Dedup key: prefer ytId when present, fall back to title alone
+    const dedupKey = sid ? `ytid:${sid}` : `title:${normT}`;
+    if (dedupKey === "ytid:" && dedupKey === "title:") {
+      // Blank entry — skip entirely
+      continue;
+    }
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    result.push({
       title: String(s.title || ""),
       singer: String(s.singer || ""),
       singerRef: safeRefs(s.singerRef),
@@ -4503,8 +4564,9 @@ function parseSongs(rawSongs) {
       thumbnailUrl: String(s.thumbnailUrl || (sid ? `https://img.youtube.com/vi/${sid}/hqdefault.jpg` : "")),
       lyrics: String(s.lyrics || ""),
       description: String(s.description || ""),
-    };
-  });
+    });
+  }
+  return result;
 }
 
 app.post("/api/admin/movies", adminAuth, async (req, res) => {
@@ -4794,8 +4856,19 @@ app.post("/api/admin/movies/:id/songs", adminAuth, async (req, res) => {
   try {
     const safeRefs = (arr) => Array.isArray(arr) ? arr.filter(id => isOid(String(id))) : [];
     const sid = ytId(req.body.ytId || req.body.url || "");
+    const songTitle = String(req.body.title || "");
+    // ── Idempotency guard: reject if the same song already exists ──────────
+    // Fetch the movie first to check existing songs before pushing.
+    const existingMovie = await Movie.findById(req.params.id, "media.songs").lean();
+    if (!existingMovie) return res.status(404).json({ error: "Not found" });
+    if (isDuplicateSong(existingMovie.media?.songs, sid, songTitle)) {
+      return res.status(409).json({
+        error: "Duplicate song: a song with the same YouTube ID or title already exists for this movie.",
+        hint: "If you need to update an existing song, use the PATCH endpoint instead.",
+      });
+    }
     const song = {
-      title: String(req.body.title || ""),
+      title: songTitle,
       singer: String(req.body.singer || ""),
       singerRef: safeRefs(req.body.singerRef),
       musicDirector: String(req.body.musicDirector || ""),

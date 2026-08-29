@@ -2785,10 +2785,18 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const [tab, setTab] = useState("dashboard");
   const [navSearch, setNavSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => {
+    try { return localStorage.getItem("admin_theme_mode") || "dark"; } catch { return "dark"; }
+  });
+  const toggleThemeMode = () => {
+    const next = themeMode === "dark" ? "light" : "dark";
+    setThemeMode(next);
+    try { localStorage.setItem("admin_theme_mode", next); } catch {}
+  };
   const [accentTheme, setAccentTheme] = useState(() => {
     try { return localStorage.getItem("ap_accent_theme") || "gold"; } catch { return "gold"; }
   });
-  const [densityMode, setDensityMode] = useState("luxury");
+  const [densityMode, setDensityMode] = useState("spacious");
   const switchTheme = (t) => {
     setAccentTheme(t);
     try { localStorage.setItem("ap_accent_theme", t); } catch {}
@@ -3174,40 +3182,179 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
   const currentTheme = AP_THEMES[accentTheme] || AP_THEMES.gold;
   const activeModule = ALL_MODULES.find(m => m.key === tab) || { label: "Dashboard", icon: "🏠" };
 
+  const isLight = themeMode === "light";
+
   return (
-    <div className="ap-portal-root" style={{
+    <div className={`ap-portal-root ${isLight ? "theme-light" : "theme-dark"}`} style={{
       height: "100vh",
       overflow: "hidden",
-      background: `radial-gradient(circle at 18% 12%, ${currentTheme.ambient} 0%, transparent 45%), radial-gradient(circle at 85% 85%, ${currentTheme.ambient} 0%, transparent 40%), #09090e`,
-      color: "#f3f3f8",
+      background: isLight 
+        ? `radial-gradient(circle at 20% 15%, ${currentTheme.ambient} 0%, transparent 50%), radial-gradient(circle at 85% 85%, rgba(201,151,58,0.06) 0%, transparent 45%), #f4f6fb`
+        : `radial-gradient(circle at 18% 12%, ${currentTheme.ambient} 0%, transparent 45%), radial-gradient(circle at 85% 85%, ${currentTheme.ambient} 0%, transparent 40%), #0b0f19`,
+      color: isLight ? "#1e293b" : "#f1f5f9",
       display: "flex",
       flexDirection: "column",
-      fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+      fontFamily: "'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
     }}>
       {/* ── Scoped Premium Admin Theme Styles ── */}
       <style>{`
         .ap-portal-root * { box-sizing: border-box; }
+
+        /* ── Dark Theme Tokens ── */
+        .ap-portal-root.theme-dark {
+          --bg: #0b0f19;
+          --bg2: #131c2e;
+          --bg3: #182238;
+          --border: rgba(255, 255, 255, 0.08);
+          --text: #f8fafc;
+          --muted: #94a3b8;
+          --gold: #ffd700;
+          
+          --ap-bg-root: #0b0f19;
+          --ap-bg-sidebar: #0f172a;
+          --ap-bg-header: rgba(15, 23, 42, 0.9);
+          --ap-bg-card: #131c2e;
+          --ap-bg-card-subtle: #182238;
+          --ap-bg-card-hover: #1e293b;
+          --ap-bg-input: #172033;
+          --ap-border: rgba(255, 255, 255, 0.08);
+          --ap-border-subtle: rgba(255, 255, 255, 0.04);
+          --ap-border-glow: ${currentTheme.borderGlow};
+          --ap-text-primary: #f8fafc;
+          --ap-text-secondary: #cbd5e1;
+          --ap-text-muted: #94a3b8;
+          --ap-accent: ${currentTheme.accent};
+          --ap-accent-text: ${currentTheme.accent};
+          --ap-accent-bg: rgba(201, 151, 58, 0.15);
+          --ap-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+          --ap-shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+          --ap-sticky-bg: rgba(11, 15, 25, 0.94);
+          --ap-nav-active-bg: ${currentTheme.activeGradient};
+          --ap-nav-active-text: ${currentTheme.accent};
+          --ap-nav-text: #94a3b8;
+          --ap-nav-hover-bg: rgba(255, 255, 255, 0.05);
+          --ap-modal-bg: #111726;
+          --ap-badge-bg: rgba(255, 255, 255, 0.06);
+          --ap-pill-bg: #141c2c;
+          --ap-table-header-bg: #101624;
+          --ap-table-row-hover: rgba(255, 255, 255, 0.03);
+        }
+
+        /* ── Light Theme Tokens ── */
+        .ap-portal-root.theme-light {
+          --bg: #f8fafc;
+          --bg2: #ffffff;
+          --bg3: #f1f5f9;
+          --border: #e2e8f0;
+          --text: #0f172a;
+          --muted: #64748b;
+          --gold: #b47818;
+          
+          --ap-bg-root: #f8fafc;
+          --ap-bg-sidebar: #ffffff;
+          --ap-bg-header: rgba(255, 255, 255, 0.94);
+          --ap-bg-card: #ffffff;
+          --ap-bg-card-subtle: #f8fafc;
+          --ap-bg-card-hover: #f1f5f9;
+          --ap-bg-input: #ffffff;
+          --ap-border: #e2e8f0;
+          --ap-border-subtle: #f1f5f9;
+          --ap-border-glow: rgba(180, 120, 24, 0.45);
+          --ap-text-primary: #0f172a;
+          --ap-text-secondary: #334155;
+          --ap-text-muted: #64748b;
+          --ap-accent: #b47818;
+          --ap-accent-text: #b47818;
+          --ap-accent-bg: rgba(180, 120, 24, 0.1);
+          --ap-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0,0,0,0.05);
+          --ap-shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+          --ap-sticky-bg: rgba(248, 250, 252, 0.95);
+          --ap-nav-active-bg: rgba(180, 120, 24, 0.12);
+          --ap-nav-active-text: #9a6a1c;
+          --ap-nav-text: #475569;
+          --ap-nav-hover-bg: rgba(0, 0, 0, 0.04);
+          --ap-modal-bg: #ffffff;
+          --ap-badge-bg: #f1f5f9;
+          --ap-pill-bg: #f1f5f9;
+          --ap-table-header-bg: #f8fafc;
+          --ap-table-row-hover: rgba(0, 0, 0, 0.02);
+        }
+
+        /* Form elements scoped to admin portal */
+        .ap-portal-root .form-input,
+        .ap-portal-root .form-select,
+        .ap-portal-root .form-textarea {
+          background: var(--ap-bg-input) !important;
+          color: var(--ap-text-primary) !important;
+          border: 1px solid var(--ap-border) !important;
+          border-radius: 8px;
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .ap-portal-root .form-input:focus,
+        .ap-portal-root .form-select:focus,
+        .ap-portal-root .form-textarea:focus {
+          border-color: var(--ap-accent) !important;
+          box-shadow: 0 0 0 3px var(--ap-accent-bg) !important;
+          outline: none;
+        }
+        .ap-portal-root .form-label {
+          color: var(--ap-text-secondary) !important;
+          font-weight: 600;
+        }
+
+        .ap-portal-root .btn-gold {
+          background: linear-gradient(135deg, #c9973a 0%, #a87926 100%) !important;
+          color: #fff !important;
+          font-weight: 700 !important;
+          border: none !important;
+          box-shadow: 0 2px 8px rgba(180, 120, 24, 0.3) !important;
+        }
+        .ap-portal-root .btn-gold:hover {
+          background: linear-gradient(135deg, #d8a649 0%, #b88531 100%) !important;
+          transform: translateY(-1px);
+        }
+
+        .ap-portal-root .btn-outline {
+          border: 1px solid var(--ap-border) !important;
+          color: var(--ap-text-primary) !important;
+          background: var(--ap-bg-card) !important;
+        }
+        .ap-portal-root .btn-outline:hover {
+          border-color: var(--ap-accent) !important;
+          color: var(--ap-accent-text) !important;
+          background: var(--ap-accent-bg) !important;
+        }
+
+        .ap-portal-root .btn-ghost {
+          color: var(--ap-text-secondary) !important;
+        }
+        .ap-portal-root .btn-ghost:hover {
+          color: var(--ap-text-primary) !important;
+          background: var(--ap-nav-hover-bg) !important;
+        }
+
         .ap-portal-root ::-webkit-scrollbar { width: 6px; height: 6px; }
         .ap-portal-root ::-webkit-scrollbar-track { background: transparent; }
-        .ap-portal-root ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
-        .ap-portal-root ::-webkit-scrollbar-thumb:hover { background: ${currentTheme.accent}; }
+        .ap-portal-root ::-webkit-scrollbar-thumb { background: var(--ap-border); border-radius: 4px; }
+        .ap-portal-root ::-webkit-scrollbar-thumb:hover { background: var(--ap-accent); }
         
         .ap-glass-panel {
-          background: rgba(14, 14, 20, 0.82);
+          background: var(--ap-bg-header);
           backdrop-filter: blur(18px);
           -webkit-backdrop-filter: blur(18px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-bottom: 1px solid var(--ap-border);
         }
         
         .ap-card-glow {
-          background: #12121a;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 12px;
+          background: var(--ap-bg-card);
+          border: 1px solid var(--ap-border);
+          border-radius: 14px;
+          box-shadow: var(--ap-shadow-sm);
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .ap-card-glow:hover {
-          border-color: ${currentTheme.borderGlow};
-          box-shadow: 0 10px 28px -6px rgba(0,0,0,0.65), 0 0 16px -4px ${currentTheme.glow};
+          border-color: var(--ap-border-glow);
+          box-shadow: var(--ap-shadow);
         }
 
         .ap-nav-btn {
@@ -3216,10 +3363,10 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           gap: 10px;
           padding: 8px 12px;
           margin: 2px 8px;
-          border-radius: 8px;
-          font-size: 0.83rem;
+          border-radius: 9px;
+          font-size: 0.82rem;
           font-weight: 500;
-          color: #9292a4;
+          color: var(--ap-nav-text);
           background: transparent;
           border: 1px solid transparent;
           cursor: pointer;
@@ -3228,43 +3375,44 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           width: calc(100% - 16px);
         }
         .ap-nav-btn:hover {
-          color: #f3f3f8;
-          background: rgba(255, 255, 255, 0.05);
+          color: var(--ap-text-primary);
+          background: var(--ap-nav-hover-bg);
           transform: translateX(2px);
         }
         .ap-nav-btn.active {
-          color: ${currentTheme.accent};
-          background: ${currentTheme.activeGradient};
-          border: 1px solid ${currentTheme.borderGlow};
+          color: var(--ap-nav-active-text);
+          background: var(--ap-nav-active-bg);
+          border: 1px solid var(--ap-border-glow);
           font-weight: 700;
-          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+          box-shadow: var(--ap-shadow-sm);
         }
 
         .ap-kpi-card {
-          background: linear-gradient(145deg, #151522 0%, #0d0d14 100%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 14px;
+          background: var(--ap-bg-card);
+          border: 1px solid var(--ap-border);
+          border-radius: 16px;
           padding: 20px 22px;
           position: relative;
           overflow: hidden;
           cursor: pointer;
+          box-shadow: var(--ap-shadow-sm);
           transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .ap-kpi-card:hover {
           transform: translateY(-3px);
-          border-color: ${currentTheme.borderGlow};
-          box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 20px ${currentTheme.glow};
+          border-color: var(--ap-border-glow);
+          box-shadow: var(--ap-shadow);
         }
 
         .ap-sticky-bar {
           position: sticky;
           top: 0;
           z-index: 40;
-          background: rgba(9, 9, 14, 0.88);
+          background: var(--ap-sticky-bg);
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-          padding: 13px 28px;
+          border-bottom: 1px solid var(--ap-border);
+          padding: 14px 28px;
           margin: 0 -28px 24px -28px;
         }
 
@@ -3285,44 +3433,70 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           50% { opacity: 0.5; }
         }
 
-        .ap-skeleton {
-          background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
-          background-size: 200% 100%;
-          animation: ap-skeleton-shimmer 1.5s infinite;
+        .ap-theme-toggle-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: var(--ap-pill-bg);
+          border: 1px solid var(--ap-border);
+          padding: 5px 12px;
+          border-radius: 20px;
+          cursor: pointer;
+          color: var(--ap-text-secondary);
+          font-size: 0.76rem;
+          font-weight: 700;
+          transition: all 0.15s ease;
         }
-        @keyframes ap-skeleton-shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
+        .ap-theme-toggle-btn:hover {
+          color: var(--ap-text-primary);
+          border-color: var(--ap-accent);
+          transform: scale(1.02);
+        }
+
+        .ap-portal-root .modal {
+          background: var(--ap-modal-bg) !important;
+          color: var(--ap-text-primary) !important;
+          border: 1px solid var(--ap-border) !important;
+          box-shadow: var(--ap-shadow) !important;
+        }
+        .ap-portal-root .modal-header {
+          border-bottom: 1px solid var(--ap-border) !important;
+        }
+        .ap-portal-root .modal-title {
+          color: var(--ap-accent-text) !important;
+          font-weight: 800 !important;
         }
       `}</style>
 
       {/* ── Top Navigation Header ── */}
       <header className="ap-glass-panel" style={{
-        height: 60,
+        height: 64,
         display: "flex",
         alignItems: "center",
-        padding: "0 20px",
+        padding: "0 24px",
         gap: 14,
         flexShrink: 0,
         zIndex: 100,
-        borderBottom: "1px solid rgba(255,255,255,0.08)"
+        background: "var(--ap-bg-header)",
+        borderBottom: "1px solid var(--ap-border)"
       }}>
         {/* Sidebar Collapse Toggle */}
         <button
           onClick={() => setSidebarCollapsed(c => !c)}
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           style={{
-            background: "#161622",
-            border: "1px solid rgba(255,255,255,0.1)",
-            color: "#e2e2ea",
-            width: 32,
-            height: 32,
-            borderRadius: 8,
+            background: "var(--ap-bg-card)",
+            border: "1px solid var(--ap-border)",
+            color: "var(--ap-text-primary)",
+            width: 34,
+            height: 34,
+            borderRadius: 9,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: "0.82rem",
+            boxShadow: "var(--ap-shadow-sm)",
             transition: "all 0.15s"
           }}
         >
@@ -3340,15 +3514,15 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           padding: 0
         }}>
           <div style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
+            width: 34,
+            height: 34,
+            borderRadius: 9,
             background: currentTheme.gradient,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontWeight: 900,
-            fontSize: "1rem",
+            fontSize: "1.05rem",
             color: "#000",
             boxShadow: `0 2px 10px ${currentTheme.glow}`
           }}>
@@ -3357,11 +3531,11 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           <span style={{
             fontFamily: "'Playfair Display', serif",
             fontWeight: 900,
-            fontSize: "1.18rem",
-            letterSpacing: "0.04em",
-            color: currentTheme.accent
+            fontSize: "1.25rem",
+            letterSpacing: "0.03em",
+            color: isLight ? "#0f172a" : currentTheme.accent
           }}>
-            OLLY<span style={{ color: "#fff" }}>PEDIA</span>
+            OLLY<span style={{ color: isLight ? "#9a6a1c" : "#fff" }}>PEDIA</span>
           </span>
         </button>
 
@@ -3370,9 +3544,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           fontWeight: 800,
           letterSpacing: "0.12em",
           textTransform: "uppercase",
-          background: currentTheme.badgeBg,
-          color: currentTheme.accent,
-          border: `1px solid ${currentTheme.badgeBorder}`,
+          background: "var(--ap-badge-bg)",
+          color: isLight ? "#9a6a1c" : currentTheme.accent,
+          border: "1px solid var(--ap-border)",
           padding: "3px 9px",
           borderRadius: 6
         }}>
@@ -3380,9 +3554,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
         </span>
 
         {/* Live Breadcrumb */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8, fontSize: "0.82rem", color: "#6a6a7c" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8, fontSize: "0.84rem", color: "var(--ap-text-muted)" }}>
           <span>/</span>
-          <span style={{ color: "#e2e2ea", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: "var(--ap-text-primary)", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
             <span>{activeModule.icon}</span>
             <span>{activeModule.label}</span>
           </span>
@@ -3390,16 +3564,26 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
         <div style={{ flex: 1 }} />
 
-        {/* Theme Selector Pills */}
-        <div style={{ display: "flex", alignItems: "center", background: "#14141d", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 2, gap: 2 }}>
+        {/* ☀️ / 🌙 Light vs Dark Theme Switcher Button */}
+        <button
+          type="button"
+          onClick={toggleThemeMode}
+          className="ap-theme-toggle-btn"
+          title={isLight ? "Switch to Dark Mode (🌙)" : "Switch to Light Mode (☀️)"}
+        >
+          <span>{isLight ? "☀️ Light" : "🌙 Dark"}</span>
+        </button>
+
+        {/* Accent Color Picker */}
+        <div style={{ display: "flex", alignItems: "center", background: "var(--ap-pill-bg)", border: "1px solid var(--ap-border)", borderRadius: 20, padding: 2, gap: 2 }}>
           {Object.entries(AP_THEMES).map(([tKey, t]) => (
             <button
               key={tKey}
               onClick={() => switchTheme(tKey)}
-              title={`Switch to ${t.name} Theme`}
+              title={`Switch accent to ${t.name}`}
               style={{
                 background: accentTheme === tKey ? t.gradient : "transparent",
-                color: accentTheme === tKey ? "#000" : "#8a8a9e",
+                color: accentTheme === tKey ? "#000" : "var(--ap-text-muted)",
                 border: "none",
                 borderRadius: 16,
                 padding: "3px 9px",
@@ -3413,34 +3597,33 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               }}
             >
               <span>{t.icon}</span>
-              <span style={{ fontSize: "0.68rem" }}>{tKey === "gold" ? "Gold" : tKey === "emerald" ? "Mint" : "Violet"}</span>
             </button>
           ))}
         </div>
 
         {/* Live Status indicator */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", padding: "4px 10px", borderRadius: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", padding: "4px 11px", borderRadius: 20 }}>
           <span className="ap-pulse" style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981", display: "inline-block" }} />
-          <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#10b981", letterSpacing: "0.04em" }}>LIVE SYSTEM</span>
+          <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#10b981", letterSpacing: "0.04em" }}>LIVE</span>
         </div>
 
         {/* Admin Profile Chip */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#14141d", border: "1px solid rgba(255,255,255,0.08)", padding: "4px 12px", borderRadius: 20 }}>
-          <div style={{ width: 22, height: 22, borderRadius: "50%", background: currentTheme.gradient, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.72rem", fontWeight: 900 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--ap-pill-bg)", border: "1px solid var(--ap-border)", padding: "4px 12px", borderRadius: 20 }}>
+          <div style={{ width: 24, height: 24, borderRadius: "50%", background: currentTheme.gradient, color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.72rem", fontWeight: 900 }}>
             {admin.username?.[0]?.toUpperCase() || "A"}
           </div>
-          <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#e2e2ea" }}>@{admin.username}</span>
+          <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--ap-text-primary)" }}>@{admin.username}</span>
           {isSuperAdmin && (
-            <span style={{ fontSize: "0.6rem", background: currentTheme.badgeBg, color: currentTheme.accent, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>SUPER</span>
+            <span style={{ fontSize: "0.6rem", background: "var(--ap-badge-bg)", color: isLight ? "#9a6a1c" : currentTheme.accent, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>SUPER</span>
           )}
         </div>
 
-        <a href="/" target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 5, borderRadius: 8, borderColor: "rgba(255,255,255,0.15)" }}>
+        <a href="/" target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 5, borderRadius: 8, borderColor: "var(--ap-border)", color: "var(--ap-text-primary)" }}>
           <span>View Site</span>
           <span style={{ fontSize: "0.85rem" }}>↗</span>
         </a>
 
-        <button className="btn btn-ghost btn-sm" onClick={() => onLogout?.()} style={{ fontSize: "0.78rem", color: "#f87171" }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => onLogout?.()} style={{ fontSize: "0.78rem", color: "#ef4444" }}>
           Logout
         </button>
       </header>
@@ -3450,8 +3633,8 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
         {/* ── Sidebar ── */}
         <aside style={{
           width: sidebarCollapsed ? 68 : 240,
-          background: "#0c0c12",
-          borderRight: "1px solid rgba(255, 255, 255, 0.08)",
+          background: "var(--ap-bg-sidebar)",
+          borderRight: "1px solid var(--ap-border)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -3463,15 +3646,16 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
           {!sidebarCollapsed && (
             <div style={{ padding: "14px 12px 6px" }}>
               <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "#6a6a7c", pointerEvents: "none" }}>🔍</span>
+                <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "var(--ap-text-muted)", pointerEvents: "none" }}>🔍</span>
                 <input
                   className="form-input"
                   style={{
                     paddingLeft: 28,
                     paddingRight: 24,
                     fontSize: "0.78rem",
-                    background: "#14141d",
-                    borderColor: "rgba(255,255,255,0.08)",
+                    background: "var(--ap-bg-input)",
+                    color: "var(--ap-text-primary)",
+                    borderColor: "var(--ap-border)",
                     borderRadius: 8,
                     height: 32
                   }}
@@ -3547,21 +3731,21 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
 
                             {key === "movies" && movies.length > 0 && (
-                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }}>{movies.length}</span>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "var(--ap-text-muted)", padding: "1px 6px", borderRadius: 10 }}>{movies.length}</span>
                             )}
                             {key === "songs" && movies.length > 0 && (
-                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }}>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "var(--ap-text-muted)", padding: "1px 6px", borderRadius: 10 }}>
                                 {movies.reduce((a, m) => a + (m.media?.songs?.length || 0), 0)}
                               </span>
                             )}
                             {key === "cast" && cast.length > 0 && (
-                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }}>{cast.length}</span>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "var(--ap-text-muted)", padding: "1px 6px", borderRadius: 10 }}>{cast.length}</span>
                             )}
                             {key === "productions" && prods.length > 0 && (
-                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }}>{prods.length}</span>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "var(--ap-text-muted)", padding: "1px 6px", borderRadius: 10 }}>{prods.length}</span>
                             )}
                             {key === "news" && news.length > 0 && (
-                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }}>{news.length}</span>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "var(--ap-text-muted)", padding: "1px 6px", borderRadius: 10 }}>{news.length}</span>
                             )}
 
                             {/* Unread badge for enquiries */}
@@ -3569,7 +3753,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                               <span style={{ fontSize: "0.65rem", background: "#ef4444", color: "#fff", padding: "1px 7px", borderRadius: 10, fontWeight: 800 }}>{unread}</span>
                             )}
                             {key === "enquiries" && unread === 0 && enquiries.length > 0 && (
-                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "#9292a4", padding: "1px 6px", borderRadius: 10 }}>{enquiries.length}</span>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(255,255,255,0.06)", color: "var(--ap-text-muted)", padding: "1px 6px", borderRadius: 10 }}>{enquiries.length}</span>
                             )}
                           </>
                         )}
@@ -3596,25 +3780,28 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                 <div style={{ padding: "32px 36px 50px" }}>
                   {/* Hero welcome banner */}
                   <div style={{
-                    background: "linear-gradient(135deg, rgba(201, 151, 58, 0.12) 0%, rgba(20, 20, 30, 0.6) 100%)",
-                    border: "1px solid rgba(201, 151, 58, 0.25)",
-                    borderRadius: 16,
+                    background: isLight 
+                      ? "linear-gradient(135deg, rgba(201, 151, 58, 0.12) 0%, rgba(255, 255, 255, 0.95) 100%)"
+                      : "linear-gradient(135deg, rgba(201, 151, 58, 0.16) 0%, rgba(19, 28, 46, 0.8) 100%)",
+                    border: isLight ? "1px solid rgba(201, 151, 58, 0.3)" : "1px solid rgba(201, 151, 58, 0.25)",
+                    borderRadius: 18,
                     padding: "26px 30px",
                     marginBottom: 32,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     flexWrap: "wrap",
-                    gap: 16
+                    gap: 16,
+                    boxShadow: "var(--ap-shadow)"
                   }}>
                     <div>
-                      <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#ffd700", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>
-                        Administrative Command Hub
+                      <div style={{ fontSize: "0.75rem", fontWeight: 800, color: isLight ? "#9a6a1c" : "var(--ap-accent)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>
+                        ✨ Administrative Command Hub
                       </div>
-                      <h1 style={{ fontSize: "1.75rem", margin: 0, fontWeight: 900, color: "#fff" }}>
+                      <h1 style={{ fontSize: "1.75rem", margin: 0, fontWeight: 900, color: "var(--ap-text-primary)" }}>
                         Welcome, {admin.username || "Administrator"}
                       </h1>
-                      <p style={{ color: "#9292a4", fontSize: "0.88rem", margin: "6px 0 0" }}>
+                      <p style={{ color: "var(--ap-text-secondary)", fontSize: "0.88rem", margin: "6px 0 0" }}>
                         Manage Ollypedia movies, tracks, news, community feeds, and administrative settings.
                       </p>
                     </div>
@@ -3630,7 +3817,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                   </div>
 
                   {/* High impact KPI Metric Cards */}
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: 800, marginBottom: 16, color: "#e2e2ea" }}>System Metrics Overview</h3>
+                  <h3 style={{ fontSize: "1.05rem", fontWeight: 800, marginBottom: 16, color: "var(--ap-text-primary)" }}>System Metrics Overview</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 36 }}>
                     {[
                       ["🎬", "Total Movies", stats?.movies || movies.length, "movies", "Manage database titles"],
@@ -3668,9 +3855,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                             <div style={{ fontSize: "1.6rem" }}>{icon}</div>
                             <span style={{ fontSize: "0.75rem", color: "#c9973a", fontWeight: 700 }}>Open →</span>
                           </div>
-                          <div style={{ fontSize: "1.85rem", fontWeight: 900, color: "#ffd700", lineHeight: 1.1 }}>{count}</div>
-                          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#e2e2ea", marginTop: 4 }}>{label}</div>
-                          <div style={{ fontSize: "0.7rem", color: "#6a6a7c", marginTop: 2 }}>{sub}</div>
+                          <div style={{ fontSize: "1.85rem", fontWeight: 900, color: isLight ? "#9a6a1c" : "var(--ap-accent)", lineHeight: 1.1 }}>{count}</div>
+                          <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--ap-text-primary)", marginTop: 4 }}>{label}</div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--ap-text-muted)", marginTop: 2 }}>{sub}</div>
                         </div>
                       );
                     })}
@@ -3694,18 +3881,18 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                               display: "flex",
                               alignItems: "center",
                               gap: 14,
-                              background: "#181824",
-                              border: "1px solid rgba(255,255,255,0.06)",
+                              background: "var(--ap-bg-card-subtle)",
+                              border: "1px solid var(--ap-border)",
                               borderRadius: 10,
                               padding: "10px 14px",
                               transition: "border-color 0.15s"
                             }}>
                               {m.posterUrl
                                 ? <img src={m.posterUrl} alt={m.title} style={{ width: 36, height: 50, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} onError={e => e.target.style.display = "none"} />
-                                : <div style={{ width: 36, height: 50, background: "#222230", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>🎬</div>}
+                                : <div style={{ width: 36, height: 50, background: "var(--ap-bg-card-hover)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>🎬</div>}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.title}</div>
-                                <div style={{ fontSize: "0.72rem", color: "#8a8a9e", marginTop: 2 }}>
+                                <div style={{ fontSize: "0.72rem", color: "var(--ap-text-secondary)", marginTop: 2 }}>
                                   {m.productions?.map(p => p.name).join(", ") || "No Production House Linked"}
                                 </div>
                               </div>
@@ -3716,7 +3903,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                           ))}
                         </div>
                       ) : (
-                        <div style={{ textAlign: "center", padding: "30px 0", color: "#6a6a7c", fontSize: "0.85rem" }}>
+                        <div style={{ textAlign: "center", padding: "30px 0", color: "var(--ap-text-muted)", fontSize: "0.85rem" }}>
                           No recent movies loaded.
                         </div>
                       )}
@@ -3764,17 +3951,17 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     <div className="ap-sticky-bar" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <h2 style={{ fontSize: "1.35rem", margin: 0, fontWeight: 900 }}>Movies Catalog</h2>
-                        <span style={{ fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--ap-text-muted)", background: "var(--ap-bg-card-subtle)", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid var(--ap-border)" }}>
                           {filteredMovies.length !== movies.length ? `${filteredMovies.length} / ${movies.length}` : `${movies.length} total`}
                         </span>
                       </div>
 
                       {/* Year Filter Dropdown */}
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
-                        <span style={{ fontSize: "0.78rem", color: "#8a8a9e", fontWeight: 600 }}>Year:</span>
+                        <span style={{ fontSize: "0.78rem", color: "var(--ap-text-secondary)", fontWeight: 600 }}>Year:</span>
                         <select
                           className="form-input"
-                          style={{ width: "auto", padding: "4px 10px", fontSize: "0.82rem", background: "#14141d", color: "#f3f3f8", borderRadius: 8, borderColor: "rgba(255,255,255,0.1)" }}
+                          style={{ width: "auto", padding: "5px 12px", fontSize: "0.82rem", background: "var(--ap-bg-input)", color: "var(--ap-text-primary)", borderRadius: 8, borderColor: "var(--ap-border)" }}
                           value={yearFilter}
                           onChange={e => { setYearFilter(e.target.value); resetPages(); }}
                         >
@@ -3786,7 +3973,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                       </div>
 
                       {/* View Switcher (Grid / List) */}
-                      <div style={{ display: "flex", background: "#14141d", borderRadius: 8, padding: 3, border: "1px solid rgba(255,255,255,0.08)", marginLeft: 6 }}>
+                      <div style={{ display: "flex", background: "var(--ap-pill-bg)", borderRadius: 8, padding: 3, border: "1px solid var(--ap-border)", marginLeft: 6 }}>
                         <button
                           onClick={() => setMovieView("grid")}
                           style={{
@@ -3815,10 +4002,10 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
                       {/* Search */}
                       <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }}>🔍</span>
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--ap-text-muted)", pointerEvents: "none" }}>🔍</span>
                         <input
                           className="form-input"
-                          style={{ paddingLeft: 30, width: 200, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }}
+                          style={{ paddingLeft: 30, width: 200, borderRadius: 8, background: "var(--ap-bg-card-subtle)", borderColor: "rgba(255,255,255,0.1)" }}
                           placeholder="Search movie title…"
                           value={search}
                           onChange={e => setQ(e.target.value)}
@@ -3855,16 +4042,16 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
 
                     {/* Movie Content (List vs Grid) */}
                     {filteredMovies.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "70px 0", color: "#6a6a7c" }}>
+                      <div style={{ textAlign: "center", padding: "70px 0", color: "var(--ap-text-muted)" }}>
                         <div style={{ fontSize: "3.5rem", marginBottom: 12 }}>🎬</div>
-                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }}>No movies matched your search</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ap-text-muted)" }}>No movies matched your search</div>
                       </div>
                     ) : movieView === "list" ? (
                       /* List View */
                       <div className="ap-card-glow" style={{ overflow: "hidden" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
                           <thead>
-                            <tr style={{ background: "#14141d", color: "#8a8a9e", textAlign: "left", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                            <tr style={{ background: "var(--ap-bg-card-subtle)", color: "var(--ap-text-secondary)", textAlign: "left", borderBottom: "1px solid var(--ap-border)" }}>
                               {selectMode && <th style={{ padding: "12px 16px", width: 40 }}></th>}
                               <th style={{ padding: "12px 20px", fontWeight: 700 }}>Movie Name</th>
                               <th style={{ padding: "12px 20px", fontWeight: 700 }}>Release Date</th>
@@ -3878,7 +4065,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                 <tr
                                   key={m._id}
                                   style={{
-                                    borderBottom: "1px solid rgba(255,255,255,0.05)",
+                                    borderBottom: "1px solid var(--ap-border)",
                                     background: isSel ? "rgba(201,151,58,0.08)" : "transparent",
                                     transition: "background 0.15s"
                                   }}
@@ -3894,19 +4081,19 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                     </td>
                                   )}
                                   <td
-                                    style={{ padding: "14px 20px", fontWeight: 700, color: "#f3f3f8", cursor: selectMode ? "pointer" : "default" }}
+                                    style={{ padding: "14px 20px", fontWeight: 700, color: "var(--ap-text-primary)", cursor: selectMode ? "pointer" : "default" }}
                                     onClick={() => selectMode && toggleSel(m._id)}
                                   >
                                     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                                       {m.posterUrl || m.thumbnailUrl ? (
                                         <img src={m.posterUrl || m.thumbnailUrl} alt={m.title} style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }} onError={e => e.target.style.display = "none"} />
                                       ) : (
-                                        <div style={{ width: 32, height: 44, background: "#1c1c28", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }}>🎬</div>
+                                        <div style={{ width: 32, height: 44, background: "var(--ap-bg-card-hover)", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }}>🎬</div>
                                       )}
                                       <div>
                                         <span style={{ color: "#ffd700", fontSize: "0.95rem" }}>{m.title}</span>
                                         {m.verdict && m.verdict !== "Upcoming" && (
-                                          <span style={{ fontSize: "0.7rem", marginLeft: 8, color: verdictColor(m.verdict), background: "#181824", border: `1px solid ${verdictColor(m.verdict)}44`, padding: "1px 7px", borderRadius: 10 }}>
+                                          <span style={{ fontSize: "0.7rem", marginLeft: 8, color: verdictColor(m.verdict), background: "var(--ap-bg-card-subtle)", border: `1px solid ${verdictColor(m.verdict)}44`, padding: "1px 7px", borderRadius: 10 }}>
                                             {m.verdict}
                                           </span>
                                         )}
@@ -3915,7 +4102,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                   </td>
                                   <td style={{ padding: "14px 20px" }}>
                                     {editingDateId === m._id ? (
-                                      <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "#14141d", padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)" }} onClick={e => e.stopPropagation()}>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--ap-bg-card-subtle)", padding: 8, borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)" }} onClick={e => e.stopPropagation()}>
                                         <div style={{ display: "flex", gap: 8 }}>
                                           <label style={{ fontSize: "0.72rem", cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
                                             <input type="radio" name={`prec-${m._id}`} value="full" checked={editingDatePrecision === "full"} onChange={() => setEditingDatePrecision("full")} /> Full
@@ -3933,7 +4120,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                             <input
                                               type="date"
                                               className="form-input"
-                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "#181824", color: "#f3f3f8" }}
+                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--ap-bg-card-subtle)", color: "var(--ap-text-primary)" }}
                                               value={editingDateValue}
                                               onChange={e => setEditingDateValue(e.target.value)}
                                             />
@@ -3942,7 +4129,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                             <input
                                               type="month"
                                               className="form-input"
-                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "#181824", color: "#f3f3f8" }}
+                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "auto", background: "var(--ap-bg-card-subtle)", color: "var(--ap-text-primary)" }}
                                               value={editingDateValue}
                                               onChange={e => setEditingDateValue(e.target.value)}
                                             />
@@ -3954,7 +4141,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                               max="2100"
                                               placeholder="e.g. 2025"
                                               className="form-input"
-                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "90px", background: "#181824", color: "#f3f3f8" }}
+                                              style={{ padding: "3px 8px", fontSize: "0.8rem", width: "90px", background: "var(--ap-bg-card-subtle)", color: "var(--ap-text-primary)" }}
                                               value={editingDateValue}
                                               onChange={e => setEditingDateValue(e.target.value)}
                                             />
@@ -3978,7 +4165,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                       </div>
                                     ) : (
                                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                        <span style={{ color: "#9292a4", fontSize: "0.85rem" }}>{fmtDate(m.releaseDate, m.releaseDatePrecision)}</span>
+                                        <span style={{ color: "var(--ap-text-muted)", fontSize: "0.85rem" }}>{fmtDate(m.releaseDate, m.releaseDatePrecision)}</span>
                                         {!selectMode && (
                                           <button
                                             className="btn btn-ghost btn-sm"
@@ -4063,9 +4250,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                               </div>
                               {/* Action strip */}
                               {!selectMode && (
-                                <div style={{ display: "flex", borderTop: "1px solid rgba(255,255,255,0.08)", background: "#13131b" }} onClick={e => e.stopPropagation()}>
+                                <div style={{ display: "flex", borderTop: "1px solid var(--ap-border)", background: "#13131b" }} onClick={e => e.stopPropagation()}>
                                   {[["Manage", () => openMovieDetail(m), "#ffd700"], ["Edit", () => openEdit("movie", m), "#fff"]].map(([lbl, fn, hc]) => (
-                                    <button key={lbl} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", color: "#8a8a9e", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s, background 0.1s", fontWeight: 600 }}
+                                    <button key={lbl} style={{ flex: 1, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", color: "var(--ap-text-secondary)", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s, background 0.1s", fontWeight: 600 }}
                                       onMouseEnter={e => { e.currentTarget.style.color = hc; e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
                                       onMouseLeave={e => { e.currentTarget.style.color = "#8a8a9e"; e.currentTarget.style.background = "none"; }}
                                       onClick={fn}>{lbl}</button>
@@ -4125,14 +4312,14 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     <div className="ap-sticky-bar" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <h2 style={{ fontSize: "1.35rem", margin: 0, fontWeight: 900 }}>Songs & Media</h2>
-                        <span style={{ fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--ap-text-muted)", background: "var(--ap-bg-card-subtle)", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid var(--ap-border)" }}>
                           {allSongIds.length} total tracks
                         </span>
                       </div>
                       <div style={{ flex: 1 }} />
                       <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }}>🔍</span>
-                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search songs or singer…" value={search} onChange={e => setQ(e.target.value)} />
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--ap-text-muted)", pointerEvents: "none" }}>🔍</span>
+                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "var(--ap-bg-card-subtle)", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search songs or singer…" value={search} onChange={e => setQ(e.target.value)} />
                       </div>
                       <button className={`btn btn-sm ${selectMode ? "btn-gold" : "btn-outline"}`} onClick={() => { setSelectMode(s => !s); setSelected(new Set()); }} style={{ borderRadius: 8 }}>
                         {selectMode ? "✓ Selecting" : "☐ Select"}
@@ -4156,19 +4343,19 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     )}
 
                     {allRows.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "70px 0", color: "#6a6a7c" }}>
+                      <div style={{ textAlign: "center", padding: "70px 0", color: "var(--ap-text-muted)" }}>
                         <div style={{ fontSize: "3.5rem", marginBottom: 12 }}>🎵</div>
-                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }}>No tracks matched your search</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ap-text-muted)" }}>No tracks matched your search</div>
                       </div>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                         {pagedRows.map(({ m, matched, songIds, allMovieSel }) => (
                           <div key={m._id} className="ap-card-glow" style={{ overflow: "hidden" }}>
                             {/* Movie header */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", background: "#161622", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", background: "var(--ap-bg-card-subtle)", borderBottom: "1px solid var(--ap-border)" }}>
                               {m.posterUrl
                                 ? <img src={m.posterUrl} alt={m.title} style={{ width: 36, height: 50, objectFit: "cover", borderRadius: 4, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }} onError={e => e.target.style.display = "none"} />
-                                : <div style={{ width: 36, height: 50, background: "#222230", borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>🎬</div>}
+                                : <div style={{ width: 36, height: 50, background: "var(--ap-bg-card-hover)", borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>🎬</div>}
                               {selectMode && (
                                 <input type="checkbox" checked={allMovieSel}
                                   onChange={() => setSelected(prev => { const n = new Set(prev); songIds.forEach(id => allMovieSel ? n.delete(id) : n.add(id)); return n; })}
@@ -4176,7 +4363,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                               )}
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#fff" }}>{m.title}</div>
-                                <div style={{ fontSize: "0.72rem", color: "#8a8a9e", marginTop: 2 }}>
+                                <div style={{ fontSize: "0.72rem", color: "var(--ap-text-secondary)", marginTop: 2 }}>
                                   <span style={{ color: "#ffd700", fontWeight: 700 }}>{matched.length}</span> track{matched.length !== 1 ? "s" : ""}
                                 </div>
                               </div>
@@ -4196,7 +4383,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                     onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                                     onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}>
                                     {/* Track# / checkbox */}
-                                    <div style={{ width: 48, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#6a6a7c", fontSize: "0.78rem", fontWeight: 700 }}>
+                                    <div style={{ width: 48, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ap-text-muted)", fontSize: "0.78rem", fontWeight: 700 }}>
                                       {selectMode
                                         ? <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${isSel ? "#ffd700" : "rgba(255,255,255,0.25)"}`, background: isSel ? "#ffd700" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { e.stopPropagation(); toggleSel(songId); }}>
                                           {isSel && <span style={{ color: "#000", fontSize: "0.65rem", fontWeight: 900 }}>✓</span>}
@@ -4204,16 +4391,16 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                         : rowIdx + 1}
                                     </div>
                                     {/* Thumbnail */}
-                                    <div style={{ width: 56, height: 56, flexShrink: 0, overflow: "hidden", position: "relative", background: "#1c1c28", borderRadius: 6 }}>
+                                    <div style={{ width: 56, height: 56, flexShrink: 0, overflow: "hidden", position: "relative", background: "var(--ap-bg-card-hover)", borderRadius: 6 }}>
                                       {thumb
                                         ? <img src={thumb} alt={s.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.opacity = "0.2"} />
-                                        : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", color: "#6a6a7c" }}>♪</div>}
+                                        : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", color: "var(--ap-text-muted)" }}>♪</div>}
                                     </div>
                                     {/* Info */}
                                     <div style={{ flex: 1, padding: "0 16px", minWidth: 0 }}>
                                       <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title}</div>
                                       {s.singer && <div style={{ fontSize: "0.72rem", color: "#ffd700", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>🎤 {s.singer}</div>}
-                                      {s.musicDirector && <div style={{ fontSize: "0.68rem", color: "#8a8a9e", marginTop: 1 }}>🎼 {s.musicDirector}</div>}
+                                      {s.musicDirector && <div style={{ fontSize: "0.68rem", color: "var(--ap-text-secondary)", marginTop: 1 }}>🎼 {s.musicDirector}</div>}
                                     </div>
                                     {/* Actions */}
                                     {!selectMode && (
@@ -4244,22 +4431,22 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     <div className="ap-sticky-bar" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <h2 style={{ fontSize: "1.35rem", margin: 0, fontWeight: 900 }}>Cast & Crew Registry</h2>
-                        <span style={{ fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--ap-text-muted)", background: "var(--ap-bg-card-subtle)", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid var(--ap-border)" }}>
                           {filteredCast.length !== cast.length ? `${filteredCast.length} / ${cast.length}` : `${cast.length} total`}
                         </span>
                       </div>
                       <div style={{ flex: 1 }} />
                       <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }}>🔍</span>
-                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search person by name…" value={search} onChange={e => setQ(e.target.value)} />
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--ap-text-muted)", pointerEvents: "none" }}>🔍</span>
+                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "var(--ap-bg-card-subtle)", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search person by name…" value={search} onChange={e => setQ(e.target.value)} />
                       </div>
                       <button className="btn btn-gold btn-sm" onClick={() => openCreate("cast")} style={{ borderRadius: 8, fontWeight: 700 }}>+ Add Person</button>
                     </div>
 
                     {filteredCast.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "70px 0", color: "#6a6a7c" }}>
+                      <div style={{ textAlign: "center", padding: "70px 0", color: "var(--ap-text-muted)" }}>
                         <div style={{ fontSize: "3.5rem", marginBottom: 12 }}>🎭</div>
-                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }}>No cast or crew found</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ap-text-muted)" }}>No cast or crew found</div>
                       </div>
                     ) : (
                       <>
@@ -4290,7 +4477,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                       <div style={{ width: "100%", aspectRatio: "1/1", background: "#1c1c26", overflow: "hidden", position: "relative" }}>
                                         {c.photo
                                           ? <img src={c.photo} alt={c.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }} onError={e => e.target.style.display = "none"} />
-                                          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.8rem", color: "#6a6a7c" }}>👤</div>}
+                                          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.8rem", color: "var(--ap-text-muted)" }}>👤</div>}
                                         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%)" }} />
                                         <div style={{ position: "absolute", bottom: 8, left: 8 }}>
                                           <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#ffd700", background: "rgba(0,0,0,0.75)", padding: "2px 8px", borderRadius: 10, border: "1px solid rgba(201,151,58,0.4)" }}>
@@ -4300,15 +4487,15 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                       </div>
                                       <div style={{ padding: "10px 12px 4px", flex: 1 }}>
                                         <div style={{ fontWeight: 800, fontSize: "0.88rem", lineHeight: 1.3, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#fff" }}>{c.name}</div>
-                                        <div style={{ fontSize: "0.7rem", color: "#8a8a9e" }}>
+                                        <div style={{ fontSize: "0.7rem", color: "var(--ap-text-secondary)" }}>
                                           {movieCount > 0 ? <span style={{ color: "#e5b458" }}>🎬 {movieCount} film{movieCount !== 1 ? "s" : ""}</span> : <span>No films</span>}
                                         </div>
                                       </div>
-                                      <div style={{ display: "flex", borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 8, background: "#13131b" }}>
-                                        <a href={`/cast/${c._id}`} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "#8a8a9e", textDecoration: "none", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s" }}
+                                      <div style={{ display: "flex", borderTop: "1px solid var(--ap-border)", marginTop: 8, background: "#13131b" }}>
+                                        <a href={`/cast/${c._id}`} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "var(--ap-text-secondary)", textDecoration: "none", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s" }}
                                           onMouseEnter={e => e.currentTarget.style.color = "#fff"}
                                           onMouseLeave={e => e.currentTarget.style.color = "#8a8a9e"}>View</a>
-                                        <button onClick={() => openEdit("cast", c)} style={{ flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "#8a8a9e", background: "none", border: "none", cursor: "pointer", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s" }}
+                                        <button onClick={() => openEdit("cast", c)} style={{ flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "var(--ap-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRight: "1px solid rgba(255,255,255,0.08)", transition: "color 0.1s" }}
                                           onMouseEnter={e => e.currentTarget.style.color = "#ffd700"}
                                           onMouseLeave={e => e.currentTarget.style.color = "#8a8a9e"}>Edit</button>
                                         <button onClick={() => handleDelete("cast", c._id, c.name)} style={{ flex: 1, padding: "7px 0", textAlign: "center", fontSize: "0.7rem", color: "#ef4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.1s" }}
@@ -4338,22 +4525,22 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     <div className="ap-sticky-bar" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <h2 style={{ fontSize: "1.35rem", margin: 0, fontWeight: 900 }}>Production Studios</h2>
-                        <span style={{ fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--ap-text-muted)", background: "var(--ap-bg-card-subtle)", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid var(--ap-border)" }}>
                           {filteredProds.length !== prods.length ? `${filteredProds.length} / ${prods.length}` : `${prods.length} total`}
                         </span>
                       </div>
                       <div style={{ flex: 1 }} />
                       <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }}>🔍</span>
-                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search production house…" value={search} onChange={e => setQ(e.target.value)} />
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--ap-text-muted)", pointerEvents: "none" }}>🔍</span>
+                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "var(--ap-bg-card-subtle)", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search production house…" value={search} onChange={e => setQ(e.target.value)} />
                       </div>
                       <button className="btn btn-gold btn-sm" onClick={() => openCreate("production")} style={{ borderRadius: 8, fontWeight: 700 }}>+ Add Production</button>
                     </div>
 
                     {filteredProds.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "70px 0", color: "#6a6a7c" }}>
+                      <div style={{ textAlign: "center", padding: "70px 0", color: "var(--ap-text-muted)" }}>
                         <div style={{ fontSize: "3.5rem", marginBottom: 12 }}>🎥</div>
-                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }}>No production studios found</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ap-text-muted)" }}>No production studios found</div>
                       </div>
                     ) : (
                       <>
@@ -4372,27 +4559,27 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                 </div>
                                 <div style={{ padding: "0 18px 18px", marginTop: -24, position: "relative" }}>
                                   <div style={{ display: "flex", alignItems: "flex-end", gap: 14, marginBottom: 12 }}>
-                                    <div style={{ width: 48, height: 48, background: "#181824", borderRadius: 10, border: "2px solid rgba(255,255,255,0.1)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", boxShadow: "0 4px 14px rgba(0,0,0,0.6)" }}>
+                                    <div style={{ width: 48, height: 48, background: "var(--ap-bg-card-subtle)", borderRadius: 10, border: "2px solid rgba(255,255,255,0.1)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", boxShadow: "0 4px 14px rgba(0,0,0,0.6)" }}>
                                       {p.logo ? <img src={p.logo} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => e.target.style.display = "none"} /> : "🎥"}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0, paddingBottom: 2 }}>
                                       <div style={{ fontWeight: 800, fontSize: "0.98rem", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#fff" }}>{p.name}</div>
-                                      <div style={{ fontSize: "0.72rem", color: "#8a8a9e", marginTop: 2 }}>
+                                      <div style={{ fontSize: "0.72rem", color: "var(--ap-text-secondary)", marginTop: 2 }}>
                                         {p.founded && `Est. ${p.founded}`}{p.founded && p.location && " · "}{p.location}
                                       </div>
                                     </div>
                                   </div>
-                                  {p.bio && <p style={{ fontSize: "0.78rem", color: "#9292a4", lineHeight: 1.6, marginBottom: 12, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.bio}</p>}
+                                  {p.bio && <p style={{ fontSize: "0.78rem", color: "var(--ap-text-muted)", lineHeight: 1.6, marginBottom: 12, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.bio}</p>}
                                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                                     <span style={{ fontSize: "0.72rem", color: "#ffd700", fontWeight: 700 }}>🎬 {filmCount} film{filmCount !== 1 ? "s" : ""}</span>
-                                    {p.website && <a href={p.website} target="_blank" rel="noreferrer" style={{ fontSize: "0.72rem", color: "#8a8a9e", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.color = "#ffd700"} onMouseLeave={e => e.currentTarget.style.color = "#8a8a9e"}>Website ↗</a>}
+                                    {p.website && <a href={p.website} target="_blank" rel="noreferrer" style={{ fontSize: "0.72rem", color: "var(--ap-text-secondary)", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.color = "#ffd700"} onMouseLeave={e => e.currentTarget.style.color = "#8a8a9e"}>Website ↗</a>}
                                   </div>
-                                  <div style={{ display: "flex", gap: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 14 }}>
+                                  <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--ap-border)", paddingTop: 14 }}>
                                     <a href={`/production/${p._id}`} target="_blank" rel="noreferrer"
                                       style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "rgba(201,151,58,0.1)", border: "1px solid rgba(201,151,58,0.3)", borderRadius: 8, fontSize: "0.75rem", color: "#ffd700", textDecoration: "none", fontWeight: 700, transition: "background 0.12s" }}
                                       onMouseEnter={e => e.currentTarget.style.background = "rgba(201,151,58,0.2)"}
                                       onMouseLeave={e => e.currentTarget.style.background = "rgba(201,151,58,0.1)"}>View ↗</a>
-                                    <button style={{ flex: 1, padding: "8px 0", background: "#181824", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: "0.75rem", color: "#fff", cursor: "pointer", fontWeight: 600, transition: "border-color 0.12s" }}
+                                    <button style={{ flex: 1, padding: "8px 0", background: "var(--ap-bg-card-subtle)", border: "1px solid var(--ap-border)", borderRadius: 8, fontSize: "0.75rem", color: "#fff", cursor: "pointer", fontWeight: 600, transition: "border-color 0.12s" }}
                                       onMouseEnter={e => e.currentTarget.style.borderColor = "#ffd700"}
                                       onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                                       onClick={() => openEdit("production", p)}>Edit</button>
@@ -4424,14 +4611,14 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     <div className="ap-sticky-bar" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <h2 style={{ fontSize: "1.35rem", margin: 0, fontWeight: 900 }}>News & Press Releases</h2>
-                        <span style={{ fontSize: "0.72rem", color: "#9292a4", background: "#181824", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span style={{ fontSize: "0.72rem", color: "var(--ap-text-muted)", background: "var(--ap-bg-card-subtle)", padding: "2px 10px", borderRadius: 12, fontWeight: 700, border: "1px solid var(--ap-border)" }}>
                           {filteredNews.length !== news.length ? `${filteredNews.length} / ${news.length}` : `${news.length} total`}
                         </span>
                       </div>
                       <div style={{ flex: 1 }} />
                       <div style={{ position: "relative" }}>
-                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "#6a6a7c", pointerEvents: "none" }}>🔍</span>
-                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "#14141d", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search news articles…" value={search} onChange={e => setQ(e.target.value)} />
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: "0.8rem", color: "var(--ap-text-muted)", pointerEvents: "none" }}>🔍</span>
+                        <input className="form-input" style={{ paddingLeft: 30, width: 220, borderRadius: 8, background: "var(--ap-bg-card-subtle)", borderColor: "rgba(255,255,255,0.1)" }} placeholder="Search news articles…" value={search} onChange={e => setQ(e.target.value)} />
                       </div>
                       <button className={`btn btn-sm ${selectMode ? "btn-gold" : "btn-outline"}`} onClick={() => { setSelectMode(s => !s); setSelected(new Set()); }} style={{ borderRadius: 8 }}>
                         {selectMode ? "✓ Selecting" : "☐ Select"}
@@ -4455,9 +4642,9 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     )}
 
                     {filteredNews.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "70px 0", color: "#6a6a7c" }}>
+                      <div style={{ textAlign: "center", padding: "70px 0", color: "var(--ap-text-muted)" }}>
                         <div style={{ fontSize: "3.5rem", marginBottom: 12 }}>📰</div>
-                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#9292a4" }}>No news articles found</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--ap-text-muted)" }}>No news articles found</div>
                       </div>
                     ) : (
                       <>
@@ -4472,7 +4659,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                 onClick={() => selectMode && toggleSel(n._id)}>
                                 {/* Image banner */}
                                 {n.imageUrl && (
-                                  <div style={{ height: 140, overflow: "hidden", position: "relative", background: "#1c1c28" }}>
+                                  <div style={{ height: 140, overflow: "hidden", position: "relative", background: "var(--ap-bg-card-hover)" }}>
                                     <img src={n.imageUrl} alt={n.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display = "none"} />
                                     <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)" }} />
                                     {selectMode && (
@@ -4502,14 +4689,14 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                   )}
                                   <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.4, marginBottom: 4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", color: "#fff" }}>{n.title}</div>
                                   {n.movieTitle && <div style={{ fontSize: "0.72rem", color: "#ffd700", marginBottom: 4 }}>🎬 {n.movieTitle}</div>}
-                                  {n.content && <div style={{ fontSize: "0.78rem", color: "#9292a4", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 12 }}>{n.content}</div>}
+                                  {n.content && <div style={{ fontSize: "0.78rem", color: "var(--ap-text-muted)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 12 }}>{n.content}</div>}
                                   {!selectMode && (
-                                    <div style={{ display: "flex", gap: 8, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
+                                    <div style={{ display: "flex", gap: 8, borderTop: "1px solid var(--ap-border)", paddingTop: 12 }}>
                                       <a href={`/news/${n._id}`} target="_blank" rel="noreferrer"
-                                        style={{ flex: 1, textAlign: "center", padding: "7px 0", fontSize: "0.75rem", color: "#8a8a9e", textDecoration: "none", background: "#181824", borderRadius: 8, transition: "color 0.1s", fontWeight: 600 }}
+                                        style={{ flex: 1, textAlign: "center", padding: "7px 0", fontSize: "0.75rem", color: "var(--ap-text-secondary)", textDecoration: "none", background: "var(--ap-bg-card-subtle)", borderRadius: 8, transition: "color 0.1s", fontWeight: 600 }}
                                         onMouseEnter={e => e.currentTarget.style.color = "#fff"}
                                         onMouseLeave={e => e.currentTarget.style.color = "#8a8a9e"}>View ↗</a>
-                                      <button style={{ flex: 1, padding: "7px 0", fontSize: "0.75rem", color: "#8a8a9e", background: "#181824", border: "none", borderRadius: 8, cursor: "pointer", transition: "color 0.1s", fontWeight: 600 }}
+                                      <button style={{ flex: 1, padding: "7px 0", fontSize: "0.75rem", color: "var(--ap-text-secondary)", background: "var(--ap-bg-card-subtle)", border: "none", borderRadius: 8, cursor: "pointer", transition: "color 0.1s", fontWeight: 600 }}
                                         onMouseEnter={e => e.currentTarget.style.color = "#ffd700"}
                                         onMouseLeave={e => e.currentTarget.style.color = "#8a8a9e"}
                                         onClick={e => { e.stopPropagation(); openEdit("news", n); }}>Edit</button>
@@ -4612,8 +4799,8 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
       {/* Global Modals */}
       {modal && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="modal" style={{ maxWidth: modal.type === "movie" ? 820 : 560, maxHeight: "90vh", overflowY: "auto", background: "#111118", border: "1px solid rgba(201,151,58,0.35)", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.8)" }}>
-            <div className="modal-header" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 16 }}>
+          <div className="modal" style={{ maxWidth: modal.type === "movie" ? 820 : 560, maxHeight: "90vh", overflowY: "auto", background: "var(--ap-modal-bg)", border: "1px solid var(--ap-border-glow)", borderRadius: 18, boxShadow: "var(--ap-shadow)", color: "var(--ap-text-primary)" }}>
+            <div className="modal-header" style={{ borderBottom: "1px solid var(--ap-border)", paddingBottom: 16 }}>
               <span className="modal-title" style={{ color: "#ffd700", fontWeight: 800 }}>
                 {modal.type === "movie" ? (modal.mode === "create" ? "+ Add New Movie" : "✏️ Edit Movie") :
                   modal.type === "cast" ? (modal.mode === "create" ? "+ Add Cast / Crew" : "✏️ Edit Cast Member") :
