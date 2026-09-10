@@ -306,6 +306,18 @@ const CastEntrySchema = new mongoose.Schema({
   role: { type: String, default: "" },
 }, { _id: false });
 
+const GenreSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true, trim: true },
+}, { timestamps: true });
+const Genre = mongoose.models.Genre || mongoose.model("Genre", GenreSchema);
+
+const DEFAULT_GENRES = [
+  "Action", "Drama", "Romance", "Comedy", "Thriller",
+  "Family", "Historical", "Devotional", "Horror", "Action-Drama",
+  "Crime", "Mystery", "Adventure", "Animation", "Biographical",
+  "Fantasy", "Musical", "Sci-Fi", "Social", "Sports", "Suspense"
+];
+
 const MovieSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   category: { type: String, default: "Feature Film" },
@@ -2889,7 +2901,7 @@ app.patch("/api/cast-auth/me", castAuth, async (req, res) => {
       if (update.instagram) cu.instagram = update.instagram;
       if (update.roles && Array.isArray(update.roles) && update.roles.length) {
         cu.roles = update.roles;
-        cu.type = update.roles[0]; // keep primary type in sync
+        cu.type = update.roles.join(", ");
       }
       if (Object.keys(cu).length) await Cast.findByIdAndUpdate(member.castId, cu);
     }
@@ -2933,6 +2945,66 @@ app.get("/api/productions/:id", async (req, res) => {
     if (!prod) return res.status(404).json({ error: "Not found" });
     res.json(prod);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GENRES API ──
+app.get("/api/genres", async (req, res) => {
+  try {
+    const customDocs = await Genre.find({}, "name").lean();
+    const customNames = (customDocs || []).map(d => d.name);
+    let movieGenres = [];
+    try {
+      movieGenres = await Movie.distinct("genre");
+    } catch {}
+
+    const map = new Map();
+    [...DEFAULT_GENRES, ...customNames, ...(movieGenres || [])].forEach(g => {
+      if (!g || typeof g !== "string") return;
+      const trimmed = g.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, trimmed);
+      }
+    });
+
+    const genres = Array.from(map.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+    res.json({ genres });
+  } catch (err) {
+    console.error("GET /api/genres error:", err);
+    res.json({ genres: DEFAULT_GENRES });
+  }
+});
+
+app.post("/api/genres", async (req, res) => {
+  try {
+    const raw = String(req.body.name || req.body.genre || "").trim();
+    if (!raw) {
+      return res.status(400).json({ error: "Genre name is required" });
+    }
+    const formatted = raw
+      .split(" ")
+      .map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : "")
+      .join(" ");
+
+    const existing = await Genre.findOne({
+      name: { $regex: new RegExp(`^${formatted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") }
+    });
+
+    let savedName = formatted;
+    if (existing) {
+      savedName = existing.name;
+    } else {
+      const created = await Genre.create({ name: formatted });
+      savedName = created.name;
+    }
+
+    res.status(201).json({ success: true, genre: savedName });
+  } catch (err) {
+    console.error("POST /api/genres error:", err);
+    res.status(500).json({ error: err.message || "Failed to save genre" });
+  }
 });
 
 app.get("/api/movies", async (req, res) => {
@@ -3006,8 +3078,8 @@ app.get("/api/cast/:id", async (req, res) => {
 
 app.get("/api/cast", async (req, res) => {
   try {
-    // Only return fields needed for admin list — bio is fetched on demand via /cast/:id
-    const cast = await Cast.find({}, "name type photo slug").sort({ name: 1 }).lean();
+    // Return fields needed for cast list and forms, including multi-roles
+    const cast = await Cast.find({}, "name type roles photo slug").sort({ name: 1 }).lean();
     res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
     res.json(cast);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -4661,6 +4733,19 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       await Cast.findByIdAndUpdate(entry.castId, { $addToSet: { movies: movie._id } });
     }
 
+    if (Array.isArray(movie.genre) && movie.genre.length > 0) {
+      movie.genre.forEach(g => {
+        const gn = String(g || "").trim();
+        if (gn) {
+          Genre.updateOne(
+            { name: { $regex: new RegExp(`^${gn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") } },
+            { $setOnInsert: { name: gn } },
+            { upsert: true }
+          ).catch(() => {});
+        }
+      });
+    }
+
     const populated = await Movie.findById(movie._id)
       .populate("productionId", "name logo")
       .populate("collaborators", "name logo").lean();
@@ -4813,6 +4898,19 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
       autoGenerateMovieDetailsBlog(updated).catch(() => { });
     }
 
+    if (Array.isArray(updated.genre) && updated.genre.length > 0) {
+      updated.genre.forEach(g => {
+        const gn = String(g || "").trim();
+        if (gn) {
+          Genre.updateOne(
+            { name: { $regex: new RegExp(`^${gn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") } },
+            { $setOnInsert: { name: gn } },
+            { upsert: true }
+          ).catch(() => {});
+        }
+      });
+    }
+
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -4840,13 +4938,52 @@ app.post("/api/admin/movies/:id/cast", adminAuth, async (req, res) => {
 // Admin remove cast from movie
 app.delete("/api/admin/movies/:id/cast/:castId", adminAuth, async (req, res) => {
   try {
-    if (!isOid(req.params.castId)) return res.status(400).json({ error: "Invalid castId" });
-    const updated = await Movie.findByIdAndUpdate(
-      req.params.id,
-      { $pull: { cast: { castId: new mongoose.Types.ObjectId(req.params.castId) } } },
-      { new: true }
-    ).populate("productionId", "name logo").populate("collaborators", "name logo").lean();
-    if (!updated) return res.status(404).json({ error: "Not found" });
+    const castIdParam = String(req.params.castId || "").trim();
+    if (!isOid(castIdParam)) return res.status(400).json({ error: "Invalid castId" });
+
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: "Not found" });
+
+    const roleParam = req.query.role;
+    const typeParam = req.query.type;
+    const indexParam = req.query.index !== undefined ? parseInt(req.query.index, 10) : NaN;
+
+    if (!isNaN(indexParam) && indexParam >= 0 && indexParam < (movie.cast || []).length) {
+      // Remove specific index
+      movie.cast.splice(indexParam, 1);
+      await movie.save();
+    } else if (roleParam !== undefined || typeParam !== undefined) {
+      // Remove by castId + matching role and/or type
+      const removeIdx = (movie.cast || []).findIndex(c =>
+        String(c.castId) === castIdParam &&
+        (roleParam === undefined || String(c.role || "") === String(roleParam)) &&
+        (typeParam === undefined || String(c.type || "") === String(typeParam))
+      );
+      if (removeIdx !== -1) {
+        movie.cast.splice(removeIdx, 1);
+        await movie.save();
+      } else {
+        movie.cast = (movie.cast || []).filter(c => String(c.castId) !== castIdParam);
+        await movie.save();
+      }
+    } else {
+      // If no role/index specified: if multiple roles exist, remove just one; otherwise remove all
+      const count = (movie.cast || []).filter(c => String(c.castId) === castIdParam).length;
+      if (count > 1) {
+        const removeIdx = (movie.cast || []).findIndex(c => String(c.castId) === castIdParam);
+        if (removeIdx !== -1) {
+          movie.cast.splice(removeIdx, 1);
+          await movie.save();
+        }
+      } else {
+        movie.cast = (movie.cast || []).filter(c => String(c.castId) !== castIdParam);
+        await movie.save();
+      }
+    }
+
+    const updated = await Movie.findById(req.params.id)
+      .populate("productionId", "name logo")
+      .populate("collaborators", "name logo").lean();
     res.json(updated);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5005,7 +5142,7 @@ app.post("/api/admin/cast", adminAuth, async (req, res) => {
     const rolesArr = Array.isArray(roles) && roles.length
       ? roles
       : (type ? type.split(",").map(r => r.trim()).filter(Boolean) : ["Actor"]);
-    const primaryType = rolesArr[0] || "Actor";
+    const primaryType = rolesArr.join(", ") || "Actor";
     const c = await Cast.create({
       name: name.trim(), type: primaryType,
       roles: rolesArr,
@@ -5025,11 +5162,11 @@ app.patch("/api/admin/cast/:id", adminAuth, async (req, res) => {
     // Handle type / roles
     if (req.body.type !== undefined || req.body.roles !== undefined) {
       const rolesArr = Array.isArray(req.body.roles) && req.body.roles.length
-        ? req.body.roles
-        : (req.body.type ? req.body.type.split(",").map(r => r.trim()).filter(Boolean) : undefined);
+        ? req.body.roles.map(r => String(r).trim()).filter(Boolean)
+        : (req.body.type ? String(req.body.type).split(",").map(r => r.trim()).filter(Boolean) : undefined);
       if (rolesArr && rolesArr.length) {
         update.roles = rolesArr;
-        update.type = rolesArr[0]; // keep primary type in sync
+        update.type = rolesArr.join(", ");
       }
     }
     const c = await Cast.findByIdAndUpdate(req.params.id, update, { new: true });
@@ -5352,11 +5489,63 @@ app.delete("/api/admin/blog/:id", adminAuth, async (req, res) => {
 
 // ── Admin — Media Upload & Cloudinary Asset Management APIs ────────────────
 
-const uploadBufferToCloudinary = (buffer, folder = "ollypedia_media", filename) => {
+const sanitizeCloudinarySlug = (str) => {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60);
+};
+
+const generateCloudinaryPublicId = (opts = {}) => {
+  const { customName, name, title, movieTitle, castName, type, source, filename } = opts;
+  const rawEntity = customName || name || title || movieTitle || castName;
+  let baseSlug = sanitizeCloudinarySlug(rawEntity);
+
+  // If no entity name provided, check if filename is meaningful (not generic screenshot/img)
+  if (!baseSlug && filename) {
+    const rawClean = filename.replace(/\.[^/.]+$/, "");
+    const isGeneric = /^(screenshot|img|image|photo|pic|dsc|file|untitled|download)[-_0-9\s]*$/i.test(rawClean);
+    if (!isGeneric) {
+      baseSlug = sanitizeCloudinarySlug(rawClean);
+    }
+  }
+
+  // Fallback to source or entity type if still empty
+  if (!baseSlug) {
+    baseSlug = sanitizeCloudinarySlug(source || type || "ollypedia_asset");
+  }
+
+  // If type exists and isn't already included in baseSlug, append it
+  const cleanType = sanitizeCloudinarySlug(type);
+  if (cleanType && !baseSlug.includes(cleanType)) {
+    baseSlug = `${baseSlug}_${cleanType}`;
+  }
+
+  // Add short unique hash (6 chars)
+  const uniqueId = Math.random().toString(36).slice(2, 8);
+  return `${baseSlug}_${uniqueId}`;
+};
+
+const uploadBufferToCloudinary = (buffer, folder = "ollypedia_media", options = {}) => {
   return new Promise((resolve, reject) => {
-    const opts = { folder, resource_type: "image" };
-    if (filename) opts.public_id = filename.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_") + "_" + Date.now().toString(36);
-    const stream = cloudinary.uploader.upload_stream(opts, (err, result) => {
+    const parsedOpts = typeof options === "string" ? { filename: options } : (options || {});
+    const public_id = generateCloudinaryPublicId(parsedOpts);
+
+    const uploadOpts = {
+      folder,
+      resource_type: "image",
+      public_id,
+      use_filename: false,
+      unique_filename: false,
+      overwrite: false,
+    };
+
+    const stream = cloudinary.uploader.upload_stream(uploadOpts, (err, result) => {
       if (err) return reject(err);
       resolve(result);
     });
@@ -5364,12 +5553,20 @@ const uploadBufferToCloudinary = (buffer, folder = "ollypedia_media", filename) 
   });
 };
 
-// 1. Single / Blog Image Upload (saves to Cloudinary and indexes in MediaAsset)
+// 1. Single / Blog Image Upload (saves to Cloudinary with SEO name and indexes in MediaAsset)
 app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No image file received" });
   try {
     const source = req.body.source || "Cloudinary Upload";
-    const result = await uploadBufferToCloudinary(req.file.buffer, "ollypedia_media", req.file.originalname);
+    const entityName = req.body.name || req.body.title || req.body.movieTitle || req.body.castName || "";
+    const type = req.body.type || "";
+
+    const result = await uploadBufferToCloudinary(req.file.buffer, "ollypedia_media", {
+      filename: req.file.originalname,
+      name: entityName,
+      type,
+      source,
+    });
     
     const media = await MediaAsset.create({
       url: result.secure_url,
@@ -5380,7 +5577,7 @@ app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("imag
       width: result.width || 0,
       height: result.height || 0,
       source,
-      title: req.body.title || req.file.originalname || "",
+      title: entityName || req.body.title || req.file.originalname || "",
       uploadedBy: req.admin?.username || "admin",
     });
     res.json({ url: result.secure_url, filename: result.public_id, media });
@@ -5917,25 +6114,6 @@ app.get("/sitemap-blogs.xml", async (req, res) => {
 });
 
 
-// ── Admin — POST /api/admin/upload-blog-image ─────────────────────────────────
-// Accepts a multipart/form-data upload with field name "image".
-// Returns { url } — a public URL the frontend inserts into the article HTML.
-app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("image"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No image file received" });
-
-  const uploadStream = cloudinary.uploader.upload_stream(
-    { folder: "ollypedia_blog_images" },
-    (error, result) => {
-      if (error) {
-        console.error("Cloudinary Upload Error:", error);
-        return res.status(500).json({ error: "Cloudinary upload failed" });
-      }
-      res.json({ url: result.secure_url, filename: result.public_id });
-    }
-  );
-
-  streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-});
 
 // ── AI Article Generator (uses server-side fetch → no CORS) ─────────────────
 // ── AI Article Generator — powered by Groq (free, ~2-3s per article) ────────

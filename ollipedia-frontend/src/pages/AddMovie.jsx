@@ -3,7 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { API, getToken } from "../api/api";
 import { ImageUploadInput } from "../components/UI";
 
-const GENRES     = ["Action","Drama","Romance","Comedy","Thriller","Family","Historical","Devotional","Horror"];
+const GENRES = [
+  "Action", "Drama", "Romance", "Comedy", "Thriller", "Family",
+  "Historical", "Devotional", "Horror", "Action-Drama", "Crime",
+  "Mystery", "Adventure", "Animation", "Biographical", "Fantasy",
+  "Musical", "Sci-Fi", "Social", "Sports", "Suspense"
+];
 const CATEGORIES = ["Feature Film","Short Film","Web Series","Documentary"];
 const CAST_TYPES = ["Actor","Actress","Director","Producer","Music Director","Cinematographer","Choreographer","Lyricist","Singer","Editor","Other"];
 const STEPS      = ["Basic Info","Cast & Crew","Collaborators","Media","Review & Submit"];
@@ -106,6 +111,79 @@ export default function AddMovie({ production, onToast }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x=>x!==g) : [...form.genre, g]);
 
+  const [allGenres, setAllGenres] = useState(() => {
+    try {
+      const cached = localStorage.getItem("olly_genres");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = Array.from(new Set([...GENRES, ...parsed]));
+          return merged.sort((a, b) => a.localeCompare(b));
+        }
+      }
+    } catch {}
+    return [...GENRES];
+  });
+  const [customGenre, setCustomGenre] = useState("");
+  const [addingGenre, setAddingGenre] = useState(false);
+  const customGenreInputRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await API.getGenres();
+        if (mounted && res && Array.isArray(res.genres)) {
+          setAllGenres(prev => {
+            const setG = new Set([...GENRES, ...prev, ...res.genres]);
+            const sorted = Array.from(setG).filter(Boolean).sort((a, b) => a.localeCompare(b));
+            try { localStorage.setItem("olly_genres", JSON.stringify(sorted)); } catch {}
+            return sorted;
+          });
+        }
+      } catch (err) {}
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleAddCustomGenre = async (e) => {
+    if (e) e.preventDefault();
+    const trimmed = (customGenre || "").trim();
+    if (!trimmed) return;
+    const formatted = trimmed.split(" ").map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : "").join(" ");
+    if (!form.genre.includes(formatted)) {
+      set("genre", [...form.genre, formatted]);
+    }
+    setAllGenres(prev => {
+      const exists = prev.some(g => g.toLowerCase() === formatted.toLowerCase());
+      const updated = exists ? prev : [...prev, formatted].sort((a, b) => a.localeCompare(b));
+      try { localStorage.setItem("olly_genres", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setCustomGenre("");
+    try {
+      setAddingGenre(true);
+      await API.addGenre(formatted);
+      onToast?.(`Genre "${formatted}" saved to dropdown!`, "success");
+    } catch {} finally {
+      setAddingGenre(false);
+    }
+  };
+
+  const handleSelectDropdownGenre = (e) => {
+    const val = e.target.value;
+    if (!val) return;
+    if (val === "__custom__") {
+      customGenreInputRef.current?.focus();
+      e.target.value = "";
+      return;
+    }
+    if (!form.genre.includes(val)) {
+      set("genre", [...form.genre, val]);
+    }
+    e.target.value = "";
+  };
+
   // ── Step 1: Cast ──
   const [cast,         setCast]         = useState([]);
   const [castQuery,    setCastQuery]    = useState("");
@@ -159,7 +237,6 @@ export default function AddMovie({ production, onToast }) {
     // c._id might be an ObjectId object from the API — always convert to string
     const idStr = String(c._id || "").trim();
     if (!isOid(idStr)) return; // safety check
-    if (cast.some(x => x.castId === idStr)) return; // already added
     setCast(prev => [...prev, {
       castId: idStr,   // ← plain "abc123..." hex string, NEVER ObjectId object
       isNew:  false,
@@ -169,16 +246,12 @@ export default function AddMovie({ production, onToast }) {
       role:   "",
     }]);
     setCastQuery(""); setCastResults([]);
-  }, [cast]);
+  }, []);
 
   // ── Add new cast ──
   const addNewCast = useCallback(() => {
     const name = nc.name.trim();
     if (!name) return;
-    if (cast.some(x => x.name.toLowerCase() === name.toLowerCase())) {
-      setNc({ name:"", type:"Actor", role:"", photo:"", bio:"" });
-      setShowNewCast(false); return;
-    }
     setCast(prev => [...prev, {
       castId: "",     // ← empty string signals "create new" to backend
       isNew:  true,
@@ -332,6 +405,114 @@ export default function AddMovie({ production, onToast }) {
                 <input className="form-input" value={form.language} onChange={e=>set("language",e.target.value)} />
               </div>
             </div>
+
+            <div className="form-group">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>Genres</label>
+                {form.genre.length > 0 && (
+                  <span style={{ fontSize: "0.76rem", color: "var(--gold)", fontWeight: 600 }}>
+                    {form.genre.length} selected
+                  </span>
+                )}
+              </div>
+
+              {form.genre.length > 0 ? (
+                <div style={{
+                  display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, padding: "8px 10px",
+                  background: "rgba(201,151,58,0.08)", borderRadius: 8, border: "1px solid rgba(201,151,58,0.25)"
+                }}>
+                  {form.genre.map(g => (
+                    <span key={g} style={{
+                      display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px",
+                      borderRadius: 16, fontSize: "0.78rem", fontWeight: 600, background: "var(--gold)", color: "#000"
+                    }}>
+                      {g}
+                      <span
+                        role="button" tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); toggleGenre(g); }}
+                        title={`Remove ${g}`}
+                        style={{ cursor: "pointer", fontSize: "0.95rem", fontWeight: "bold", lineHeight: 1, opacity: 0.75, marginLeft: 2 }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={e => e.currentTarget.style.opacity = 0.75}
+                      >✕</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginBottom: 8, fontStyle: "italic" }}>
+                  Select genre(s) from dropdown or type a custom genre below.
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }}>
+                <div>
+                  <select className="form-select" defaultValue="" onChange={handleSelectDropdownGenre} style={{ width: "100%", height: 38 }}>
+                    <option value="">▼ Choose Genre from Dropdown...</option>
+                    <optgroup label="Available Genres">
+                      {allGenres.map(g => (
+                        <option key={g} value={g} disabled={form.genre.includes(g)}>
+                          {g} {form.genre.includes(g) ? " (Selected)" : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <option value="__custom__">➕ + Enter Custom Genre...</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    ref={customGenreInputRef}
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter custom genre..."
+                    value={customGenre}
+                    onChange={e => setCustomGenre(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomGenre();
+                      }
+                    }}
+                    style={{ flex: 1, height: 38 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-gold btn-sm"
+                    onClick={handleAddCustomGenre}
+                    disabled={addingGenre || !customGenre.trim()}
+                    style={{ whiteSpace: "nowrap", padding: "0 14px", height: 38 }}
+                    title="Add custom genre and save to dropdown for future"
+                  >
+                    {addingGenre ? "Saving..." : "+ Add"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: 4 }}>Quick Toggle:</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {allGenres.map(g => {
+                    const isSelected = form.genre.includes(g);
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleGenre(g)}
+                        style={{
+                          padding: "3px 10px", borderRadius: 16, fontSize: "0.75rem", cursor: "pointer", border: "1px solid",
+                          background: isSelected ? "var(--gold)" : "transparent",
+                          color: isSelected ? "#000" : "var(--muted)",
+                          borderColor: isSelected ? "var(--gold)" : "var(--border)",
+                          fontWeight: isSelected ? 600 : 400, transition: "all 0.15s ease"
+                        }}
+                      >
+                        {isSelected ? `✓ ${g}` : g}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Release Date</label>
@@ -394,21 +575,21 @@ export default function AddMovie({ production, onToast }) {
             </div>
                     <div className="form-group">
               <label className="form-label">Poster URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(portrait 2:3)</span></label>
-              <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" source="Movie" />
+              <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} name={form.title} type="poster" placeholder="https://…" source="Movie" />
               {form.posterUrl && (
                 <img src={form.posterUrl} alt="poster" style={{ marginTop:8, height:120, borderRadius:4, border:"1px solid var(--border)", objectFit:"cover" }} onError={e=>e.target.style.display="none"} />
               )}
             </div>
             <div className="form-group">
               <label className="form-label">Thumbnail URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(landscape 16:9)</span></label>
-              <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" source="Movie" />
+              <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} name={form.title} type="thumbnail" placeholder="https://…" source="Movie" />
               {form.thumbnailUrl && (
                 <img src={form.thumbnailUrl} alt="thumbnail" style={{ marginTop:8, width:"100%", maxHeight:140, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />
               )}
             </div>
             <div className="form-group">
               <label className="form-label">Banner URL <span style={{ color:"var(--muted)", fontWeight:400 }}>(landscape 16:9 — homepage hero)</span></label>
-              <ImageUploadInput value={form.bannerUrl} onChange={v => set("bannerUrl", v)} placeholder="Wide landscape image URL…" source="Movie" />
+              <ImageUploadInput value={form.bannerUrl} onChange={v => set("bannerUrl", v)} name={form.title} type="banner" placeholder="Wide landscape image URL…" source="Movie" />
               {form.bannerUrl && (
                 <img src={form.bannerUrl} alt="banner" style={{ marginTop:8, width:"100%", maxHeight:140, objectFit:"cover", borderRadius:4, border:"1px solid var(--border)" }} onError={e=>e.target.style.display="none"} />
               )}
@@ -441,18 +622,21 @@ export default function AddMovie({ production, onToast }) {
                   )}
                   {castResults.map(r => {
                     const idStr = String(r._id || "").trim();
-                    const already = cast.some(x => x.castId === idStr);
+                    const existingCount = cast.filter(x => x.castId === idStr).length;
                     return (
                       <div key={idStr} className="search-dropdown-item"
-                        onClick={() => !already && addExistingCast(r)}
-                        style={{ opacity:already?0.5:1, cursor:already?"default":"pointer" }}>
+                        onClick={() => addExistingCast(r)}
+                        style={{ cursor: "pointer" }}>
                         {r.photo && <img src={r.photo} alt={r.name} style={{ width:28,height:28,borderRadius:"50%",objectFit:"cover" }} onError={e=>e.target.style.display="none"} />}
                         <div style={{ flex:1 }}>
                           <span style={{ fontWeight:600 }}>{r.name}</span>
-                          <span style={{ color:"var(--gold)", fontSize:"0.72rem", marginLeft:8 }}>{r.type}</span>
+                          <span style={{ color:"var(--gold)", fontSize:"0.72rem", marginLeft:8 }}>
+                            {r.type}
+                            {existingCount > 0 && <span style={{ color:"var(--muted)", marginLeft:6 }}>({existingCount} {existingCount === 1 ? "role" : "roles"} added)</span>}
+                          </span>
                         </div>
-                        <span style={{ fontSize:"0.7rem", color:already?"var(--muted)":"#4caf82" }}>
-                          {already ? "already added" : "✓ existing"}
+                        <span style={{ fontSize:"0.7rem", color:existingCount > 0 ? "var(--gold)" : "#4caf82", fontWeight: 700 }}>
+                          {existingCount > 0 ? "+ Add Another Role" : "✓ + Link"}
                         </span>
                       </div>
                     );

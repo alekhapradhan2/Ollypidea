@@ -64,7 +64,7 @@ function SettingsPanel({ member, onToast, onUpdate }) {
     location:  member.location  || "",
     website:   member.website   || "",
     instagram: member.instagram || "",
-    roles:     member.roles     || [],
+    roles:     (Array.isArray(member.roles) && member.roles.length) ? member.roles : (member.type ? member.type.split(",").map(r => r.trim()).filter(Boolean) : []),
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));

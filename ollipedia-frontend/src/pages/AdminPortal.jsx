@@ -21,7 +21,12 @@ const MediaPanel = lazy(() => import("./MediaPanel"));
 // ════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ════════════════════════════════════════════════════════════════
-const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
+const GENRES = [
+  "Action", "Drama", "Romance", "Comedy", "Thriller", "Family",
+  "Historical", "Devotional", "Horror", "Action-Drama", "Crime",
+  "Mystery", "Adventure", "Animation", "Biographical", "Fantasy",
+  "Musical", "Sci-Fi", "Social", "Sports", "Suspense"
+];
 const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES = [
   "Actor", "Actress", "Director", "Producer",
@@ -196,14 +201,26 @@ function CastPicker({ cast, onChange }) {
   }, [query]);
 
   const addFromSearch = (person) => {
-    if (cast.some(c => c.castId && String(c.castId) === String(person._id))) return;
-    onChange([...cast, { castId: String(person._id), name: person.name, photo: person.photo || "", type: person.type || "Actor", role: "", isNew: false }]);
-    setQuery(""); setResults([]);
+    const newEntry = {
+      castId: String(person._id),
+      name: person.name,
+      photo: person.photo || "",
+      type: person.type || "Actor",
+      role: "",
+      isNew: false
+    };
+    const nextCast = [...cast, newEntry];
+    onChange(nextCast);
+    setQuery("");
+    setResults([]);
+    // Automatically open edit mode on the newly added entry so the admin can set their role/type
+    setEditIdx(nextCast.length - 1);
   };
 
   const addNew = () => {
     if (!nc.name.trim()) return;
-    onChange([...cast, { castId: "", name: nc.name.trim(), photo: nc.photo.trim(), type: nc.type, role: nc.role.trim(), bio: nc.bio.trim(), isNew: true }]);
+    const nextCast = [...cast, { castId: "", name: nc.name.trim(), photo: nc.photo.trim(), type: nc.type, role: nc.role.trim(), bio: nc.bio.trim(), isNew: true }];
+    onChange(nextCast);
     setNc({ name: "", type: "Actor", role: "", photo: "", bio: "" });
     setShowNewForm(false);
   };
@@ -228,21 +245,29 @@ function CastPicker({ cast, onChange }) {
                 <div style={{ padding: "10px 14px", color: "var(--muted)", fontSize: "0.82rem" }}>No results — add as new below</div>
               )}
               {results.map(p => {
-                const already = cast.some(c => c.castId === String(p._id));
+                const existingEntries = cast.filter(c => c.castId && String(c.castId) === String(p._id));
+                const alreadyCount = existingEntries.length;
                 return (
-                  <div key={p._id} onClick={() => !already && addFromSearch(p)}
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: already ? "default" : "pointer", borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: already ? 0.5 : 1 }}
-                    onMouseEnter={e => { if (!already) e.currentTarget.style.background = "rgba(201,151,58,0.08)"; }}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <div key={p._id} onClick={() => addFromSearch(p)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(201,151,58,0.08)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
                     <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--bg3)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {p.photo ? <img src={p.photo} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display = "none"} /> : "👤"}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: "0.86rem" }}>{p.name}</div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--gold)" }}>{p.type}</div>
+                      <div style={{ fontSize: "0.68rem", color: "var(--gold)" }}>
+                        {p.type}
+                        {alreadyCount > 0 && (
+                          <span style={{ color: "var(--muted)", marginLeft: 6 }}>
+                            ({alreadyCount} {alreadyCount === 1 ? "role" : "roles"} added)
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span style={{ fontSize: "0.68rem", color: already ? "var(--muted)" : "#4caf82", fontWeight: 700 }}>
-                      {already ? "✓ Added" : "+ Link"}
+                    <span style={{ fontSize: "0.68rem", color: alreadyCount > 0 ? "var(--gold)" : "#4caf82", fontWeight: 700 }}>
+                      {alreadyCount > 0 ? "+ Add Another Role" : "+ Link"}
                     </span>
                   </div>
                 );
@@ -328,27 +353,37 @@ function CastPicker({ cast, onChange }) {
                       </div>
                       <button type="button" className="btn btn-gold btn-sm" onClick={() => setEditIdx(null)}>✓ Done</button>
                     </div>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }}>
-                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--bg2)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", border: "1px solid var(--border)" }}>
-                        {c.photo ? <img src={c.photo} alt={c.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display = "none"} /> : "👤"}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>{c.name || <span style={{ color: "var(--muted)" }}>Unnamed</span>}</span>
-                          <span style={{ fontSize: "0.62rem", fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: "rgba(201,151,58,0.12)", color: "var(--gold)" }}>{c.type}</span>
-                          {c.isNew
-                            ? <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#e8b96a", background: "rgba(232,185,106,0.12)", padding: "1px 6px", borderRadius: 6 }}>✦ NEW</span>
-                            : <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#4caf82", background: "rgba(76,175,130,0.12)", padding: "1px 6px", borderRadius: 6 }}>✓ LINKED</span>}
+                  ) : (() => {
+                    const samePersonCount = cast.filter(x => (x.castId && c.castId && String(x.castId) === String(c.castId)) || (x.name && c.name && x.name.toLowerCase() === c.name.toLowerCase())).length;
+                    const roleNum = cast.slice(0, i + 1).filter(x => (x.castId && c.castId && String(x.castId) === String(c.castId)) || (x.name && c.name && x.name.toLowerCase() === c.name.toLowerCase())).length;
+
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--bg2)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", border: "1px solid var(--border)" }}>
+                          {c.photo ? <img src={c.photo} alt={c.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => e.target.style.display = "none"} /> : "👤"}
                         </div>
-                        {c.role && <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 2 }}>as {c.role}</div>}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>{c.name || <span style={{ color: "var(--muted)" }}>Unnamed</span>}</span>
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: "rgba(201,151,58,0.12)", color: "var(--gold)" }}>{c.type}</span>
+                            {samePersonCount > 1 && (
+                              <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "var(--gold)", background: "rgba(201,151,58,0.18)", padding: "1px 6px", borderRadius: 6 }}>
+                                Role #{roleNum}
+                              </span>
+                            )}
+                            {c.isNew
+                              ? <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#e8b96a", background: "rgba(232,185,106,0.12)", padding: "1px 6px", borderRadius: 6 }}>✦ NEW</span>
+                              : <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "#4caf82", background: "rgba(76,175,130,0.12)", padding: "1px 6px", borderRadius: 6 }}>✓ LINKED</span>}
+                          </div>
+                          {c.role && <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 2 }}>as {c.role}</div>}
+                        </div>
+                        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditIdx(i)} style={{ fontSize: "0.7rem", padding: "4px 8px" }} title="Edit this role">✏️</button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => remove(i)} style={{ color: "var(--red)", fontSize: "0.7rem", padding: "4px 8px" }} title="Remove this role">✕</button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditIdx(i)} style={{ fontSize: "0.7rem", padding: "4px 8px" }}>✏️</button>
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => remove(i)} style={{ color: "var(--red)", fontSize: "0.7rem", padding: "4px 8px" }}>✕</button>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
             </div>
@@ -507,7 +542,7 @@ function PersonPicker({ label, icon, castType, value, refs, onChange }) {
 // ════════════════════════════════════════════════════════════════
 const MOVIE_STEPS = ["Basic Info", "Cast & Crew", "Media", "Review & Submit"];
 
-function MovieForm({ initial, onSave, onCancel, saving }) {
+function MovieForm({ initial, onSave, onCancel, saving, onToast }) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     title: initial?.title || "",
@@ -543,6 +578,106 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleGenre = g => set("genre", form.genre.includes(g) ? form.genre.filter(x => x !== g) : [...form.genre, g]);
+
+  // Dynamic genres with localStorage caching and server sync
+  const [allGenres, setAllGenres] = useState(() => {
+    try {
+      const cached = localStorage.getItem("olly_genres");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = Array.from(new Set([...GENRES, ...(initial?.genre || []), ...parsed]));
+          return merged.sort((a, b) => a.localeCompare(b));
+        }
+      }
+    } catch {}
+    const initialList = Array.from(new Set([...GENRES, ...(initial?.genre || [])]));
+    return initialList.sort((a, b) => a.localeCompare(b));
+  });
+  const [customGenre, setCustomGenre] = useState("");
+  const [addingGenre, setAddingGenre] = useState(false);
+  const [genreFeedback, setGenreFeedback] = useState("");
+  const customGenreInputRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await API.getGenres();
+        if (mounted && res && Array.isArray(res.genres)) {
+          setAllGenres(prev => {
+            const setG = new Set([...GENRES, ...(initial?.genre || []), ...prev, ...res.genres]);
+            const sorted = Array.from(setG).filter(Boolean).sort((a, b) => a.localeCompare(b));
+            try { localStorage.setItem("olly_genres", JSON.stringify(sorted)); } catch {}
+            return sorted;
+          });
+        }
+      } catch (err) {
+        console.warn("Could not load genres:", err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [initial]);
+
+  const handleAddCustomGenre = async (e) => {
+    if (e) e.preventDefault();
+    const trimmed = (customGenre || "").trim();
+    if (!trimmed) return;
+
+    // Capitalize words nicely
+    const formatted = trimmed
+      .split(" ")
+      .map(w => {
+        if (!w) return "";
+        if (w.includes("-")) {
+          return w.split("-").map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : "").join("-");
+        }
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      })
+      .join(" ");
+
+    // 1. Select it in current movie form
+    if (!form.genre.includes(formatted)) {
+      set("genre", [...form.genre, formatted]);
+    }
+
+    // 2. Add to allGenres dropdown options list immediately
+    setAllGenres(prev => {
+      const exists = prev.some(g => g.toLowerCase() === formatted.toLowerCase());
+      const updated = exists ? prev : [...prev, formatted].sort((a, b) => a.localeCompare(b));
+      try { localStorage.setItem("olly_genres", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    setCustomGenre("");
+    setGenreFeedback(`✓ "${formatted}" added to dropdown & selected!`);
+    setTimeout(() => setGenreFeedback(""), 3500);
+
+    // 3. Persist to backend database so it's stored permanently
+    try {
+      setAddingGenre(true);
+      await API.addGenre(formatted);
+      onToast?.(`Genre "${formatted}" saved to dropdown for future!`, "success");
+    } catch (err) {
+      console.warn("Backend genre save warning:", err);
+    } finally {
+      setAddingGenre(false);
+    }
+  };
+
+  const handleSelectDropdownGenre = (e) => {
+    const val = e.target.value;
+    if (!val) return;
+    if (val === "__custom__") {
+      customGenreInputRef.current?.focus();
+      e.target.value = "";
+      return;
+    }
+    if (!form.genre.includes(val)) {
+      set("genre", [...form.genre, val]);
+    }
+    e.target.value = "";
+  };
 
   // Productions: normalise to [{_id, name}]
   // Server may return productions as populated objects OR bare IDs
@@ -750,16 +885,160 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Genres</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {GENRES.map(g => (
-                <button key={g} type="button" onClick={() => toggleGenre(g)} style={{
-                  padding: "4px 12px", borderRadius: 20, fontSize: "0.78rem", cursor: "pointer", border: "1px solid",
-                  background: form.genre.includes(g) ? "var(--gold)" : "transparent",
-                  color: form.genre.includes(g) ? "#000" : "var(--muted)",
-                  borderColor: form.genre.includes(g) ? "var(--gold)" : "var(--border)",
-                }}>{g}</button>
-              ))}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>Genres</label>
+              {form.genre.length > 0 && (
+                <span style={{ fontSize: "0.76rem", color: "var(--gold)", fontWeight: 600 }}>
+                  {form.genre.length} selected
+                </span>
+              )}
+            </div>
+
+            {/* Selected Genre Badges */}
+            {form.genre.length > 0 ? (
+              <div style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginBottom: 10,
+                padding: "8px 10px",
+                background: "rgba(201,151,58,0.08)",
+                borderRadius: 8,
+                border: "1px solid rgba(201,151,58,0.25)"
+              }}>
+                {form.genre.map(g => (
+                  <span
+                    key={g}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 10px",
+                      borderRadius: 16,
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      background: "var(--gold)",
+                      color: "#000",
+                    }}
+                  >
+                    {g}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); toggleGenre(g); }}
+                      title={`Remove ${g}`}
+                      style={{
+                        cursor: "pointer",
+                        fontSize: "0.95rem",
+                        fontWeight: "bold",
+                        lineHeight: 1,
+                        opacity: 0.75,
+                        marginLeft: 2,
+                        transition: "opacity 0.15s"
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                      onMouseLeave={e => e.currentTarget.style.opacity = 0.75}
+                    >
+                      ✕
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginBottom: 8, fontStyle: "italic" }}>
+                Select genre(s) from the dropdown or type a custom genre below.
+              </div>
+            )}
+
+            {/* Dropdown & Custom Genre Entry Controls */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }}>
+              {/* Dropdown */}
+              <div>
+                <select
+                  className="form-select"
+                  defaultValue=""
+                  onChange={handleSelectDropdownGenre}
+                  style={{ width: "100%", height: 38 }}
+                >
+                  <option value="">▼ Choose Genre from Dropdown...</option>
+                  <optgroup label="Available Genres">
+                    {allGenres.map(g => (
+                      <option key={g} value={g} disabled={form.genre.includes(g)}>
+                        {g} {form.genre.includes(g) ? " (Selected)" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <option value="__custom__">➕ + Enter Custom Genre...</option>
+                </select>
+              </div>
+
+              {/* Manual Entry with Persistence */}
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  ref={customGenreInputRef}
+                  type="text"
+                  className="form-input"
+                  placeholder="Enter custom genre..."
+                  value={customGenre}
+                  onChange={e => setCustomGenre(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustomGenre();
+                    }
+                  }}
+                  style={{ flex: 1, height: 38 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-gold btn-sm"
+                  onClick={handleAddCustomGenre}
+                  disabled={addingGenre || !customGenre.trim()}
+                  style={{ whiteSpace: "nowrap", padding: "0 14px", height: 38 }}
+                  title="Add custom genre and save to dropdown for future"
+                >
+                  {addingGenre ? "Saving..." : "+ Add"}
+                </button>
+              </div>
+            </div>
+
+            {genreFeedback && (
+              <div style={{ fontSize: "0.75rem", color: "var(--gold)", marginBottom: 8, fontWeight: 500 }}>
+                {genreFeedback}
+              </div>
+            )}
+
+            {/* Quick-pick tags */}
+            <div style={{ marginTop: 6 }}>
+              <div style={{ fontSize: "0.72rem", color: "var(--muted)", marginBottom: 4 }}>
+                Quick Toggle:
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {allGenres.map(g => {
+                  const isSelected = form.genre.includes(g);
+                  return (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => toggleGenre(g)}
+                      style={{
+                        padding: "3px 10px",
+                        borderRadius: 16,
+                        fontSize: "0.75rem",
+                        cursor: "pointer",
+                        border: "1px solid",
+                        background: isSelected ? "var(--gold)" : "transparent",
+                        color: isSelected ? "#000" : "var(--muted)",
+                        borderColor: isSelected ? "var(--gold)" : "var(--border)",
+                        fontWeight: isSelected ? 600 : 400,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {isSelected ? `✓ ${g}` : g}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <div className="form-grid">
@@ -840,12 +1119,12 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           </div>
           <div className="form-group">
             <label className="form-label">Poster URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(portrait 2:3)</span></label>
-            <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} placeholder="https://…" source="Movie" />
+            <ImageUploadInput value={form.posterUrl} onChange={v => set("posterUrl", v)} name={form.title} type="poster" placeholder="https://…" source="Movie" />
             {form.posterUrl && <img src={form.posterUrl} alt="poster" style={{ marginTop: 8, height: 100, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }} onError={e => e.target.style.display = "none"} />}
           </div>
           <div className="form-group">
             <label className="form-label">Thumbnail URL <span style={{ color: "var(--muted)", fontWeight: 400 }}>(16:9 landscape)</span></label>
-            <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} placeholder="https://…" source="Movie" />
+            <ImageUploadInput value={form.thumbnailUrl} onChange={v => set("thumbnailUrl", v)} name={form.title} type="thumbnail" placeholder="https://…" source="Movie" />
             {form.thumbnailUrl && <img src={form.thumbnailUrl} alt="thumbnail" style={{ marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
           </div>
           <div className="form-group">
@@ -872,7 +1151,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           </div>
           <div className="form-group">
             <label className="form-label">Banner URL (Hero Background)</label>
-            <ImageUploadInput value={form.bannerUrl} onChange={v => set("bannerUrl", v)} placeholder="Wide landscape image URL…" source="Movie" />
+            <ImageUploadInput value={form.bannerUrl} onChange={v => set("bannerUrl", v)} name={form.title} type="banner" placeholder="Wide landscape image URL…" source="Movie" />
             {form.bannerUrl && <img src={form.bannerUrl} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
           </div>
 
@@ -1156,13 +1435,21 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
 // ════════════════════════════════════════════════════════════════
 // CAST FORM
 // ════════════════════════════════════════════════════════════════
-function CastForm({ initial, onSave, onCancel, saving }) {
-  // roles is stored as a comma-separated string in `type` for backward compat
-  // e.g. "Actor,Director" or just "Actor"
-  const initRoles = initial?.type
-    ? initial.type.split(",").map(r => r.trim()).filter(Boolean)
-    : ["Actor"];
+function parseCastRoles(data) {
+  if (!data) return ["Actor"];
+  let list = [];
+  if (Array.isArray(data.roles) && data.roles.length > 0) {
+    list = data.roles.flatMap(r => typeof r === "string" ? r.split(",") : [r]).map(r => String(r).trim()).filter(Boolean);
+  } else if (typeof data.roles === "string" && data.roles.trim()) {
+    list = data.roles.split(",").map(r => r.trim()).filter(Boolean);
+  } else if (data.type) {
+    list = String(data.type).split(",").map(r => r.trim()).filter(Boolean);
+  }
+  return list.length > 0 ? Array.from(new Set(list)) : ["Actor"];
+}
 
+function CastForm({ initial, onSave, onCancel, saving }) {
+  const [roles, setRoles] = useState(() => parseCastRoles(initial));
   const [form, setForm] = useState({
     name: initial?.name || "",
     photo: initial?.photo || "",
@@ -1174,7 +1461,34 @@ function CastForm({ initial, onSave, onCancel, saving }) {
     website: initial?.website || "",
     instagram: initial?.instagram || "",
   });
-  const [roles, setRoles] = useState(initRoles);
+
+  useEffect(() => {
+    if (initial?._id) {
+      API.getCastMember(initial._id)
+        .then(full => {
+          if (full) {
+            const fetchedRoles = parseCastRoles(full);
+            if (fetchedRoles.length > 0) {
+              setRoles(fetchedRoles);
+            }
+            setForm(f => ({
+              ...f,
+              name: full.name ?? f.name,
+              photo: full.photo ?? f.photo,
+              banner: full.banner ?? f.banner,
+              bio: full.bio ?? f.bio,
+              dob: full.dob ?? f.dob,
+              gender: full.gender ?? f.gender,
+              location: full.location ?? f.location,
+              website: full.website ?? f.website,
+              instagram: full.instagram ?? f.instagram,
+            }));
+          }
+        })
+        .catch(err => console.error("Error fetching full cast details:", err));
+    }
+  }, [initial?._id]);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const toggleRole = (r) => {
@@ -1186,7 +1500,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
   };
 
   const handleSave = () => {
-    onSave({ ...form, type: roles.join(", ") });
+    onSave({ ...form, roles, type: roles.join(", ") });
   };
 
   return (
@@ -1222,7 +1536,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
       {/* Photo */}
       <div className="form-group">
         <label className="form-label">Profile Photo</label>
-        <ImageUploadInput value={form.photo} onChange={v => set("photo", v)} placeholder="https://…" source="Cast" />
+        <ImageUploadInput value={form.photo} onChange={v => set("photo", v)} name={form.name} type="photo" placeholder="https://…" source="Cast" />
         {form.photo && (
           <img src={form.photo} alt={form.name} style={{ marginTop: 8, width: 64, height: 64, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--gold)" }}
             onError={e => e.target.style.display = "none"} />
@@ -1232,7 +1546,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
       {/* Banner */}
       <div className="form-group">
         <label className="form-label">Profile Banner (Landscape 16:9)</label>
-        <ImageUploadInput value={form.banner} onChange={v => set("banner", v)} placeholder="https://…" source="Cast" />
+        <ImageUploadInput value={form.banner} onChange={v => set("banner", v)} name={form.name} type="banner" placeholder="https://…" source="Cast" />
         {form.banner && (
           <img src={form.banner} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 90, borderRadius: 6, objectFit: "cover", border: "1px solid var(--border)" }}
             onError={e => e.target.style.display = "none"} />
@@ -1315,12 +1629,12 @@ function ProductionForm({ initial, onSave, onCancel, saving }) {
       </div>
       <div className="form-group">
         <label className="form-label">Logo URL</label>
-        <ImageUploadInput value={form.logo} onChange={v => set("logo", v)} placeholder="https://…" source="Production" />
+        <ImageUploadInput value={form.logo} onChange={v => set("logo", v)} name={form.name} type="logo" placeholder="https://…" source="Production" />
         {form.logo && <img src={form.logo} alt="logo" style={{ marginTop: 8, height: 48, objectFit: "contain", borderRadius: 4, border: "1px solid var(--border)", padding: 2 }} onError={e => e.target.style.display = "none"} />}
       </div>
       <div className="form-group">
         <label className="form-label">Studio Banner URL (Landscape)</label>
-        <ImageUploadInput value={form.banner} onChange={v => set("banner", v)} placeholder="https://…" source="Production" />
+        <ImageUploadInput value={form.banner} onChange={v => set("banner", v)} name={form.name} type="banner" placeholder="https://…" source="Production" />
         {form.banner && <img src={form.banner} alt="banner" style={{ marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
       </div>
       <div className="form-group">
@@ -1424,7 +1738,7 @@ function NewsForm({ initial, onSave, onCancel, saving, movies }) {
         </div>
         <div className="form-group">
           <label className="form-label">Cover Image URL</label>
-          <ImageUploadInput value={form.imageUrl} onChange={v => set("imageUrl", v)} placeholder="https://…" source="News" />
+          <ImageUploadInput value={form.imageUrl} onChange={v => set("imageUrl", v)} name={form.title || form.movieTitle} type="news" placeholder="https://…" source="News" />
         </div>
       </div>
       {form.imageUrl && <img src={form.imageUrl} alt="cover" style={{ width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 5, marginBottom: 12, border: "1px solid var(--border)" }} onError={e => e.target.style.display = "none"} />}
@@ -1674,7 +1988,7 @@ function CastDetailTab({ movie, onAdd, onRemove, onToast, onMovieUpdate }) {
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       <button className="btn btn-ghost btn-sm" style={{ fontSize: "0.7rem" }} onClick={() => startEdit(c, i)}>✏ Edit</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: "var(--red)", fontSize: "0.7rem" }} onClick={() => onRemove(c.castId || String(c._id), c.name)}>✕</button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: "var(--red)", fontSize: "0.7rem" }} onClick={() => onRemove(c.castId || String(c._id), c.name, { role: c.role, type: c.type, index: i })}>✕</button>
                     </div>
                   </div>
                 )}
@@ -1713,15 +2027,16 @@ function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovi
     finally { setSaving(false); }
   };
 
-  const handleRemoveCast = (castId, name) => {
+  const handleRemoveCast = (castId, name, params = {}) => {
+    const roleLabel = params.role ? ` (as ${params.role})` : params.type ? ` (${params.type})` : "";
     setConfirm({
-      message: `Remove "${name}" from cast?`,
+      message: `Remove "${name}"${roleLabel} from cast?`,
       onConfirm: async () => {
         setConfirm(null);
         try {
-          const m = await API.adminRemoveCastFromMovie(movie._id, castId);
+          const m = await API.adminRemoveCastFromMovie(movie._id, castId, params);
           setMovie(m); onMovieUpdate?.(m);
-          onToast?.(`"${name}" removed from cast.`);
+          onToast?.(`"${name}"${roleLabel} removed from cast.`);
         } catch (e) { onToast?.(e.message, "error"); }
       }
     });
@@ -2978,6 +3293,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
         setModal({ type, mode: "edit", data: fullMovie });
       } catch (err) {
         console.error("Error fetching full movie for edit modal:", err);
+      }
+    } else if (type === "cast" && data?._id) {
+      try {
+        const fullCast = await API.getCastMember(data._id);
+        setModal({ type, mode: "edit", data: fullCast });
+      } catch (err) {
+        console.error("Error fetching full cast for edit modal:", err);
       }
     }
   };
@@ -4451,7 +4773,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                     ) : (
                       <>
                         {["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer", "Other"].map(typeLabel => {
-                          const group = pagedCast.filter(c => (c.type || "Other") === typeLabel || (typeLabel === "Other" && !["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer"].includes(c.type)));
+                          const group = pagedCast.filter(c => {
+                            const pRole = (Array.isArray(c.roles) && c.roles[0]) || (c.type ? c.type.split(",")[0].trim() : "Other");
+                            if (typeLabel === "Other") {
+                              return !["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer"].includes(pRole);
+                            }
+                            return pRole === typeLabel;
+                          });
                           if (!group.length) return null;
 
                           return (
@@ -4811,7 +5139,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div style={{ padding: "20px 0 4px" }}>
-              {modal.type === "movie" && <MovieForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveMovie} onCancel={closeModal} saving={saving} />}
+              {modal.type === "movie" && <MovieForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveMovie} onCancel={closeModal} saving={saving} onToast={onToast} />}
               {modal.type === "cast" && <CastForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveCast} onCancel={closeModal} saving={saving} />}
               {modal.type === "production" && <ProductionForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveProd} onCancel={closeModal} saving={saving} />}
               {modal.type === "news" && <NewsForm key={modal.data ? JSON.stringify(modal.data) : "new"} initial={modal.data} onSave={handleSaveNews} onCancel={closeModal} saving={saving} movies={movies} />}

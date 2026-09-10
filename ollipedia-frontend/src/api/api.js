@@ -86,6 +86,8 @@ const del = (path, token) => req("DELETE", path, undefined, token);
 
 export const API = {
   // ── Public
+  getGenres: () => get("/genres"),
+  addGenre: (name) => post("/genres", { name }),
   getMovies: () => get("/movies"),
   getMovie: (id) => get(`/movies/${id}`),
   getCast: () => get("/cast"),
@@ -141,7 +143,10 @@ export const API = {
   adminUpdateMovie: (id, body) => patch(`/admin/movies/${id}`, body, _adminToken),
   adminDeleteMovie: (id) => del(`/admin/movies/${id}`, _adminToken),
   adminAddCastToMovie: (id, entry) => post(`/admin/movies/${id}/cast`, entry, _adminToken),
-  adminRemoveCastFromMovie: (id, castId) => del(`/admin/movies/${id}/cast/${castId}`, _adminToken),
+  adminRemoveCastFromMovie: (id, castId, params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return del(`/admin/movies/${id}/cast/${castId}${qp ? `?${qp}` : ""}`, _adminToken);
+  },
   adminAddSong: (id, song) => post(`/admin/movies/${id}/songs`, song, _adminToken),
   adminUpdateSong: (id, idx, song) => patch(`/admin/movies/${id}/songs/${idx}`, song, _adminToken),
   adminAddVideo: (id, video) => post(`/admin/movies/${id}/videos`, video, _adminToken),

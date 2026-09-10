@@ -52,7 +52,16 @@ export function MovieCard({ movie, portalMode }) {
 }
 
 // ── Reusable Image Upload Input (Text + File Upload + Copy) ──
-export function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input", source = "Direct Upload" }) {
+export function ImageUploadInput({
+  value,
+  onChange,
+  placeholder = "Enter URL...",
+  className = "form-input",
+  source = "Direct Upload",
+  name = "",
+  title = "",
+  type = "",
+}) {
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef(null);
@@ -65,6 +74,10 @@ export function ImageUploadInput({ value, onChange, placeholder = "Enter URL..."
       const fd = new FormData();
       fd.append("image", file);
       fd.append("source", source);
+      const entityName = name || title;
+      if (entityName) fd.append("name", entityName);
+      if (type) fd.append("type", type);
+
       const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
       const res = await fetch(`${API_BASE}/admin/upload-blog-image`, {
         method: "POST",
