@@ -12,22 +12,25 @@ const VOTE_LABELS = {
   time_waste: { label: "Time Waste", color: "#ef4444", bg: "rgba(239,68,68,0.15)" }
 };
 function getActivityInfo(act) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
   const type = act.type || "ACTIVITY";
   switch (type) {
-    case "REGISTER":
+    case "REGISTER": {
+      const isGoogle = ((_a = act.metadata) == null ? void 0 : _a.provider) === "google" || ((_b = act.userId) == null ? void 0 : _b.authProvider) === "google" || ((_c = act.userId) == null ? void 0 : _c.googleId) || /google/i.test(((_d = act.metadata) == null ? void 0 : _d.snippet) || "");
       return {
-        icon: "👋",
-        title: "Joined Ollypedia Community",
-        desc: ((_a = act.metadata) == null ? void 0 : _a.snippet) || "New community member signed up",
-        color: "#c9973a",
-        bg: "rgba(201,151,58,0.15)"
+        icon: isGoogle ? "🌐" : "👋",
+        title: isGoogle ? "Joined via Google OAuth" : "Joined Ollypedia Community",
+        desc: ((_e = act.metadata) == null ? void 0 : _e.snippet) || (isGoogle ? "New member onboarded via Google" : "New community member signed up"),
+        color: isGoogle ? "#60a5fa" : "#c9973a",
+        bg: isGoogle ? "rgba(59, 130, 246, 0.15)" : "rgba(201,151,58,0.15)",
+        isGoogle
       };
+    }
     case "VOTE_MOVIE":
       return {
         icon: "🗳️",
         title: "Voted on Movie",
-        desc: ((_b = act.metadata) == null ? void 0 : _b.snippet) || `Voted on ${((_c = act.metadata) == null ? void 0 : _c.movieTitle) || "a movie"}`,
+        desc: ((_f = act.metadata) == null ? void 0 : _f.snippet) || `Voted on ${((_g = act.metadata) == null ? void 0 : _g.movieTitle) || "a movie"}`,
         color: "#3b82f6",
         bg: "rgba(59,130,246,0.15)"
       };
@@ -35,7 +38,7 @@ function getActivityInfo(act) {
       return {
         icon: "💬",
         title: "Started Discussion",
-        desc: ((_d = act.metadata) == null ? void 0 : _d.snippet) || `Created discussion in ${((_e = act.metadata) == null ? void 0 : _e.movieTitle) || "movie"}`,
+        desc: ((_h = act.metadata) == null ? void 0 : _h.snippet) || `Created discussion in ${((_i = act.metadata) == null ? void 0 : _i.movieTitle) || "movie"}`,
         color: "#8b5cf6",
         bg: "rgba(139,92,246,0.15)"
       };
@@ -43,7 +46,7 @@ function getActivityInfo(act) {
       return {
         icon: "💭",
         title: "Posted Comment",
-        desc: ((_f = act.metadata) == null ? void 0 : _f.snippet) || "Commented in discussion",
+        desc: ((_j = act.metadata) == null ? void 0 : _j.snippet) || "Commented in discussion",
         color: "#ec4899",
         bg: "rgba(236,72,153,0.15)"
       };
@@ -52,7 +55,7 @@ function getActivityInfo(act) {
       return {
         icon: "❤️",
         title: "Liked Content",
-        desc: ((_g = act.metadata) == null ? void 0 : _g.snippet) || "Liked a discussion or comment",
+        desc: ((_k = act.metadata) == null ? void 0 : _k.snippet) || "Liked a discussion or comment",
         color: "#ef4444",
         bg: "rgba(239,68,68,0.15)"
       };
@@ -60,7 +63,7 @@ function getActivityInfo(act) {
       return {
         icon: "🏆",
         title: "Completed Quiz",
-        desc: ((_h = act.metadata) == null ? void 0 : _h.snippet) || "Finished an Ollypedia quiz",
+        desc: ((_l = act.metadata) == null ? void 0 : _l.snippet) || "Finished an Ollypedia quiz",
         color: "#10b981",
         bg: "rgba(16,185,129,0.15)"
       };
@@ -68,7 +71,7 @@ function getActivityInfo(act) {
       return {
         icon: "⚡",
         title: type.replace(/_/g, " "),
-        desc: ((_i = act.metadata) == null ? void 0 : _i.snippet) || JSON.stringify(act.metadata || {}),
+        desc: ((_m = act.metadata) == null ? void 0 : _m.snippet) || JSON.stringify(act.metadata || {}),
         color: "#94a3b8",
         bg: "rgba(148,163,184,0.15)"
       };
@@ -91,7 +94,7 @@ function formatDate(isoStr) {
   }
 }
 function CommunityPanel({ onToast }) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u;
+  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
   const [activeTab, setActiveTab] = useState("overview");
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -526,7 +529,10 @@ function CommunityPanel({ onToast }) {
                   ),
                   /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
                     /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }, children: [
-                      /* @__PURE__ */ jsx("span", { style: { fontWeight: 700, fontSize: "0.84rem", color: "#f8fafc" }, children: ((_a2 = act.userId) == null ? void 0 : _a2.displayName) || ((_b2 = act.userId) == null ? void 0 : _b2.username) || "A Member" }),
+                      /* @__PURE__ */ jsxs("span", { style: { fontWeight: 700, fontSize: "0.84rem", color: "#f8fafc", display: "flex", alignItems: "center", gap: 6 }, children: [
+                        ((_a2 = act.userId) == null ? void 0 : _a2.displayName) || ((_b2 = act.userId) == null ? void 0 : _b2.username) || "A Member",
+                        info.isGoogle && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.66rem", padding: "1px 5px", borderRadius: 4, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }, children: "Google" })
+                      ] }),
                       /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: "#64748b", flexShrink: 0 }, children: formatDate(act.createdAt) })
                     ] }),
                     /* @__PURE__ */ jsx("div", { style: { fontSize: "0.78rem", color: "#94a3b8", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: info.desc })
@@ -665,7 +671,10 @@ function CommunityPanel({ onToast }) {
                     }
                   ),
                   /* @__PURE__ */ jsxs("div", { children: [
-                    /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, color: "#f8fafc" }, children: u.displayName || u.username }),
+                    /* @__PURE__ */ jsxs("div", { style: { fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: 6 }, children: [
+                      u.displayName || u.username,
+                      (u.authProvider === "google" || u.googleId) && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", padding: "1px 6px", borderRadius: 4, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }, children: "Google" })
+                    ] }),
                     /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.75rem", color: "#94a3b8" }, children: [
                       "@",
                       u.username
@@ -913,7 +922,8 @@ function CommunityPanel({ onToast }) {
                         act.userId.email,
                         ")"
                       ] }),
-                      /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", padding: "1px 6px", borderRadius: 8, background: info.bg, color: info.color, fontWeight: 700 }, children: info.title })
+                      /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", padding: "1px 6px", borderRadius: 8, background: info.bg, color: info.color, fontWeight: 700 }, children: info.title }),
+                      info.isGoogle && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", padding: "1px 6px", borderRadius: 6, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }, children: "🌐 Google OAuth" })
                     ] }),
                     /* @__PURE__ */ jsx("span", { style: { fontSize: "0.75rem", color: "#64748b" }, children: formatDate(act.createdAt) })
                   ] }),
@@ -1188,20 +1198,21 @@ function CommunityPanel({ onToast }) {
           /* @__PURE__ */ jsxs("div", { style: { flex: 1 }, children: [
             /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
               /* @__PURE__ */ jsx("h3", { style: { margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#f8fafc" }, children: ((_e = userDetail.user) == null ? void 0 : _e.displayName) || ((_f = userDetail.user) == null ? void 0 : _f.username) }),
-              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", padding: "2px 8px", borderRadius: 10, background: ((_g = userDetail.user) == null ? void 0 : _g.status) === "active" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)", color: ((_h = userDetail.user) == null ? void 0 : _h.status) === "active" ? "#10b981" : "#ef4444", fontWeight: 700 }, children: (_i = userDetail.user) == null ? void 0 : _i.status })
+              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", padding: "2px 8px", borderRadius: 10, background: ((_g = userDetail.user) == null ? void 0 : _g.status) === "active" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)", color: ((_h = userDetail.user) == null ? void 0 : _h.status) === "active" ? "#10b981" : "#ef4444", fontWeight: 700 }, children: (_i = userDetail.user) == null ? void 0 : _i.status }),
+              (((_j = userDetail.user) == null ? void 0 : _j.authProvider) === "google" || ((_k = userDetail.user) == null ? void 0 : _k.googleId)) && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", padding: "2px 8px", borderRadius: 10, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }, children: "🌐 Google OAuth" })
             ] }),
             /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.82rem", color: "#94a3b8", marginTop: 4 }, children: [
               "@",
-              (_j = userDetail.user) == null ? void 0 : _j.username,
+              (_l = userDetail.user) == null ? void 0 : _l.username,
               " • ",
-              (_k = userDetail.user) == null ? void 0 : _k.email
+              (_m = userDetail.user) == null ? void 0 : _m.email
             ] }),
             /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.75rem", color: "#64748b", marginTop: 4 }, children: [
               "Joined on ",
-              formatDate((_l = userDetail.user) == null ? void 0 : _l.createdAt)
+              formatDate((_n = userDetail.user) == null ? void 0 : _n.createdAt)
             ] })
           ] }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: ((_m = userDetail.user) == null ? void 0 : _m.status) === "active" ? /* @__PURE__ */ jsx(
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: ((_o = userDetail.user) == null ? void 0 : _o.status) === "active" ? /* @__PURE__ */ jsx(
             "button",
             {
               onClick: () => handleUpdateStatus(userDetail.user._id, "banned"),
@@ -1220,10 +1231,10 @@ function CommunityPanel({ onToast }) {
           ) })
         ] }),
         /* @__PURE__ */ jsx("div", { style: { display: "flex", gap: 8, borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 12, marginBottom: 16 }, children: [
-          { id: "activities", label: `⚡ Activities (${((_n = userDetail.activities) == null ? void 0 : _n.length) || 0})` },
-          { id: "votes", label: `🗳️ Movie Votes (${((_o = userDetail.votes) == null ? void 0 : _o.length) || 0})` },
-          { id: "discussions", label: `💬 Discussions (${((_p = userDetail.discussions) == null ? void 0 : _p.length) || 0})` },
-          { id: "comments", label: `💭 Comments (${((_q = userDetail.comments) == null ? void 0 : _q.length) || 0})` }
+          { id: "activities", label: `⚡ Activities (${((_p = userDetail.activities) == null ? void 0 : _p.length) || 0})` },
+          { id: "votes", label: `🗳️ Movie Votes (${((_q = userDetail.votes) == null ? void 0 : _q.length) || 0})` },
+          { id: "discussions", label: `💬 Discussions (${((_r = userDetail.discussions) == null ? void 0 : _r.length) || 0})` },
+          { id: "comments", label: `💭 Comments (${((_s = userDetail.comments) == null ? void 0 : _s.length) || 0})` }
         ].map((mtab) => /* @__PURE__ */ jsx(
           "button",
           {
@@ -1242,7 +1253,7 @@ function CommunityPanel({ onToast }) {
           },
           mtab.id
         )) }),
-        userModalTab === "activities" && /* @__PURE__ */ jsx("div", { children: ((_r = userDetail.activities) == null ? void 0 : _r.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.activities.map((act) => {
+        userModalTab === "activities" && /* @__PURE__ */ jsx("div", { children: ((_t = userDetail.activities) == null ? void 0 : _t.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.activities.map((act) => {
           const info = getActivityInfo(act);
           return /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.04)" }, children: [
             /* @__PURE__ */ jsx("span", { style: { fontSize: "1.2rem" }, children: info.icon }),
@@ -1255,7 +1266,7 @@ function CommunityPanel({ onToast }) {
             ] })
           ] }, act._id);
         }) }) : /* @__PURE__ */ jsx("div", { style: { textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: "0.85rem" }, children: "No activities recorded yet for this member." }) }),
-        userModalTab === "votes" && /* @__PURE__ */ jsx("div", { children: ((_s = userDetail.votes) == null ? void 0 : _s.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.votes.map((v) => {
+        userModalTab === "votes" && /* @__PURE__ */ jsx("div", { children: ((_u = userDetail.votes) == null ? void 0 : _u.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.votes.map((v) => {
           var _a2, _b2;
           const voteInfo = VOTE_LABELS[v.voteType] || { label: v.voteType, color: "#94a3b8", bg: "rgba(255,255,255,0.05)" };
           return /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.04)" }, children: [
@@ -1269,7 +1280,7 @@ function CommunityPanel({ onToast }) {
             /* @__PURE__ */ jsx("span", { style: { fontSize: "0.75rem", padding: "3px 10px", borderRadius: 10, background: voteInfo.bg, color: voteInfo.color, fontWeight: 700 }, children: voteInfo.label })
           ] }, v._id);
         }) }) : /* @__PURE__ */ jsx("div", { style: { textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: "0.85rem" }, children: "This member has not cast any movie votes yet." }) }),
-        userModalTab === "discussions" && /* @__PURE__ */ jsx("div", { children: ((_t = userDetail.discussions) == null ? void 0 : _t.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.discussions.map((d) => /* @__PURE__ */ jsxs("div", { style: { padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.04)" }, children: [
+        userModalTab === "discussions" && /* @__PURE__ */ jsx("div", { children: ((_v = userDetail.discussions) == null ? void 0 : _v.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.discussions.map((d) => /* @__PURE__ */ jsxs("div", { style: { padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.04)" }, children: [
           /* @__PURE__ */ jsx("div", { style: { fontWeight: 700, fontSize: "0.88rem", color: "#f8fafc" }, children: d.title }),
           /* @__PURE__ */ jsx("div", { style: { fontSize: "0.8rem", color: "#94a3b8", marginTop: 4 }, children: d.content }),
           /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "#64748b", marginTop: 6 }, children: [
@@ -1279,7 +1290,7 @@ function CommunityPanel({ onToast }) {
             " comments"
           ] })
         ] }, d._id)) }) : /* @__PURE__ */ jsx("div", { style: { textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: "0.85rem" }, children: "This member has not created any discussions yet." }) }),
-        userModalTab === "comments" && /* @__PURE__ */ jsx("div", { children: ((_u = userDetail.comments) == null ? void 0 : _u.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.comments.map((c) => /* @__PURE__ */ jsxs("div", { style: { padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.04)" }, children: [
+        userModalTab === "comments" && /* @__PURE__ */ jsx("div", { children: ((_w = userDetail.comments) == null ? void 0 : _w.length) > 0 ? /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10, maxHeight: 380, overflowY: "auto" }, children: userDetail.comments.map((c) => /* @__PURE__ */ jsxs("div", { style: { padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.04)" }, children: [
           /* @__PURE__ */ jsx("div", { style: { fontSize: "0.84rem", color: "#cbd5e1" }, children: c.content }),
           /* @__PURE__ */ jsx("div", { style: { fontSize: "0.72rem", color: "#64748b", marginTop: 4 }, children: formatDate(c.createdAt) })
         ] }, c._id)) }) : /* @__PURE__ */ jsx("div", { style: { textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: "0.85rem" }, children: "This member has not posted any comments yet." }) })

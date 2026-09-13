@@ -401,14 +401,14 @@ async function generateArticle(movie, type) {
 async function publishArticle(movie, article, type, youtubeVideoId = "") {
   const token = getAdminToken();
   if (!token) throw new Error("Not logged in as admin.");
-  const title = autoTitle(movie, type);
+  const title2 = autoTitle(movie, type);
   const slug = slugify(`${movie.title}-${type}-${Date.now().toString(36)}`);
   const excerpt = article.slice(0, 200).trim() + "…";
   const res = await fetch(`${API_BASE}/admin/blog`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
-      title,
+      title: title2,
       slug,
       content: article,
       excerpt,
@@ -419,7 +419,7 @@ async function publishArticle(movie, article, type, youtubeVideoId = "") {
       movieId: movie._id,
       author: "OllyPedia Editorial",
       readTime: readTime(article),
-      seoTitle: title,
+      seoTitle: title2,
       seoDesc: excerpt,
       published: true,
       ...youtubeVideoId.trim() ? { youtubeVideoId: youtubeVideoId.trim() } : {}
@@ -433,16 +433,16 @@ async function publishArticle(movie, article, type, youtubeVideoId = "") {
   invalidateBlogCache();
   return post;
 }
-async function publishBlogPost({ title, content, category, tags, coverImage, movie, castMember, published, youtubeVideoId }) {
+async function publishBlogPost({ title: title2, content, category, tags, coverImage, movie, castMember, published, youtubeVideoId }) {
   const token = getAdminToken();
   if (!token) throw new Error("Not logged in as admin.");
-  const slug = slugify(`${title}-${Date.now().toString(36)}`);
+  const slug = slugify(`${title2}-${Date.now().toString(36)}`);
   const excerpt = content.slice(0, 200).trim() + "…";
   const res = await fetch(`${API_BASE}/admin/blog`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
-      title: title.trim(),
+      title: title2.trim(),
       slug,
       content: content.trim(),
       excerpt,
@@ -455,7 +455,7 @@ async function publishBlogPost({ title, content, category, tags, coverImage, mov
       castId: (castMember == null ? void 0 : castMember._id) || null,
       author: "OllyPedia Editorial",
       readTime: readTime(content),
-      seoTitle: title.trim(),
+      seoTitle: title2.trim(),
       seoDesc: excerpt,
       published: published !== false,
       ...(youtubeVideoId == null ? void 0 : youtubeVideoId.trim()) ? { youtubeVideoId: youtubeVideoId.trim() } : {}
@@ -1248,7 +1248,7 @@ function EntityLinkerUI({ content, movies = [], cast = [], onChange }) {
   ] });
 }
 function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast }) {
-  const [title, setTitle] = useState(article.title || "");
+  const [title2, setTitle] = useState(article.title || "");
   const [content, setContent] = useState(article.content || "");
   const [excerpt, setExcerpt] = useState(article.excerpt || "");
   const [blogCategory, setBlogCategory] = useState(article.category || BLOG_CATEGORIES[0]);
@@ -1334,7 +1334,7 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
     try {
       const cleanId = parseYtId(youtubeVideoId);
       const updated = await updateArticle(article._id, {
-        title: title.trim(),
+        title: title2.trim(),
         content: content.trim(),
         excerpt: excerpt.trim() || content.slice(0, 200).trim() + "…",
         category: blogCategory,
@@ -1365,7 +1365,7 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
     /* @__PURE__ */ jsxs("div", { className: "bg-modal-body", children: [
       /* @__PURE__ */ jsxs("div", { children: [
         /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Title" }),
-        /* @__PURE__ */ jsx("input", { className: "bg-field-input", value: title, onChange: (e) => setTitle(e.target.value) })
+        /* @__PURE__ */ jsx("input", { className: "bg-field-input", value: title2, onChange: (e) => setTitle(e.target.value) })
       ] }),
       /* @__PURE__ */ jsxs("div", { children: [
         /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Excerpt" }),
@@ -1394,7 +1394,7 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
       ] }),
       /* @__PURE__ */ jsxs("div", { style: { marginBottom: 10 }, children: [
         /* @__PURE__ */ jsx("label", { className: "bg-field-label", children: "Cover Image URL" }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, placeholder: "https://…", source: "Blog" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, name: title2, type: "cover", placeholder: "https://…", source: "Blog" }),
         coverImage && /* @__PURE__ */ jsx(
           "img",
           {
@@ -1560,7 +1560,7 @@ function EditModal({ article, movies = [], cast = [], onClose, onSaved, onToast 
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "bg-modal-foot", children: [
       /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-ghost", onClick: onClose, children: "Cancel" }),
-      /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-gold", onClick: save, disabled: saving || !title.trim() || !content.trim(), children: saving ? /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("button", { className: "bg-btn bg-btn-gold", onClick: save, disabled: saving || !title2.trim() || !content.trim(), children: saving ? /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx(Spin, {}),
         " Saving…"
       ] }) : "💾 Save Changes" })
@@ -1899,7 +1899,7 @@ IMPORTANT: Respond ONLY with a valid JSON object (no markdown, no backticks, no 
         "Cover Image URL ",
         /* @__PURE__ */ jsx("span", { style: { fontWeight: 400, textTransform: "none" }, children: "(optional)" })
       ] }),
-      /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, placeholder: "https://…", source: "Blog" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: coverImage, onChange: setCoverImage, name: title, type: "cover", placeholder: "https://…", source: "Blog" }),
       coverImage && /* @__PURE__ */ jsx(
         "img",
         {
@@ -2415,7 +2415,7 @@ function CastPanel({ castMember, movies = [], cast = [], onToast }) {
   const handlePublish = async () => {
     if (!genContent.trim() || !activeType) return;
     try {
-      const title = autoCastTitle(castMember, activeType);
+      const title2 = autoCastTitle(castMember, activeType);
       const slug = slugify(`${castMember.name}-${activeType}-${Date.now().toString(36)}`);
       const excerpt = genContent.slice(0, 200).trim() + "…";
       const token = getAdminToken();
@@ -2423,7 +2423,7 @@ function CastPanel({ castMember, movies = [], cast = [], onToast }) {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          title,
+          title: title2,
           slug,
           content: genContent,
           excerpt,
@@ -2436,7 +2436,7 @@ function CastPanel({ castMember, movies = [], cast = [], onToast }) {
           movieId: null,
           author: "OllyPedia Editorial",
           readTime: readTime(genContent),
-          seoTitle: title,
+          seoTitle: title2,
           seoDesc: excerpt,
           published: true,
           ...ytId.trim() ? { youtubeVideoId: parseYtId(ytId) } : {}
@@ -2452,7 +2452,7 @@ function CastPanel({ castMember, movies = [], cast = [], onToast }) {
       setActiveType(null);
       setGenContent("");
       setYtId("");
-      onToast(`✅ Published: "${title}"`, "success");
+      onToast(`✅ Published: "${title2}"`, "success");
     } catch (err) {
       onToast("❌ " + err.message, "error");
     }

@@ -80,6 +80,8 @@ const patch = (path, body, token) => req("PATCH", path, body, token);
 const del = (path, token) => req("DELETE", path, void 0, token);
 const API = {
   // ── Public
+  getGenres: () => get("/genres"),
+  addGenre: (name) => post("/genres", { name }),
   getMovies: () => get("/movies"),
   getMovie: (id) => get(`/movies/${id}`),
   getCast: () => get("/cast"),
@@ -130,7 +132,10 @@ const API = {
   adminUpdateMovie: (id, body) => patch(`/admin/movies/${id}`, body, _adminToken),
   adminDeleteMovie: (id) => del(`/admin/movies/${id}`, _adminToken),
   adminAddCastToMovie: (id, entry) => post(`/admin/movies/${id}/cast`, entry, _adminToken),
-  adminRemoveCastFromMovie: (id, castId) => del(`/admin/movies/${id}/cast/${castId}`, _adminToken),
+  adminRemoveCastFromMovie: (id, castId, params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return del(`/admin/movies/${id}/cast/${castId}${qp ? `?${qp}` : ""}`, _adminToken);
+  },
   adminAddSong: (id, song) => post(`/admin/movies/${id}/songs`, song, _adminToken),
   adminUpdateSong: (id, idx, song) => patch(`/admin/movies/${id}/songs/${idx}`, song, _adminToken),
   adminAddVideo: (id, video) => post(`/admin/movies/${id}/videos`, video, _adminToken),
@@ -809,7 +814,16 @@ function MovieCard$3({ movie, portalMode }) {
     ] })
   ] });
 }
-function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", className = "form-input", source = "Direct Upload" }) {
+function ImageUploadInput({
+  value,
+  onChange,
+  placeholder = "Enter URL...",
+  className = "form-input",
+  source = "Direct Upload",
+  name = "",
+  title = "",
+  type = ""
+}) {
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef(null);
@@ -822,6 +836,9 @@ function ImageUploadInput({ value, onChange, placeholder = "Enter URL...", class
       const fd2 = new FormData();
       fd2.append("image", file);
       fd2.append("source", source);
+      const entityName = name || title;
+      if (entityName) fd2.append("name", entityName);
+      if (type) fd2.append("type", type);
       const API_BASE2 = "http://localhost:4000/api";
       const res = await fetch(`${API_BASE2}/admin/upload-blog-image`, {
         method: "POST",
@@ -2508,7 +2525,7 @@ const Cache = {
     return ((_a = store[key]) == null ? void 0 : _a.data) ?? null;
   }
 };
-const GENRES$2 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Musical", "Biographical", "Devotional", "Horror"];
+const GENRES$3 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Musical", "Biographical", "Devotional", "Horror"];
 const VERDICTS$1 = ["Upcoming", "Blockbuster", "Super Hit", "Hit", "Average", "Flop", "Disaster"];
 const VS = { "Blockbuster": "#95e5b8", "Super Hit": "#95e5b8", "Hit": "#a3e8a0", "Average": "#e8c87a", "Flop": "#e59595", "Disaster": "#e59595", "Upcoming": "#7aaae8" };
 const YEAR_PREVIEW = 16;
@@ -2921,7 +2938,7 @@ function Movies() {
           "🎭 Genre",
           /* @__PURE__ */ jsxs("select", { value: fGenre, onChange: (e) => setFGenre(e.target.value), title: "Genre", children: [
             /* @__PURE__ */ jsx("option", { value: "", children: "All Genres" }),
-            GENRES$2.map((g) => /* @__PURE__ */ jsx("option", { value: g, children: g }, g))
+            GENRES$3.map((g) => /* @__PURE__ */ jsx("option", { value: g, children: g }, g))
           ] })
         ] }) }),
         /* @__PURE__ */ jsx("div", { className: `mv-chip${fVerdict ? " on" : ""}`, children: fVerdict ? /* @__PURE__ */ jsxs(Fragment, { children: [
@@ -3090,7 +3107,7 @@ const fmtDate$5 = (d, precision) => {
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? s : dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 };
-const GENRES$1 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
+const GENRES$2 = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror"];
 const CATS$2 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const VDICT = ["Upcoming", "Average", "Hit", "Super Hit", "Blockbuster", "Flop", "Disaster"];
 const NCATS = ["Update", "Release", "Trailer", "Song", "Award", "Interview", "Other"];
@@ -4866,7 +4883,7 @@ function MovieDetails({ production, onToast, portalMode }) {
         /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Poster URL (Portrait 2:3)" }),
-            /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.posterUrl || "", onChange: (v) => setE("posterUrl", v), source: "Movie" })
+            /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.posterUrl || "", onChange: (v) => setE("posterUrl", v), name: (movie == null ? void 0 : movie.title) || editForm.title, type: "poster", source: "Movie" })
           ] }),
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Verdict" }),
@@ -4875,7 +4892,7 @@ function MovieDetails({ production, onToast, portalMode }) {
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Genres" }),
-          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 }, children: GENRES$1.map((g) => /* @__PURE__ */ jsx("button", { type: "button", className: `btn btn-sm ${(editForm.genre || []).includes(g) ? "btn-gold" : "btn-outline"}`, onClick: () => toggleGenre(g), children: g }, g)) })
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 }, children: GENRES$2.map((g) => /* @__PURE__ */ jsx("button", { type: "button", className: `btn btn-sm ${(editForm.genre || []).includes(g) ? "btn-gold" : "btn-outline"}`, onClick: () => toggleGenre(g), children: g }, g)) })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Synopsis" }),
@@ -4883,11 +4900,11 @@ function MovieDetails({ production, onToast, portalMode }) {
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Thumbnail URL (Landscape 16:9)" }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.thumbnailUrl || "", onChange: (v) => setE("thumbnailUrl", v), source: "Movie" })
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.thumbnailUrl || "", onChange: (v) => setE("thumbnailUrl", v), name: (movie == null ? void 0 : movie.title) || editForm.title, type: "thumbnail", source: "Movie" })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
           /* @__PURE__ */ jsx("label", { className: "form-label", children: "Banner URL (Hero Background)" }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.bannerUrl || "", onChange: (v) => setE("bannerUrl", v), placeholder: "Wide landscape image URL…", source: "Movie" })
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: editForm.bannerUrl || "", onChange: (v) => setE("bannerUrl", v), name: (movie == null ? void 0 : movie.title) || editForm.title, type: "banner", placeholder: "Wide landscape image URL…", source: "Movie" })
         ] })
       ] }),
       tab === "cast" && /* @__PURE__ */ jsxs("div", { children: [
@@ -11093,6 +11110,29 @@ function Home({ production }) {
     ] })
   ] });
 }
+const GENRES$1 = [
+  "Action",
+  "Drama",
+  "Romance",
+  "Comedy",
+  "Thriller",
+  "Family",
+  "Historical",
+  "Devotional",
+  "Horror",
+  "Action-Drama",
+  "Crime",
+  "Mystery",
+  "Adventure",
+  "Animation",
+  "Biographical",
+  "Fantasy",
+  "Musical",
+  "Sci-Fi",
+  "Social",
+  "Sports",
+  "Suspense"
+];
 const CATEGORIES$1 = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES$1 = ["Actor", "Actress", "Director", "Producer", "Music Director", "Cinematographer", "Choreographer", "Lyricist", "Singer", "Editor", "Other"];
 const STEPS = ["Basic Info", "Cast & Crew", "Collaborators", "Media", "Review & Submit"];
@@ -11181,6 +11221,88 @@ function AddMovie({ production, onToast }) {
     thumbnailUrl: ""
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleGenre = (g) => set("genre", form.genre.includes(g) ? form.genre.filter((x) => x !== g) : [...form.genre, g]);
+  const [allGenres, setAllGenres] = useState(() => {
+    try {
+      const cached = localStorage.getItem("olly_genres");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = Array.from(/* @__PURE__ */ new Set([...GENRES$1, ...parsed]));
+          return merged.sort((a, b) => a.localeCompare(b));
+        }
+      }
+    } catch {
+    }
+    return [...GENRES$1];
+  });
+  const [customGenre, setCustomGenre] = useState("");
+  const [addingGenre, setAddingGenre] = useState(false);
+  const customGenreInputRef = useRef(null);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await API.getGenres();
+        if (mounted && res && Array.isArray(res.genres)) {
+          setAllGenres((prev) => {
+            const setG = /* @__PURE__ */ new Set([...GENRES$1, ...prev, ...res.genres]);
+            const sorted = Array.from(setG).filter(Boolean).sort((a, b) => a.localeCompare(b));
+            try {
+              localStorage.setItem("olly_genres", JSON.stringify(sorted));
+            } catch {
+            }
+            return sorted;
+          });
+        }
+      } catch (err) {
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  const handleAddCustomGenre = async (e) => {
+    if (e) e.preventDefault();
+    const trimmed = (customGenre || "").trim();
+    if (!trimmed) return;
+    const formatted = trimmed.split(" ").map((w) => w ? w.charAt(0).toUpperCase() + w.slice(1) : "").join(" ");
+    if (!form.genre.includes(formatted)) {
+      set("genre", [...form.genre, formatted]);
+    }
+    setAllGenres((prev) => {
+      const exists = prev.some((g) => g.toLowerCase() === formatted.toLowerCase());
+      const updated = exists ? prev : [...prev, formatted].sort((a, b) => a.localeCompare(b));
+      try {
+        localStorage.setItem("olly_genres", JSON.stringify(updated));
+      } catch {
+      }
+      return updated;
+    });
+    setCustomGenre("");
+    try {
+      setAddingGenre(true);
+      await API.addGenre(formatted);
+      onToast == null ? void 0 : onToast(`Genre "${formatted}" saved to dropdown!`, "success");
+    } catch {
+    } finally {
+      setAddingGenre(false);
+    }
+  };
+  const handleSelectDropdownGenre = (e) => {
+    var _a2;
+    const val = e.target.value;
+    if (!val) return;
+    if (val === "__custom__") {
+      (_a2 = customGenreInputRef.current) == null ? void 0 : _a2.focus();
+      e.target.value = "";
+      return;
+    }
+    if (!form.genre.includes(val)) {
+      set("genre", [...form.genre, val]);
+    }
+    e.target.value = "";
+  };
   const [cast, setCast] = useState([]);
   const [castQuery, setCastQuery] = useState("");
   const [castResults, setCastResults] = useState([]);
@@ -11233,7 +11355,6 @@ function AddMovie({ production, onToast }) {
   const addExistingCast = useCallback((c) => {
     const idStr = String(c._id || "").trim();
     if (!isOid$1(idStr)) return;
-    if (cast.some((x) => x.castId === idStr)) return;
     setCast((prev) => [...prev, {
       castId: idStr,
       // ← plain "abc123..." hex string, NEVER ObjectId object
@@ -11245,15 +11366,10 @@ function AddMovie({ production, onToast }) {
     }]);
     setCastQuery("");
     setCastResults([]);
-  }, [cast]);
+  }, []);
   const addNewCast = useCallback(() => {
     const name = nc.name.trim();
     if (!name) return;
-    if (cast.some((x) => x.name.toLowerCase() === name.toLowerCase())) {
-      setNc({ name: "", type: "Actor", role: "", photo: "", bio: "" });
-      setShowNewCast(false);
-      return;
-    }
     setCast((prev) => [...prev, {
       castId: "",
       // ← empty string signals "create new" to backend
@@ -11376,6 +11492,123 @@ function AddMovie({ production, onToast }) {
             /* @__PURE__ */ jsx("input", { className: "form-input", value: form.language, onChange: (e) => set("language", e.target.value) })
           ] })
         ] }),
+        /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }, children: [
+            /* @__PURE__ */ jsx("label", { className: "form-label", style: { marginBottom: 0 }, children: "Genres" }),
+            form.genre.length > 0 && /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.76rem", color: "var(--gold)", fontWeight: 600 }, children: [
+              form.genre.length,
+              " selected"
+            ] })
+          ] }),
+          form.genre.length > 0 ? /* @__PURE__ */ jsx("div", { style: {
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            marginBottom: 10,
+            padding: "8px 10px",
+            background: "rgba(201,151,58,0.08)",
+            borderRadius: 8,
+            border: "1px solid rgba(201,151,58,0.25)"
+          }, children: form.genre.map((g) => /* @__PURE__ */ jsxs("span", { style: {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 10px",
+            borderRadius: 16,
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            background: "var(--gold)",
+            color: "#000"
+          }, children: [
+            g,
+            /* @__PURE__ */ jsx(
+              "span",
+              {
+                role: "button",
+                tabIndex: 0,
+                onClick: (e) => {
+                  e.stopPropagation();
+                  toggleGenre(g);
+                },
+                title: `Remove ${g}`,
+                style: { cursor: "pointer", fontSize: "0.95rem", fontWeight: "bold", lineHeight: 1, opacity: 0.75, marginLeft: 2 },
+                onMouseEnter: (e) => e.currentTarget.style.opacity = 1,
+                onMouseLeave: (e) => e.currentTarget.style.opacity = 0.75,
+                children: "✕"
+              }
+            )
+          ] }, g)) }) : /* @__PURE__ */ jsx("div", { style: { fontSize: "0.78rem", color: "var(--muted)", marginBottom: 8, fontStyle: "italic" }, children: "Select genre(s) from dropdown or type a custom genre below." }),
+          /* @__PURE__ */ jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }, children: [
+            /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsxs("select", { className: "form-select", defaultValue: "", onChange: handleSelectDropdownGenre, style: { width: "100%", height: 38 }, children: [
+              /* @__PURE__ */ jsx("option", { value: "", children: "▼ Choose Genre from Dropdown..." }),
+              /* @__PURE__ */ jsx("optgroup", { label: "Available Genres", children: allGenres.map((g) => /* @__PURE__ */ jsxs("option", { value: g, disabled: form.genre.includes(g), children: [
+                g,
+                " ",
+                form.genre.includes(g) ? " (Selected)" : ""
+              ] }, g)) }),
+              /* @__PURE__ */ jsx("option", { value: "__custom__", children: "➕ + Enter Custom Genre..." })
+            ] }) }),
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+              /* @__PURE__ */ jsx(
+                "input",
+                {
+                  ref: customGenreInputRef,
+                  type: "text",
+                  className: "form-input",
+                  placeholder: "Enter custom genre...",
+                  value: customGenre,
+                  onChange: (e) => setCustomGenre(e.target.value),
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustomGenre();
+                    }
+                  },
+                  style: { flex: 1, height: 38 }
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                "button",
+                {
+                  type: "button",
+                  className: "btn btn-gold btn-sm",
+                  onClick: handleAddCustomGenre,
+                  disabled: addingGenre || !customGenre.trim(),
+                  style: { whiteSpace: "nowrap", padding: "0 14px", height: 38 },
+                  title: "Add custom genre and save to dropdown for future",
+                  children: addingGenre ? "Saving..." : "+ Add"
+                }
+              )
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxs("div", { style: { marginTop: 6 }, children: [
+            /* @__PURE__ */ jsx("div", { style: { fontSize: "0.72rem", color: "var(--muted)", marginBottom: 4 }, children: "Quick Toggle:" }),
+            /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 }, children: allGenres.map((g) => {
+              const isSelected = form.genre.includes(g);
+              return /* @__PURE__ */ jsx(
+                "button",
+                {
+                  type: "button",
+                  onClick: () => toggleGenre(g),
+                  style: {
+                    padding: "3px 10px",
+                    borderRadius: 16,
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                    border: "1px solid",
+                    background: isSelected ? "var(--gold)" : "transparent",
+                    color: isSelected ? "#000" : "var(--muted)",
+                    borderColor: isSelected ? "var(--gold)" : "var(--border)",
+                    fontWeight: isSelected ? 600 : 400,
+                    transition: "all 0.15s ease"
+                  },
+                  children: isSelected ? `✓ ${g}` : g
+                },
+                g
+              );
+            }) })
+          ] })
+        ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
           /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsx("label", { className: "form-label", children: "Release Date" }),
@@ -11434,7 +11667,7 @@ function AddMovie({ production, onToast }) {
             "Poster URL ",
             /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(portrait 2:3)" })
           ] }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), placeholder: "https://…", source: "Movie" }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), name: form.title, type: "poster", placeholder: "https://…", source: "Movie" }),
           form.posterUrl && /* @__PURE__ */ jsx("img", { src: form.posterUrl, alt: "poster", style: { marginTop: 8, height: 120, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -11442,7 +11675,7 @@ function AddMovie({ production, onToast }) {
             "Thumbnail URL ",
             /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(landscape 16:9)" })
           ] }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), placeholder: "https://…", source: "Movie" }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), name: form.title, type: "thumbnail", placeholder: "https://…", source: "Movie" }),
           form.thumbnailUrl && /* @__PURE__ */ jsx("img", { src: form.thumbnailUrl, alt: "thumbnail", style: { marginTop: 8, width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -11450,7 +11683,7 @@ function AddMovie({ production, onToast }) {
             "Banner URL ",
             /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(landscape 16:9 — homepage hero)" })
           ] }),
-          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.bannerUrl, onChange: (v) => set("bannerUrl", v), placeholder: "Wide landscape image URL…", source: "Movie" }),
+          /* @__PURE__ */ jsx(ImageUploadInput, { value: form.bannerUrl, onChange: (v) => set("bannerUrl", v), name: form.title, type: "banner", placeholder: "Wide landscape image URL…", source: "Movie" }),
           form.bannerUrl && /* @__PURE__ */ jsx("img", { src: form.bannerUrl, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -11474,20 +11707,29 @@ function AddMovie({ production, onToast }) {
             ] }),
             castResults.map((r) => {
               const idStr = String(r._id || "").trim();
-              const already = cast.some((x) => x.castId === idStr);
+              const existingCount = cast.filter((x) => x.castId === idStr).length;
               return /* @__PURE__ */ jsxs(
                 "div",
                 {
                   className: "search-dropdown-item",
-                  onClick: () => !already && addExistingCast(r),
-                  style: { opacity: already ? 0.5 : 1, cursor: already ? "default" : "pointer" },
+                  onClick: () => addExistingCast(r),
+                  style: { cursor: "pointer" },
                   children: [
                     r.photo && /* @__PURE__ */ jsx("img", { src: r.photo, alt: r.name, style: { width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" }),
                     /* @__PURE__ */ jsxs("div", { style: { flex: 1 }, children: [
                       /* @__PURE__ */ jsx("span", { style: { fontWeight: 600 }, children: r.name }),
-                      /* @__PURE__ */ jsx("span", { style: { color: "var(--gold)", fontSize: "0.72rem", marginLeft: 8 }, children: r.type })
+                      /* @__PURE__ */ jsxs("span", { style: { color: "var(--gold)", fontSize: "0.72rem", marginLeft: 8 }, children: [
+                        r.type,
+                        existingCount > 0 && /* @__PURE__ */ jsxs("span", { style: { color: "var(--muted)", marginLeft: 6 }, children: [
+                          "(",
+                          existingCount,
+                          " ",
+                          existingCount === 1 ? "role" : "roles",
+                          " added)"
+                        ] })
+                      ] })
                     ] }),
-                    /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: already ? "var(--muted)" : "#4caf82" }, children: already ? "already added" : "✓ existing" })
+                    /* @__PURE__ */ jsx("span", { style: { fontSize: "0.7rem", color: existingCount > 0 ? "var(--gold)" : "#4caf82", fontWeight: 700 }, children: existingCount > 0 ? "+ Add Another Role" : "✓ + Link" })
                   ]
                 },
                 idStr
@@ -11995,7 +12237,7 @@ function SettingsPanel({ member, onToast, onUpdate }) {
     location: member.location || "",
     website: member.website || "",
     instagram: member.instagram || "",
-    roles: member.roles || []
+    roles: Array.isArray(member.roles) && member.roles.length ? member.roles : member.type ? member.type.split(",").map((r) => r.trim()).filter(Boolean) : []
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -12406,14 +12648,36 @@ function PortalCastProfile({ production }) {
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
   ] });
 }
-const BlogGenerator = lazy(() => import("./assets/BlogGenerator-COFCWN4y.js"));
+const BlogGenerator = lazy(() => import("./assets/BlogGenerator-CBDa7u9e.js"));
 const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-DWba9T8B.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
 const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBhCj4H.js"));
 const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-Bu3AylyH.js"));
-const CommunityPanel = lazy(() => import("./assets/CommunityPanel-CUe1gwe6.js"));
+const CommunityPanel = lazy(() => import("./assets/CommunityPanel-CoCEIZbc.js"));
 const MediaPanel = lazy(() => import("./assets/MediaPanel-DOrQCeDC.js"));
-const GENRES = ["Action", "Drama", "Romance", "Comedy", "Thriller", "Family", "Historical", "Devotional", "Horror", "Action-Drama", "Crime", "Mystery"];
+const GENRES = [
+  "Action",
+  "Drama",
+  "Romance",
+  "Comedy",
+  "Thriller",
+  "Family",
+  "Historical",
+  "Devotional",
+  "Horror",
+  "Action-Drama",
+  "Crime",
+  "Mystery",
+  "Adventure",
+  "Animation",
+  "Biographical",
+  "Fantasy",
+  "Musical",
+  "Sci-Fi",
+  "Social",
+  "Sports",
+  "Suspense"
+];
 const CATEGORIES = ["Feature Film", "Short Film", "Web Series", "Documentary"];
 const CAST_TYPES = [
   "Actor",
@@ -12595,14 +12859,24 @@ function CastPicker({ cast, onChange }) {
     return () => clearTimeout(timer.current);
   }, [query]);
   const addFromSearch = (person) => {
-    if (cast.some((c) => c.castId && String(c.castId) === String(person._id))) return;
-    onChange([...cast, { castId: String(person._id), name: person.name, photo: person.photo || "", type: person.type || "Actor", role: "", isNew: false }]);
+    const newEntry = {
+      castId: String(person._id),
+      name: person.name,
+      photo: person.photo || "",
+      type: person.type || "Actor",
+      role: "",
+      isNew: false
+    };
+    const nextCast = [...cast, newEntry];
+    onChange(nextCast);
     setQuery("");
     setResults([]);
+    setEditIdx(nextCast.length - 1);
   };
   const addNew = () => {
     if (!nc.name.trim()) return;
-    onChange([...cast, { castId: "", name: nc.name.trim(), photo: nc.photo.trim(), type: nc.type, role: nc.role.trim(), bio: nc.bio.trim(), isNew: true }]);
+    const nextCast = [...cast, { castId: "", name: nc.name.trim(), photo: nc.photo.trim(), type: nc.type, role: nc.role.trim(), bio: nc.bio.trim(), isNew: true }];
+    onChange(nextCast);
     setNc({ name: "", type: "Actor", role: "", photo: "", bio: "" });
     setShowNewForm(false);
   };
@@ -12633,23 +12907,35 @@ function CastPicker({ cast, onChange }) {
           searching && /* @__PURE__ */ jsx("div", { style: { padding: "10px 14px", color: "var(--muted)", fontSize: "0.82rem" }, children: "Searching…" }),
           !searching && results.length === 0 && query.trim() && /* @__PURE__ */ jsx("div", { style: { padding: "10px 14px", color: "var(--muted)", fontSize: "0.82rem" }, children: "No results — add as new below" }),
           results.map((p) => {
-            const already = cast.some((c) => c.castId === String(p._id));
+            const existingEntries = cast.filter((c) => c.castId && String(c.castId) === String(p._id));
+            const alreadyCount = existingEntries.length;
             return /* @__PURE__ */ jsxs(
               "div",
               {
-                onClick: () => !already && addFromSearch(p),
-                style: { display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: already ? "default" : "pointer", borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: already ? 0.5 : 1 },
+                onClick: () => addFromSearch(p),
+                style: { display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.04)" },
                 onMouseEnter: (e) => {
-                  if (!already) e.currentTarget.style.background = "rgba(201,151,58,0.08)";
+                  e.currentTarget.style.background = "rgba(201,151,58,0.08)";
                 },
-                onMouseLeave: (e) => e.currentTarget.style.background = "transparent",
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.background = "transparent";
+                },
                 children: [
                   /* @__PURE__ */ jsx("div", { style: { width: 34, height: 34, borderRadius: "50%", background: "var(--bg3)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }, children: p.photo ? /* @__PURE__ */ jsx("img", { src: p.photo, alt: p.name, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" }) : "👤" }),
                   /* @__PURE__ */ jsxs("div", { style: { flex: 1 }, children: [
                     /* @__PURE__ */ jsx("div", { style: { fontWeight: 600, fontSize: "0.86rem" }, children: p.name }),
-                    /* @__PURE__ */ jsx("div", { style: { fontSize: "0.68rem", color: "var(--gold)" }, children: p.type })
+                    /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.68rem", color: "var(--gold)" }, children: [
+                      p.type,
+                      alreadyCount > 0 && /* @__PURE__ */ jsxs("span", { style: { color: "var(--muted)", marginLeft: 6 }, children: [
+                        "(",
+                        alreadyCount,
+                        " ",
+                        alreadyCount === 1 ? "role" : "roles",
+                        " added)"
+                      ] })
+                    ] })
                   ] }),
-                  /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", color: already ? "var(--muted)" : "#4caf82", fontWeight: 700 }, children: already ? "✓ Added" : "+ Link" })
+                  /* @__PURE__ */ jsx("span", { style: { fontSize: "0.68rem", color: alreadyCount > 0 ? "var(--gold)" : "#4caf82", fontWeight: 700 }, children: alreadyCount > 0 ? "+ Add Another Role" : "+ Link" })
                 ]
               },
               p._id
@@ -12716,24 +13002,32 @@ function CastPicker({ cast, onChange }) {
           ] })
         ] }),
         /* @__PURE__ */ jsx("button", { type: "button", className: "btn btn-gold btn-sm", onClick: () => setEditIdx(null), children: "✓ Done" })
-      ] }) : /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }, children: [
-        /* @__PURE__ */ jsx("div", { style: { width: 38, height: 38, borderRadius: "50%", background: "var(--bg2)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", border: "1px solid var(--border)" }, children: c.photo ? /* @__PURE__ */ jsx("img", { src: c.photo, alt: c.name, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" }) : "👤" }),
-        /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-          /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }, children: [
-            /* @__PURE__ */ jsx("span", { style: { fontWeight: 700, fontSize: "0.88rem" }, children: c.name || /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)" }, children: "Unnamed" }) }),
-            /* @__PURE__ */ jsx("span", { style: { fontSize: "0.62rem", fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: "rgba(201,151,58,0.12)", color: "var(--gold)" }, children: c.type }),
-            c.isNew ? /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, color: "#e8b96a", background: "rgba(232,185,106,0.12)", padding: "1px 6px", borderRadius: 6 }, children: "✦ NEW" }) : /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, color: "#4caf82", background: "rgba(76,175,130,0.12)", padding: "1px 6px", borderRadius: 6 }, children: "✓ LINKED" })
+      ] }) : (() => {
+        const samePersonCount = cast.filter((x) => x.castId && c.castId && String(x.castId) === String(c.castId) || x.name && c.name && x.name.toLowerCase() === c.name.toLowerCase()).length;
+        const roleNum = cast.slice(0, i + 1).filter((x) => x.castId && c.castId && String(x.castId) === String(c.castId) || x.name && c.name && x.name.toLowerCase() === c.name.toLowerCase()).length;
+        return /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }, children: [
+          /* @__PURE__ */ jsx("div", { style: { width: 38, height: 38, borderRadius: "50%", background: "var(--bg2)", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", border: "1px solid var(--border)" }, children: c.photo ? /* @__PURE__ */ jsx("img", { src: c.photo, alt: c.name, style: { width: "100%", height: "100%", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" }) : "👤" }),
+          /* @__PURE__ */ jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+            /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }, children: [
+              /* @__PURE__ */ jsx("span", { style: { fontWeight: 700, fontSize: "0.88rem" }, children: c.name || /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)" }, children: "Unnamed" }) }),
+              /* @__PURE__ */ jsx("span", { style: { fontSize: "0.62rem", fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: "rgba(201,151,58,0.12)", color: "var(--gold)" }, children: c.type }),
+              samePersonCount > 1 && /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.6rem", fontWeight: 700, color: "var(--gold)", background: "rgba(201,151,58,0.18)", padding: "1px 6px", borderRadius: 6 }, children: [
+                "Role #",
+                roleNum
+              ] }),
+              c.isNew ? /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, color: "#e8b96a", background: "rgba(232,185,106,0.12)", padding: "1px 6px", borderRadius: 6 }, children: "✦ NEW" }) : /* @__PURE__ */ jsx("span", { style: { fontSize: "0.6rem", fontWeight: 700, color: "#4caf82", background: "rgba(76,175,130,0.12)", padding: "1px 6px", borderRadius: 6 }, children: "✓ LINKED" })
+            ] }),
+            c.role && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "var(--muted)", marginTop: 2 }, children: [
+              "as ",
+              c.role
+            ] })
           ] }),
-          c.role && /* @__PURE__ */ jsxs("div", { style: { fontSize: "0.72rem", color: "var(--muted)", marginTop: 2 }, children: [
-            "as ",
-            c.role
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 5, flexShrink: 0 }, children: [
+            /* @__PURE__ */ jsx("button", { type: "button", className: "btn btn-ghost btn-sm", onClick: () => setEditIdx(i), style: { fontSize: "0.7rem", padding: "4px 8px" }, title: "Edit this role", children: "✏️" }),
+            /* @__PURE__ */ jsx("button", { type: "button", className: "btn btn-ghost btn-sm", onClick: () => remove(i), style: { color: "var(--red)", fontSize: "0.7rem", padding: "4px 8px" }, title: "Remove this role", children: "✕" })
           ] })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 5, flexShrink: 0 }, children: [
-          /* @__PURE__ */ jsx("button", { type: "button", className: "btn btn-ghost btn-sm", onClick: () => setEditIdx(i), style: { fontSize: "0.7rem", padding: "4px 8px" }, children: "✏️" }),
-          /* @__PURE__ */ jsx("button", { type: "button", className: "btn btn-ghost btn-sm", onClick: () => remove(i), style: { color: "var(--red)", fontSize: "0.7rem", padding: "4px 8px" }, children: "✕" })
-        ] })
-      ] }) }, i)) })
+        ] });
+      })() }, i)) })
     ] })
   ] });
 }
@@ -12877,7 +13171,7 @@ function PersonPicker({ label, icon, castType, value, refs, onChange }) {
   ] });
 }
 const MOVIE_STEPS = ["Basic Info", "Cast & Crew", "Media", "Review & Submit"];
-function MovieForm({ initial, onSave, onCancel, saving }) {
+function MovieForm({ initial, onSave, onCancel, saving, onToast }) {
   var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -12895,6 +13189,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     synopsis: (initial == null ? void 0 : initial.synopsis) || "",
     posterUrl: (initial == null ? void 0 : initial.posterUrl) || "",
     thumbnailUrl: (initial == null ? void 0 : initial.thumbnailUrl) || "",
+    inTheatre: (initial == null ? void 0 : initial.inTheatre) && (String(initial.inTheatre).toLowerCase() === "yes" || initial.inTheatre === true) ? "Yes" : "No",
     verdict: (initial == null ? void 0 : initial.verdict) || "Upcoming",
     runtime: (initial == null ? void 0 : initial.runtime) || "",
     imdbId: (initial == null ? void 0 : initial.imdbId) || "",
@@ -12922,6 +13217,99 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleGenre = (g) => set("genre", form.genre.includes(g) ? form.genre.filter((x) => x !== g) : [...form.genre, g]);
+  const [allGenres, setAllGenres] = useState(() => {
+    try {
+      const cached = localStorage.getItem("olly_genres");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = Array.from(/* @__PURE__ */ new Set([...GENRES, ...(initial == null ? void 0 : initial.genre) || [], ...parsed]));
+          return merged.sort((a, b) => a.localeCompare(b));
+        }
+      }
+    } catch {
+    }
+    const initialList = Array.from(/* @__PURE__ */ new Set([...GENRES, ...(initial == null ? void 0 : initial.genre) || []]));
+    return initialList.sort((a, b) => a.localeCompare(b));
+  });
+  const [customGenre, setCustomGenre] = useState("");
+  const [addingGenre, setAddingGenre] = useState(false);
+  const [genreFeedback, setGenreFeedback] = useState("");
+  const customGenreInputRef = useRef(null);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await API.getGenres();
+        if (mounted && res && Array.isArray(res.genres)) {
+          setAllGenres((prev) => {
+            const setG = /* @__PURE__ */ new Set([...GENRES, ...(initial == null ? void 0 : initial.genre) || [], ...prev, ...res.genres]);
+            const sorted = Array.from(setG).filter(Boolean).sort((a, b) => a.localeCompare(b));
+            try {
+              localStorage.setItem("olly_genres", JSON.stringify(sorted));
+            } catch {
+            }
+            return sorted;
+          });
+        }
+      } catch (err) {
+        console.warn("Could not load genres:", err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [initial]);
+  const handleAddCustomGenre = async (e) => {
+    if (e) e.preventDefault();
+    const trimmed = (customGenre || "").trim();
+    if (!trimmed) return;
+    const formatted = trimmed.split(" ").map((w) => {
+      if (!w) return "";
+      if (w.includes("-")) {
+        return w.split("-").map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : "").join("-");
+      }
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(" ");
+    if (!form.genre.includes(formatted)) {
+      set("genre", [...form.genre, formatted]);
+    }
+    setAllGenres((prev) => {
+      const exists = prev.some((g) => g.toLowerCase() === formatted.toLowerCase());
+      const updated = exists ? prev : [...prev, formatted].sort((a, b) => a.localeCompare(b));
+      try {
+        localStorage.setItem("olly_genres", JSON.stringify(updated));
+      } catch {
+      }
+      return updated;
+    });
+    setCustomGenre("");
+    setGenreFeedback(`✓ "${formatted}" added to dropdown & selected!`);
+    setTimeout(() => setGenreFeedback(""), 3500);
+    try {
+      setAddingGenre(true);
+      await API.addGenre(formatted);
+      onToast == null ? void 0 : onToast(`Genre "${formatted}" saved to dropdown for future!`, "success");
+    } catch (err) {
+      console.warn("Backend genre save warning:", err);
+    } finally {
+      setAddingGenre(false);
+    }
+  };
+  const handleSelectDropdownGenre = (e) => {
+    var _a2;
+    const val = e.target.value;
+    if (!val) return;
+    if (val === "__custom__") {
+      (_a2 = customGenreInputRef.current) == null ? void 0 : _a2.focus();
+      e.target.value = "";
+      return;
+    }
+    if (!form.genre.includes(val)) {
+      set("genre", [...form.genre, val]);
+    }
+    e.target.value = "";
+  };
   const [productions, setProductions] = useState(() => {
     const primary = (initial == null ? void 0 : initial.productionId) ? [initial.productionId] : [];
     const collabs = (initial == null ? void 0 : initial.collaborators) || [];
@@ -13054,6 +13442,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       synopsis: form.synopsis,
       posterUrl: form.posterUrl,
       thumbnailUrl: form.thumbnailUrl,
+      inTheatre: form.inTheatre === "Yes" ? "Yes" : "No",
       verdict: form.verdict,
       runtime: form.runtime,
       imdbId: form.imdbId,
@@ -13120,17 +13509,146 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
         ] })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
-        /* @__PURE__ */ jsx("label", { className: "form-label", children: "Genres" }),
-        /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 }, children: GENRES.map((g) => /* @__PURE__ */ jsx("button", { type: "button", onClick: () => toggleGenre(g), style: {
-          padding: "4px 12px",
-          borderRadius: 20,
-          fontSize: "0.78rem",
-          cursor: "pointer",
-          border: "1px solid",
-          background: form.genre.includes(g) ? "var(--gold)" : "transparent",
-          color: form.genre.includes(g) ? "#000" : "var(--muted)",
-          borderColor: form.genre.includes(g) ? "var(--gold)" : "var(--border)"
-        }, children: g }, g)) })
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }, children: [
+          /* @__PURE__ */ jsx("label", { className: "form-label", style: { marginBottom: 0 }, children: "Genres" }),
+          form.genre.length > 0 && /* @__PURE__ */ jsxs("span", { style: { fontSize: "0.76rem", color: "var(--gold)", fontWeight: 600 }, children: [
+            form.genre.length,
+            " selected"
+          ] })
+        ] }),
+        form.genre.length > 0 ? /* @__PURE__ */ jsx("div", { style: {
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          marginBottom: 10,
+          padding: "8px 10px",
+          background: "rgba(201,151,58,0.08)",
+          borderRadius: 8,
+          border: "1px solid rgba(201,151,58,0.25)"
+        }, children: form.genre.map((g) => /* @__PURE__ */ jsxs(
+          "span",
+          {
+            style: {
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: 16,
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              background: "var(--gold)",
+              color: "#000"
+            },
+            children: [
+              g,
+              /* @__PURE__ */ jsx(
+                "span",
+                {
+                  role: "button",
+                  tabIndex: 0,
+                  onClick: (e) => {
+                    e.stopPropagation();
+                    toggleGenre(g);
+                  },
+                  title: `Remove ${g}`,
+                  style: {
+                    cursor: "pointer",
+                    fontSize: "0.95rem",
+                    fontWeight: "bold",
+                    lineHeight: 1,
+                    opacity: 0.75,
+                    marginLeft: 2,
+                    transition: "opacity 0.15s"
+                  },
+                  onMouseEnter: (e) => e.currentTarget.style.opacity = 1,
+                  onMouseLeave: (e) => e.currentTarget.style.opacity = 0.75,
+                  children: "✕"
+                }
+              )
+            ]
+          },
+          g
+        )) }) : /* @__PURE__ */ jsx("div", { style: { fontSize: "0.78rem", color: "var(--muted)", marginBottom: 8, fontStyle: "italic" }, children: "Select genre(s) from the dropdown or type a custom genre below." }),
+        /* @__PURE__ */ jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }, children: [
+          /* @__PURE__ */ jsx("div", { children: /* @__PURE__ */ jsxs(
+            "select",
+            {
+              className: "form-select",
+              defaultValue: "",
+              onChange: handleSelectDropdownGenre,
+              style: { width: "100%", height: 38 },
+              children: [
+                /* @__PURE__ */ jsx("option", { value: "", children: "▼ Choose Genre from Dropdown..." }),
+                /* @__PURE__ */ jsx("optgroup", { label: "Available Genres", children: allGenres.map((g) => /* @__PURE__ */ jsxs("option", { value: g, disabled: form.genre.includes(g), children: [
+                  g,
+                  " ",
+                  form.genre.includes(g) ? " (Selected)" : ""
+                ] }, g)) }),
+                /* @__PURE__ */ jsx("option", { value: "__custom__", children: "➕ + Enter Custom Genre..." })
+              ]
+            }
+          ) }),
+          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+            /* @__PURE__ */ jsx(
+              "input",
+              {
+                ref: customGenreInputRef,
+                type: "text",
+                className: "form-input",
+                placeholder: "Enter custom genre...",
+                value: customGenre,
+                onChange: (e) => setCustomGenre(e.target.value),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCustomGenre();
+                  }
+                },
+                style: { flex: 1, height: 38 }
+              }
+            ),
+            /* @__PURE__ */ jsx(
+              "button",
+              {
+                type: "button",
+                className: "btn btn-gold btn-sm",
+                onClick: handleAddCustomGenre,
+                disabled: addingGenre || !customGenre.trim(),
+                style: { whiteSpace: "nowrap", padding: "0 14px", height: 38 },
+                title: "Add custom genre and save to dropdown for future",
+                children: addingGenre ? "Saving..." : "+ Add"
+              }
+            )
+          ] })
+        ] }),
+        genreFeedback && /* @__PURE__ */ jsx("div", { style: { fontSize: "0.75rem", color: "var(--gold)", marginBottom: 8, fontWeight: 500 }, children: genreFeedback }),
+        /* @__PURE__ */ jsxs("div", { style: { marginTop: 6 }, children: [
+          /* @__PURE__ */ jsx("div", { style: { fontSize: "0.72rem", color: "var(--muted)", marginBottom: 4 }, children: "Quick Toggle:" }),
+          /* @__PURE__ */ jsx("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 }, children: allGenres.map((g) => {
+            const isSelected = form.genre.includes(g);
+            return /* @__PURE__ */ jsx(
+              "button",
+              {
+                type: "button",
+                onClick: () => toggleGenre(g),
+                style: {
+                  padding: "3px 10px",
+                  borderRadius: 16,
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                  border: "1px solid",
+                  background: isSelected ? "var(--gold)" : "transparent",
+                  color: isSelected ? "#000" : "var(--muted)",
+                  borderColor: isSelected ? "var(--gold)" : "var(--border)",
+                  fontWeight: isSelected ? 600 : 400,
+                  transition: "all 0.15s ease"
+                },
+                children: isSelected ? `✓ ${g}` : g
+              },
+              g
+            );
+          }) })
+        ] })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-grid", children: [
         /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13195,6 +13713,53 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           /* @__PURE__ */ jsx("input", { className: "form-input", value: form.runtime, onChange: (e) => set("runtime", e.target.value), placeholder: "e.g. 2h 15m" })
         ] })
       ] }),
+      /* @__PURE__ */ jsx("div", { className: "form-group", style: { background: "rgba(255,255,255,0.03)", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border)", marginBottom: 16 }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" }, children: [
+        /* @__PURE__ */ jsxs("div", { children: [
+          /* @__PURE__ */ jsxs("label", { className: "form-label", style: { marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }, children: [
+            /* @__PURE__ */ jsx("span", { children: "🎟️" }),
+            " Now In Theatres"
+          ] }),
+          /* @__PURE__ */ jsx("div", { style: { fontSize: "0.78rem", color: "var(--muted)" }, children: 'Toggle whether this movie is currently running in theatres (stored as "Yes" or "No")' })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+          /* @__PURE__ */ jsx("span", { style: { fontSize: "0.85rem", fontWeight: 800, color: form.inTheatre === "Yes" ? "#22c55e" : "#ef4444" }, children: form.inTheatre === "Yes" ? "Yes" : "No" }),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "button",
+              onClick: () => set("inTheatre", form.inTheatre === "Yes" ? "No" : "Yes"),
+              title: `Toggle to ${form.inTheatre === "Yes" ? "No" : "Yes"}`,
+              style: {
+                position: "relative",
+                width: 44,
+                height: 24,
+                borderRadius: 24,
+                background: form.inTheatre === "Yes" ? "#22c55e" : "#333",
+                border: "none",
+                cursor: "pointer",
+                padding: 2,
+                transition: "background 0.2s ease",
+                display: "flex",
+                alignItems: "center"
+              },
+              children: /* @__PURE__ */ jsx(
+                "span",
+                {
+                  style: {
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    transform: form.inTheatre === "Yes" ? "translateX(20px)" : "translateX(0px)",
+                    transition: "transform 0.2s ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                  }
+                }
+              )
+            }
+          )
+        ] })
+      ] }) }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsx("label", { className: "form-label", children: "Production House(s)" }),
         /* @__PURE__ */ jsx(ProductionPicker, { selected: productions, onChange: setProductions })
@@ -13204,7 +13769,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           "Poster URL ",
           /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(portrait 2:3)" })
         ] }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), placeholder: "https://…", source: "Movie" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.posterUrl, onChange: (v) => set("posterUrl", v), name: form.title, type: "poster", placeholder: "https://…", source: "Movie" }),
         form.posterUrl && /* @__PURE__ */ jsx("img", { src: form.posterUrl, alt: "poster", style: { marginTop: 8, height: 100, borderRadius: 4, border: "1px solid var(--border)", objectFit: "cover" }, onError: (e) => e.target.style.display = "none" })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13212,7 +13777,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
           "Thumbnail URL ",
           /* @__PURE__ */ jsx("span", { style: { color: "var(--muted)", fontWeight: 400 }, children: "(16:9 landscape)" })
         ] }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), placeholder: "https://…", source: "Movie" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.thumbnailUrl, onChange: (v) => set("thumbnailUrl", v), name: form.title, type: "thumbnail", placeholder: "https://…", source: "Movie" }),
         form.thumbnailUrl && /* @__PURE__ */ jsx("img", { src: form.thumbnailUrl, alt: "thumbnail", style: { marginTop: 8, width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 4, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13239,7 +13804,7 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsx("label", { className: "form-label", children: "Banner URL (Hero Background)" }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.bannerUrl, onChange: (v) => set("bannerUrl", v), placeholder: "Wide landscape image URL…", source: "Movie" }),
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.bannerUrl, onChange: (v) => set("bannerUrl", v), name: form.title, type: "banner", placeholder: "Wide landscape image URL…", source: "Movie" }),
         form.bannerUrl && /* @__PURE__ */ jsx("img", { src: form.bannerUrl, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13564,8 +14129,20 @@ function MovieForm({ initial, onSave, onCancel, saving }) {
     ] })
   ] });
 }
+function parseCastRoles(data) {
+  if (!data) return ["Actor"];
+  let list = [];
+  if (Array.isArray(data.roles) && data.roles.length > 0) {
+    list = data.roles.flatMap((r) => typeof r === "string" ? r.split(",") : [r]).map((r) => String(r).trim()).filter(Boolean);
+  } else if (typeof data.roles === "string" && data.roles.trim()) {
+    list = data.roles.split(",").map((r) => r.trim()).filter(Boolean);
+  } else if (data.type) {
+    list = String(data.type).split(",").map((r) => r.trim()).filter(Boolean);
+  }
+  return list.length > 0 ? Array.from(new Set(list)) : ["Actor"];
+}
 function CastForm({ initial, onSave, onCancel, saving }) {
-  const initRoles = (initial == null ? void 0 : initial.type) ? initial.type.split(",").map((r) => r.trim()).filter(Boolean) : ["Actor"];
+  const [roles, setRoles] = useState(() => parseCastRoles(initial));
   const [form, setForm] = useState({
     name: (initial == null ? void 0 : initial.name) || "",
     photo: (initial == null ? void 0 : initial.photo) || "",
@@ -13577,7 +14154,30 @@ function CastForm({ initial, onSave, onCancel, saving }) {
     website: (initial == null ? void 0 : initial.website) || "",
     instagram: (initial == null ? void 0 : initial.instagram) || ""
   });
-  const [roles, setRoles] = useState(initRoles);
+  useEffect(() => {
+    if (initial == null ? void 0 : initial._id) {
+      API.getCastMember(initial._id).then((full) => {
+        if (full) {
+          const fetchedRoles = parseCastRoles(full);
+          if (fetchedRoles.length > 0) {
+            setRoles(fetchedRoles);
+          }
+          setForm((f) => ({
+            ...f,
+            name: full.name ?? f.name,
+            photo: full.photo ?? f.photo,
+            banner: full.banner ?? f.banner,
+            bio: full.bio ?? f.bio,
+            dob: full.dob ?? f.dob,
+            gender: full.gender ?? f.gender,
+            location: full.location ?? f.location,
+            website: full.website ?? f.website,
+            instagram: full.instagram ?? f.instagram
+          }));
+        }
+      }).catch((err) => console.error("Error fetching full cast details:", err));
+    }
+  }, [initial == null ? void 0 : initial._id]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleRole = (r) => {
     setRoles(
@@ -13585,7 +14185,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
     );
   };
   const handleSave = () => {
-    onSave({ ...form, type: roles.join(", ") });
+    onSave({ ...form, roles, type: roles.join(", ") });
   };
   return /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 0 }, children: [
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13615,7 +14215,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
       /* @__PURE__ */ jsx("label", { className: "form-label", children: "Profile Photo" }),
-      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.photo, onChange: (v) => set("photo", v), placeholder: "https://…", source: "Cast" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.photo, onChange: (v) => set("photo", v), name: form.name, type: "photo", placeholder: "https://…", source: "Cast" }),
       form.photo && /* @__PURE__ */ jsx(
         "img",
         {
@@ -13628,7 +14228,7 @@ function CastForm({ initial, onSave, onCancel, saving }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
       /* @__PURE__ */ jsx("label", { className: "form-label", children: "Profile Banner (Landscape 16:9)" }),
-      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.banner, onChange: (v) => set("banner", v), placeholder: "https://…", source: "Cast" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.banner, onChange: (v) => set("banner", v), name: form.name, type: "banner", placeholder: "https://…", source: "Cast" }),
       form.banner && /* @__PURE__ */ jsx(
         "img",
         {
@@ -13707,12 +14307,12 @@ function ProductionForm({ initial, onSave, onCancel, saving }) {
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
       /* @__PURE__ */ jsx("label", { className: "form-label", children: "Logo URL" }),
-      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.logo, onChange: (v) => set("logo", v), placeholder: "https://…", source: "Production" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.logo, onChange: (v) => set("logo", v), name: form.name, type: "logo", placeholder: "https://…", source: "Production" }),
       form.logo && /* @__PURE__ */ jsx("img", { src: form.logo, alt: "logo", style: { marginTop: 8, height: 48, objectFit: "contain", borderRadius: 4, border: "1px solid var(--border)", padding: 2 }, onError: (e) => e.target.style.display = "none" })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
       /* @__PURE__ */ jsx("label", { className: "form-label", children: "Studio Banner URL (Landscape)" }),
-      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.banner, onChange: (v) => set("banner", v), placeholder: "https://…", source: "Production" }),
+      /* @__PURE__ */ jsx(ImageUploadInput, { value: form.banner, onChange: (v) => set("banner", v), name: form.name, type: "banner", placeholder: "https://…", source: "Production" }),
       form.banner && /* @__PURE__ */ jsx("img", { src: form.banner, alt: "banner", style: { marginTop: 8, width: "100%", maxHeight: 80, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
@@ -13826,7 +14426,7 @@ function NewsForm({ initial, onSave, onCancel, saving, movies }) {
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsx("label", { className: "form-label", children: "Cover Image URL" }),
-        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.imageUrl, onChange: (v) => set("imageUrl", v), placeholder: "https://…", source: "News" })
+        /* @__PURE__ */ jsx(ImageUploadInput, { value: form.imageUrl, onChange: (v) => set("imageUrl", v), name: form.title || form.movieTitle, type: "news", placeholder: "https://…", source: "News" })
       ] })
     ] }),
     form.imageUrl && /* @__PURE__ */ jsx("img", { src: form.imageUrl, alt: "cover", style: { width: "100%", maxHeight: 130, objectFit: "cover", borderRadius: 5, marginBottom: 12, border: "1px solid var(--border)" }, onError: (e) => e.target.style.display = "none" }),
@@ -14084,7 +14684,7 @@ function CastDetailTab({ movie, onAdd, onRemove, onToast, onMovieUpdate }) {
       ] }),
       /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 6, flexShrink: 0 }, children: [
         /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { fontSize: "0.7rem" }, onClick: () => startEdit(c, i), children: "✏ Edit" }),
-        /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { color: "var(--red)", fontSize: "0.7rem" }, onClick: () => onRemove(c.castId || String(c._id), c.name), children: "✕" })
+        /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", style: { color: "var(--red)", fontSize: "0.7rem" }, onClick: () => onRemove(c.castId || String(c._id), c.name, { role: c.role, type: c.type, index: i }), children: "✕" })
       ] })
     ] }) }, i)) })
   ] });
@@ -14118,16 +14718,17 @@ function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovi
       setSaving(false);
     }
   };
-  const handleRemoveCast = (castId, name) => {
+  const handleRemoveCast = (castId, name, params = {}) => {
+    const roleLabel = params.role ? ` (as ${params.role})` : params.type ? ` (${params.type})` : "";
     setConfirm({
-      message: `Remove "${name}" from cast?`,
+      message: `Remove "${name}"${roleLabel} from cast?`,
       onConfirm: async () => {
         setConfirm(null);
         try {
-          const m = await API.adminRemoveCastFromMovie(movie._id, castId);
+          const m = await API.adminRemoveCastFromMovie(movie._id, castId, params);
           setMovie(m);
           onMovieUpdate == null ? void 0 : onMovieUpdate(m);
-          onToast == null ? void 0 : onToast(`"${name}" removed from cast.`);
+          onToast == null ? void 0 : onToast(`"${name}"${roleLabel} removed from cast.`);
         } catch (e) {
           onToast == null ? void 0 : onToast(e.message, "error");
         }
@@ -14253,7 +14854,45 @@ function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovi
               color: verdictColor(movie.verdict),
               border: `1px solid ${verdictColor(movie.verdict)}44`
             }, children: movie.verdict || "Upcoming" }),
-            movie.runtime && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", color: "var(--muted)", padding: "2px 9px", borderRadius: 9, border: "1px solid var(--border)" }, children: movie.runtime })
+            movie.runtime && /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", color: "var(--muted)", padding: "2px 9px", borderRadius: 9, border: "1px solid var(--border)" }, children: movie.runtime }),
+            /* @__PURE__ */ jsxs(
+              "button",
+              {
+                type: "button",
+                onClick: async () => {
+                  const isYes = movie.inTheatre === "Yes" || movie.inTheatre === true;
+                  const nextVal = isYes ? "No" : "Yes";
+                  try {
+                    await API.adminUpdateMovie(movie._id, { inTheatre: nextVal });
+                    const updated = { ...movie, inTheatre: nextVal };
+                    setMovie(updated);
+                    onMovieUpdate == null ? void 0 : onMovieUpdate(updated);
+                    onToast == null ? void 0 : onToast(`Now in Theatre set to ${nextVal}`, "success");
+                  } catch (e) {
+                    onToast == null ? void 0 : onToast(e.message, "error");
+                  }
+                },
+                style: {
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "2px 10px",
+                  borderRadius: 9,
+                  background: movie.inTheatre === "Yes" || movie.inTheatre === true ? "rgba(34, 197, 94, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                  color: movie.inTheatre === "Yes" || movie.inTheatre === true ? "#22c55e" : "var(--muted)",
+                  border: `1px solid ${movie.inTheatre === "Yes" || movie.inTheatre === true ? "#22c55e66" : "var(--border)"}`,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5
+                },
+                title: "Click to toggle Now in Theatre",
+                children: [
+                  /* @__PURE__ */ jsx("span", { children: "🎟️" }),
+                  " In Theatre: ",
+                  /* @__PURE__ */ jsx("strong", { style: { color: movie.inTheatre === "Yes" || movie.inTheatre === true ? "#4ade80" : "#ef4444" }, children: movie.inTheatre === "Yes" || movie.inTheatre === true ? "Yes" : "No" })
+                ]
+              }
+            )
           ] })
         ] }),
         /* @__PURE__ */ jsx("a", { href: `/movie/${movie._id}`, target: "_blank", rel: "noreferrer", className: "btn btn-ghost btn-sm", style: { fontSize: "0.72rem", flexShrink: 0 }, children: "View Public ↗" })
@@ -15293,6 +15932,13 @@ function AdminPortal({ admin, onLogout, onToast }) {
       } catch (err) {
         console.error("Error fetching full movie for edit modal:", err);
       }
+    } else if (type === "cast" && (data == null ? void 0 : data._id)) {
+      try {
+        const fullCast = await API.getCastMember(data._id);
+        setModal({ type, mode: "edit", data: fullCast });
+      } catch (err) {
+        console.error("Error fetching full cast for edit modal:", err);
+      }
     }
   };
   const closeModal = () => setModal(null);
@@ -15314,6 +15960,28 @@ function AdminPortal({ admin, onLogout, onToast }) {
       onToast == null ? void 0 : onToast(e.message, "error");
     } finally {
       setSaving(false);
+    }
+  };
+  const [togglingTheatreId, setTogglingTheatreId] = useState(null);
+  const handleToggleInTheatre = async (movie) => {
+    const isCurrentlyYes = movie.inTheatre === "Yes" || movie.inTheatre === true;
+    const nextVal = isCurrentlyYes ? "No" : "Yes";
+    setTogglingTheatreId(movie._id);
+    setMovies((prev) => prev.map((x) => x._id === movie._id ? { ...x, inTheatre: nextVal } : x));
+    if (detailMovie && detailMovie._id === movie._id) {
+      setDetailMovie((prev) => prev ? { ...prev, inTheatre: nextVal } : prev);
+    }
+    try {
+      await API.adminUpdateMovie(movie._id, { inTheatre: nextVal });
+      onToast == null ? void 0 : onToast(`"${movie.title}" Now in Theatre set to ${nextVal}`, "success");
+    } catch (err) {
+      setMovies((prev) => prev.map((x) => x._id === movie._id ? { ...x, inTheatre: isCurrentlyYes ? "Yes" : "No" } : x));
+      if (detailMovie && detailMovie._id === movie._id) {
+        setDetailMovie((prev) => prev ? { ...prev, inTheatre: isCurrentlyYes ? "Yes" : "No" } : prev);
+      }
+      onToast == null ? void 0 : onToast(`Failed to update theatre status: ${(err == null ? void 0 : err.message) || err}`, "error");
+    } finally {
+      setTogglingTheatreId(null);
     }
   };
   const handleSaveCast = async (formData) => {
@@ -16271,6 +16939,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
                   selectMode && /* @__PURE__ */ jsx("th", { style: { padding: "12px 16px", width: 40 } }),
                   /* @__PURE__ */ jsx("th", { style: { padding: "12px 20px", fontWeight: 700 }, children: "Movie Name" }),
                   /* @__PURE__ */ jsx("th", { style: { padding: "12px 20px", fontWeight: 700 }, children: "Release Date" }),
+                  /* @__PURE__ */ jsx("th", { style: { padding: "12px 20px", fontWeight: 700 }, children: "In Theatre" }),
                   /* @__PURE__ */ jsx("th", { style: { padding: "12px 20px", textAlign: "right", fontWeight: 700 }, children: "Actions" })
                 ] }) }),
                 /* @__PURE__ */ jsx("tbody", { children: pagedMovies.map((m) => {
@@ -16394,6 +17063,53 @@ function AdminPortal({ admin, onLogout, onToast }) {
                             }
                           )
                         ] }) }),
+                        /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px" }, children: /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                          /* @__PURE__ */ jsx(
+                            "button",
+                            {
+                              type: "button",
+                              disabled: togglingTheatreId === m._id,
+                              onClick: (e) => {
+                                e.stopPropagation();
+                                handleToggleInTheatre(m);
+                              },
+                              title: `Toggle to ${m.inTheatre === "Yes" || m.inTheatre === true ? "No" : "Yes"}`,
+                              style: {
+                                position: "relative",
+                                width: 36,
+                                height: 20,
+                                borderRadius: 20,
+                                background: m.inTheatre === "Yes" || m.inTheatre === true ? "#22c55e" : "#333",
+                                border: "none",
+                                cursor: togglingTheatreId === m._id ? "wait" : "pointer",
+                                padding: 2,
+                                transition: "background 0.2s ease",
+                                display: "flex",
+                                alignItems: "center",
+                                flexShrink: 0
+                              },
+                              children: /* @__PURE__ */ jsx(
+                                "span",
+                                {
+                                  style: {
+                                    width: 16,
+                                    height: 16,
+                                    borderRadius: "50%",
+                                    background: "#fff",
+                                    transform: m.inTheatre === "Yes" || m.inTheatre === true ? "translateX(16px)" : "translateX(0px)",
+                                    transition: "transform 0.2s ease",
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                                  }
+                                }
+                              )
+                            }
+                          ),
+                          /* @__PURE__ */ jsx("span", { style: {
+                            fontSize: "0.78rem",
+                            fontWeight: 800,
+                            color: m.inTheatre === "Yes" || m.inTheatre === true ? "#22c55e" : "var(--ap-text-muted)"
+                          }, children: m.inTheatre === "Yes" || m.inTheatre === true ? "Yes" : "No" })
+                        ] }) }),
                         /* @__PURE__ */ jsx("td", { style: { padding: "14px 20px", textAlign: "right" }, children: !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end" }, children: [
                           /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openMovieDetail(m), style: { color: "#ffd700", fontWeight: 600 }, children: "Manage" }),
                           /* @__PURE__ */ jsx("button", { className: "btn btn-ghost btn-sm", onClick: () => openEdit("movie", m), children: "Edit" }),
@@ -16438,6 +17154,75 @@ function AdminPortal({ admin, onLogout, onToast }) {
                           /* @__PURE__ */ jsx("div", { style: { fontSize: "0.68rem", color: "rgba(255,255,255,0.6)", marginTop: 1 }, children: fmtDate(m.releaseDate) })
                         ] })
                       ] }),
+                      /* @__PURE__ */ jsxs(
+                        "div",
+                        {
+                          style: {
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "7px 10px",
+                            background: m.inTheatre === "Yes" || m.inTheatre === true ? "rgba(34, 197, 94, 0.12)" : "#13131b",
+                            borderTop: "1px solid var(--ap-border)",
+                            fontSize: "0.72rem",
+                            transition: "background 0.2s ease"
+                          },
+                          onClick: (e) => e.stopPropagation(),
+                          children: [
+                            /* @__PURE__ */ jsxs("span", { style: {
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              fontWeight: 700,
+                              color: m.inTheatre === "Yes" || m.inTheatre === true ? "#22c55e" : "#8a8a9e"
+                            }, children: [
+                              /* @__PURE__ */ jsx("span", { children: "🎟️" }),
+                              " In Theatre:",
+                              /* @__PURE__ */ jsx("strong", { style: {
+                                color: m.inTheatre === "Yes" || m.inTheatre === true ? "#4ade80" : "#ef4444",
+                                marginLeft: 2
+                              }, children: m.inTheatre === "Yes" || m.inTheatre === true ? "Yes" : "No" })
+                            ] }),
+                            /* @__PURE__ */ jsx(
+                              "button",
+                              {
+                                type: "button",
+                                disabled: togglingTheatreId === m._id,
+                                onClick: () => handleToggleInTheatre(m),
+                                title: `Toggle to ${m.inTheatre === "Yes" || m.inTheatre === true ? "No" : "Yes"}`,
+                                style: {
+                                  position: "relative",
+                                  width: 36,
+                                  height: 20,
+                                  borderRadius: 20,
+                                  background: m.inTheatre === "Yes" || m.inTheatre === true ? "#22c55e" : "#333",
+                                  border: "none",
+                                  cursor: togglingTheatreId === m._id ? "wait" : "pointer",
+                                  padding: 2,
+                                  transition: "background 0.2s ease",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  flexShrink: 0
+                                },
+                                children: /* @__PURE__ */ jsx(
+                                  "span",
+                                  {
+                                    style: {
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: "50%",
+                                      background: "#fff",
+                                      transform: m.inTheatre === "Yes" || m.inTheatre === true ? "translateX(16px)" : "translateX(0px)",
+                                      transition: "transform 0.2s ease",
+                                      boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                                    }
+                                  }
+                                )
+                              }
+                            )
+                          ]
+                        }
+                      ),
                       !selectMode && /* @__PURE__ */ jsxs("div", { style: { display: "flex", borderTop: "1px solid var(--ap-border)", background: "#13131b" }, onClick: (e) => e.stopPropagation(), children: [
                         [["Manage", () => openMovieDetail(m), "#ffd700"], ["Edit", () => openEdit("movie", m), "#fff"]].map(([lbl, fn, hc]) => /* @__PURE__ */ jsx(
                           "button",
@@ -16636,7 +17421,13 @@ function AdminPortal({ admin, onLogout, onToast }) {
               /* @__PURE__ */ jsx("div", { style: { fontSize: "1.1rem", fontWeight: 700, color: "var(--ap-text-muted)" }, children: "No cast or crew found" })
             ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
               ["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer", "Other"].map((typeLabel) => {
-                const group = pagedCast.filter((c) => (c.type || "Other") === typeLabel || typeLabel === "Other" && !["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer"].includes(c.type));
+                const group = pagedCast.filter((c) => {
+                  const pRole = Array.isArray(c.roles) && c.roles[0] || (c.type ? c.type.split(",")[0].trim() : "Other");
+                  if (typeLabel === "Other") {
+                    return !["Actor", "Actress", "Director", "Producer", "Music Director", "Singer", "Lyricist", "Cinematographer"].includes(pRole);
+                  }
+                  return pRole === typeLabel;
+                });
                 if (!group.length) return null;
                 return /* @__PURE__ */ jsxs("div", { style: { marginBottom: 36 }, children: [
                   /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }, children: [
@@ -16960,7 +17751,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
         /* @__PURE__ */ jsx("button", { className: "modal-close", onClick: closeModal, children: "×" })
       ] }),
       /* @__PURE__ */ jsxs("div", { style: { padding: "20px 0 4px" }, children: [
-        modal.type === "movie" && /* @__PURE__ */ jsx(MovieForm, { initial: modal.data, onSave: handleSaveMovie, onCancel: closeModal, saving }, modal.data ? JSON.stringify(modal.data) : "new"),
+        modal.type === "movie" && /* @__PURE__ */ jsx(MovieForm, { initial: modal.data, onSave: handleSaveMovie, onCancel: closeModal, saving, onToast }, modal.data ? JSON.stringify(modal.data) : "new"),
         modal.type === "cast" && /* @__PURE__ */ jsx(CastForm, { initial: modal.data, onSave: handleSaveCast, onCancel: closeModal, saving }, modal.data ? JSON.stringify(modal.data) : "new"),
         modal.type === "production" && /* @__PURE__ */ jsx(ProductionForm, { initial: modal.data, onSave: handleSaveProd, onCancel: closeModal, saving }, modal.data ? JSON.stringify(modal.data) : "new"),
         modal.type === "news" && /* @__PURE__ */ jsx(NewsForm, { initial: modal.data, onSave: handleSaveNews, onCancel: closeModal, saving, movies }, modal.data ? JSON.stringify(modal.data) : "new"),

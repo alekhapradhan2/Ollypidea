@@ -559,6 +559,7 @@ function MovieForm({ initial, onSave, onCancel, saving, onToast }) {
     synopsis: initial?.synopsis || "",
     posterUrl: initial?.posterUrl || "",
     thumbnailUrl: initial?.thumbnailUrl || "",
+    inTheatre: (initial?.inTheatre && (String(initial.inTheatre).toLowerCase() === "yes" || initial.inTheatre === true)) ? "Yes" : "No",
     verdict: initial?.verdict || "Upcoming",
     runtime: initial?.runtime || "",
     imdbId: initial?.imdbId || "",
@@ -814,6 +815,7 @@ function MovieForm({ initial, onSave, onCancel, saving, onToast }) {
       synopsis: form.synopsis,
       posterUrl: form.posterUrl,
       thumbnailUrl: form.thumbnailUrl,
+      inTheatre: form.inTheatre === "Yes" ? "Yes" : "No",
       verdict: form.verdict,
       runtime: form.runtime,
       imdbId: form.imdbId,
@@ -1111,6 +1113,53 @@ function MovieForm({ initial, onSave, onCancel, saving, onToast }) {
             <div className="form-group">
               <label className="form-label">Runtime</label>
               <input className="form-input" value={form.runtime} onChange={e => set("runtime", e.target.value)} placeholder="e.g. 2h 15m" />
+            </div>
+          </div>
+          <div className="form-group" style={{ background: "rgba(255,255,255,0.03)", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border)", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <label className="form-label" style={{ marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>🎟️</span> Now In Theatres
+                </label>
+                <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+                  Toggle whether this movie is currently running in theatres (stored as &quot;Yes&quot; or &quot;No&quot;)
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: "0.85rem", fontWeight: 800, color: form.inTheatre === "Yes" ? "#22c55e" : "#ef4444" }}>
+                  {form.inTheatre === "Yes" ? "Yes" : "No"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => set("inTheatre", form.inTheatre === "Yes" ? "No" : "Yes")}
+                  title={`Toggle to ${form.inTheatre === "Yes" ? "No" : "Yes"}`}
+                  style={{
+                    position: "relative",
+                    width: 44,
+                    height: 24,
+                    borderRadius: 24,
+                    background: form.inTheatre === "Yes" ? "#22c55e" : "#333",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 2,
+                    transition: "background 0.2s ease",
+                    display: "flex",
+                    alignItems: "center"
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: "50%",
+                      background: "#fff",
+                      transform: form.inTheatre === "Yes" ? "translateX(20px)" : "translateX(0px)",
+                      transition: "transform 0.2s ease",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                    }}
+                  />
+                </button>
+              </div>
             </div>
           </div>
           <div className="form-group">
@@ -2148,6 +2197,38 @@ function AdminMovieDetail({ movie: initialMovie, movies, onBack, onToast, onMovi
                 border: `1px solid ${verdictColor(movie.verdict)}44`,
               }}>{movie.verdict || "Upcoming"}</span>
               {movie.runtime && <span style={{ fontSize: "0.72rem", color: "var(--muted)", padding: "2px 9px", borderRadius: 9, border: "1px solid var(--border)" }}>{movie.runtime}</span>}
+              <button
+                type="button"
+                onClick={async () => {
+                  const isYes = movie.inTheatre === "Yes" || movie.inTheatre === true;
+                  const nextVal = isYes ? "No" : "Yes";
+                  try {
+                    await API.adminUpdateMovie(movie._id, { inTheatre: nextVal });
+                    const updated = { ...movie, inTheatre: nextVal };
+                    setMovie(updated);
+                    onMovieUpdate?.(updated);
+                    onToast?.(`Now in Theatre set to ${nextVal}`, "success");
+                  } catch (e) {
+                    onToast?.(e.message, "error");
+                  }
+                }}
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "2px 10px",
+                  borderRadius: 9,
+                  background: (movie.inTheatre === "Yes" || movie.inTheatre === true) ? "rgba(34, 197, 94, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                  color: (movie.inTheatre === "Yes" || movie.inTheatre === true) ? "#22c55e" : "var(--muted)",
+                  border: `1px solid ${(movie.inTheatre === "Yes" || movie.inTheatre === true) ? "#22c55e66" : "var(--border)"}`,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5
+                }}
+                title="Click to toggle Now in Theatre"
+              >
+                <span>🎟️</span> In Theatre: <strong style={{ color: (movie.inTheatre === "Yes" || movie.inTheatre === true) ? "#4ade80" : "#ef4444" }}>{(movie.inTheatre === "Yes" || movie.inTheatre === true) ? "Yes" : "No"}</strong>
+              </button>
             </div>
           </div>
           <a href={`/movie/${movie._id}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem", flexShrink: 0 }}>View Public ↗</a>
@@ -3324,6 +3405,33 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
     finally { setSaving(false); }
   };
 
+  // ── Quick Toggle Now in Theatre ──
+  const [togglingTheatreId, setTogglingTheatreId] = useState(null);
+
+  const handleToggleInTheatre = async (movie) => {
+    const isCurrentlyYes = movie.inTheatre === "Yes" || movie.inTheatre === true;
+    const nextVal = isCurrentlyYes ? "No" : "Yes";
+    setTogglingTheatreId(movie._id);
+    // Optimistically update
+    setMovies(prev => prev.map(x => x._id === movie._id ? { ...x, inTheatre: nextVal } : x));
+    if (detailMovie && detailMovie._id === movie._id) {
+      setDetailMovie(prev => prev ? { ...prev, inTheatre: nextVal } : prev);
+    }
+    try {
+      await API.adminUpdateMovie(movie._id, { inTheatre: nextVal });
+      onToast?.(`"${movie.title}" Now in Theatre set to ${nextVal}`, "success");
+    } catch (err) {
+      // Revert on error
+      setMovies(prev => prev.map(x => x._id === movie._id ? { ...x, inTheatre: isCurrentlyYes ? "Yes" : "No" } : x));
+      if (detailMovie && detailMovie._id === movie._id) {
+        setDetailMovie(prev => prev ? { ...prev, inTheatre: isCurrentlyYes ? "Yes" : "No" } : prev);
+      }
+      onToast?.(`Failed to update theatre status: ${err?.message || err}`, "error");
+    } finally {
+      setTogglingTheatreId(null);
+    }
+  };
+
   // ── Cast save ──
   const handleSaveCast = async (formData) => {
     setSaving(true);
@@ -4377,6 +4485,7 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                               {selectMode && <th style={{ padding: "12px 16px", width: 40 }}></th>}
                               <th style={{ padding: "12px 20px", fontWeight: 700 }}>Movie Name</th>
                               <th style={{ padding: "12px 20px", fontWeight: 700 }}>Release Date</th>
+                              <th style={{ padding: "12px 20px", fontWeight: 700 }}>In Theatre</th>
                               <th style={{ padding: "12px 20px", textAlign: "right", fontWeight: 700 }}>Actions</th>
                             </tr>
                           </thead>
@@ -4506,6 +4615,49 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                       </div>
                                     )}
                                   </td>
+                                  <td style={{ padding: "14px 20px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                      <button
+                                        type="button"
+                                        disabled={togglingTheatreId === m._id}
+                                        onClick={(e) => { e.stopPropagation(); handleToggleInTheatre(m); }}
+                                        title={`Toggle to ${(m.inTheatre === "Yes" || m.inTheatre === true) ? "No" : "Yes"}`}
+                                        style={{
+                                          position: "relative",
+                                          width: 36,
+                                          height: 20,
+                                          borderRadius: 20,
+                                          background: (m.inTheatre === "Yes" || m.inTheatre === true) ? "#22c55e" : "#333",
+                                          border: "none",
+                                          cursor: togglingTheatreId === m._id ? "wait" : "pointer",
+                                          padding: 2,
+                                          transition: "background 0.2s ease",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          flexShrink: 0
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            width: 16,
+                                            height: 16,
+                                            borderRadius: "50%",
+                                            background: "#fff",
+                                            transform: (m.inTheatre === "Yes" || m.inTheatre === true) ? "translateX(16px)" : "translateX(0px)",
+                                            transition: "transform 0.2s ease",
+                                            boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                                          }}
+                                        />
+                                      </button>
+                                      <span style={{
+                                        fontSize: "0.78rem",
+                                        fontWeight: 800,
+                                        color: (m.inTheatre === "Yes" || m.inTheatre === true) ? "#22c55e" : "var(--ap-text-muted)"
+                                      }}>
+                                        {(m.inTheatre === "Yes" || m.inTheatre === true) ? "Yes" : "No"}
+                                      </span>
+                                    </div>
+                                  </td>
                                   <td style={{ padding: "14px 20px", textAlign: "right" }}>
                                     {!selectMode && (
                                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -4570,6 +4722,69 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
                                   <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.6)", marginTop: 1 }}>{fmtDate(m.releaseDate)}</div>
                                 </div>
                               </div>
+                              {/* In Theatre Toggle Strip */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  padding: "7px 10px",
+                                  background: (m.inTheatre === "Yes" || m.inTheatre === true) ? "rgba(34, 197, 94, 0.12)" : "#13131b",
+                                  borderTop: "1px solid var(--ap-border)",
+                                  fontSize: "0.72rem",
+                                  transition: "background 0.2s ease"
+                                }}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <span style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  fontWeight: 700,
+                                  color: (m.inTheatre === "Yes" || m.inTheatre === true) ? "#22c55e" : "#8a8a9e"
+                                }}>
+                                  <span>🎟️</span> In Theatre:
+                                  <strong style={{
+                                    color: (m.inTheatre === "Yes" || m.inTheatre === true) ? "#4ade80" : "#ef4444",
+                                    marginLeft: 2
+                                  }}>
+                                    {(m.inTheatre === "Yes" || m.inTheatre === true) ? "Yes" : "No"}
+                                  </strong>
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={togglingTheatreId === m._id}
+                                  onClick={() => handleToggleInTheatre(m)}
+                                  title={`Toggle to ${(m.inTheatre === "Yes" || m.inTheatre === true) ? "No" : "Yes"}`}
+                                  style={{
+                                    position: "relative",
+                                    width: 36,
+                                    height: 20,
+                                    borderRadius: 20,
+                                    background: (m.inTheatre === "Yes" || m.inTheatre === true) ? "#22c55e" : "#333",
+                                    border: "none",
+                                    cursor: togglingTheatreId === m._id ? "wait" : "pointer",
+                                    padding: 2,
+                                    transition: "background 0.2s ease",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: "50%",
+                                      background: "#fff",
+                                      transform: (m.inTheatre === "Yes" || m.inTheatre === true) ? "translateX(16px)" : "translateX(0px)",
+                                      transition: "transform 0.2s ease",
+                                      boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
+                                    }}
+                                  />
+                                </button>
+                              </div>
+
                               {/* Action strip */}
                               {!selectMode && (
                                 <div style={{ display: "flex", borderTop: "1px solid var(--ap-border)", background: "#13131b" }} onClick={e => e.stopPropagation()}>

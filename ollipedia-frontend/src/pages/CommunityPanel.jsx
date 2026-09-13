@@ -11,14 +11,21 @@ const VOTE_LABELS = {
 function getActivityInfo(act) {
   const type = act.type || "ACTIVITY";
   switch (type) {
-    case "REGISTER":
+    case "REGISTER": {
+      const isGoogle =
+        act.metadata?.provider === "google" ||
+        act.userId?.authProvider === "google" ||
+        act.userId?.googleId ||
+        /google/i.test(act.metadata?.snippet || "");
       return {
-        icon: "👋",
-        title: "Joined Ollypedia Community",
-        desc: act.metadata?.snippet || "New community member signed up",
-        color: "#c9973a",
-        bg: "rgba(201,151,58,0.15)",
+        icon: isGoogle ? "🌐" : "👋",
+        title: isGoogle ? "Joined via Google OAuth" : "Joined Ollypedia Community",
+        desc: act.metadata?.snippet || (isGoogle ? "New member onboarded via Google" : "New community member signed up"),
+        color: isGoogle ? "#60a5fa" : "#c9973a",
+        bg: isGoogle ? "rgba(59, 130, 246, 0.15)" : "rgba(201,151,58,0.15)",
+        isGoogle,
       };
+    }
     case "VOTE_MOVIE":
       return {
         icon: "🗳️",
@@ -596,8 +603,11 @@ export default function CommunityPanel({ onToast }) {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                            <span style={{ fontWeight: 700, fontSize: "0.84rem", color: "#f8fafc" }}>
+                            <span style={{ fontWeight: 700, fontSize: "0.84rem", color: "#f8fafc", display: "flex", alignItems: "center", gap: 6 }}>
                               {act.userId?.displayName || act.userId?.username || "A Member"}
+                              {info.isGoogle && (
+                                <span style={{ fontSize: "0.66rem", padding: "1px 5px", borderRadius: 4, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }}>Google</span>
+                              )}
                             </span>
                             <span style={{ fontSize: "0.7rem", color: "#64748b", flexShrink: 0 }}>{formatDate(act.createdAt)}</span>
                           </div>
@@ -748,7 +758,12 @@ export default function CommunityPanel({ onToast }) {
                             style={{ width: 38, height: 38, borderRadius: "50%", background: "#222" }}
                           />
                           <div>
-                            <div style={{ fontWeight: 700, color: "#f8fafc" }}>{u.displayName || u.username}</div>
+                            <div style={{ fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: 6 }}>
+                              {u.displayName || u.username}
+                              {(u.authProvider === "google" || u.googleId) && (
+                                <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: 4, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }}>Google</span>
+                              )}
+                            </div>
                             <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>@{u.username}</div>
                           </div>
                         </div>
@@ -998,6 +1013,11 @@ export default function CommunityPanel({ onToast }) {
                             <span style={{ fontSize: "0.72rem", padding: "1px 6px", borderRadius: 8, background: info.bg, color: info.color, fontWeight: 700 }}>
                               {info.title}
                             </span>
+                            {info.isGoogle && (
+                              <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: 6, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }}>
+                                🌐 Google OAuth
+                              </span>
+                            )}
                           </div>
                           <span style={{ fontSize: "0.75rem", color: "#64748b" }}>{formatDate(act.createdAt)}</span>
                         </div>
@@ -1304,6 +1324,11 @@ export default function CommunityPanel({ onToast }) {
                       <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: 10, background: userDetail.user?.status === "active" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)", color: userDetail.user?.status === "active" ? "#10b981" : "#ef4444", fontWeight: 700 }}>
                         {userDetail.user?.status}
                       </span>
+                      {(userDetail.user?.authProvider === "google" || userDetail.user?.googleId) && (
+                        <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: 10, background: "rgba(66, 133, 244, 0.2)", color: "#60a5fa", fontWeight: 700 }}>
+                          🌐 Google OAuth
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ fontSize: "0.82rem", color: "#94a3b8", marginTop: 4 }}>
