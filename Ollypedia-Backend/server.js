@@ -377,6 +377,7 @@ const MovieSchema = new mongoose.Schema({
   slug: { type: String, default: "", index: true },
   interestedYes: { type: Number, default: 0 },
   interestedNo: { type: Number, default: 0 },   // SEO slug e.g. "bindusagar-2026"
+  inTheatre: { type: String, default: "No", enum: ["Yes", "No", "yes", "no"] },
   streamingOn: { type: String, default: "" },  // OTT platform name e.g. "Aao NXT"
   streamingUrl: { type: String, default: "" },  // Direct link to stream the movie
   ottReleaseDate: { type: String, default: "" },  // OTT release date (ISO string or "TBA")
@@ -448,6 +449,42 @@ BlogSchema.pre("validate", function (next) {
     this.readTime = Math.max(1, Math.ceil(this.content.split(/\s+/).length / 200));
   }
   next();
+});
+
+// On-demand frontend cache revalidation helper
+async function revalidateFrontendBlog(slug) {
+  if (!slug) return;
+  const secret = process.env.REVALIDATE_SECRET;
+  if (!secret) return;
+  const siteUrl = process.env.NEXT_SITE_URL || "https://www.ollypedia.in";
+  try {
+    const res = await fetch(`${siteUrl}/api/revalidate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${secret}`
+      },
+      body: JSON.stringify({ path: `/blog/${slug}` })
+    });
+    const data = await res.json().catch(() => ({}));
+    console.log(`[Revalidate] Purged frontend cache for /blog/${slug} (${res.status}):`, data);
+  } catch (err) {
+    console.warn(`[Revalidate Warning] Failed to purge /blog/${slug}:`, err.message);
+  }
+}
+
+// Auto-revalidate whenever a published blog is saved or created
+BlogSchema.post("save", function (doc) {
+  if (doc && doc.slug && doc.published) {
+    revalidateFrontendBlog(doc.slug);
+  }
+});
+
+// Auto-revalidate whenever a published blog is updated via findOneAndUpdate / findByIdAndUpdate
+BlogSchema.post("findOneAndUpdate", function (doc) {
+  if (doc && doc.slug && doc.published) {
+    revalidateFrontendBlog(doc.slug);
+  }
 });
 
 const Blog = mongoose.model("Blog", BlogSchema);
@@ -563,6 +600,8 @@ const CommunityUserSchema = new mongoose.Schema({
   commentCount: { type: Number, default: 0 },
   voteCount: { type: Number, default: 0 },
   likesReceived: { type: Number, default: 0 },
+  authProvider: { type: String, default: "local" },
+  googleId: { type: String, default: "" },
 }, { timestamps: true });
 
 const CommunityActivitySchema = new mongoose.Schema({
@@ -3720,9 +3759,12 @@ app.patch("/api/movies/:id", auth, async (req, res) => {
     const movie = await Movie.findById(req.params.id);
     if (!movie) return res.status(404).json({ error: "Not found" });
     if (!canEdit(movie, req.prodId)) return res.status(403).json({ error: "Forbidden" });
-    const allowed = ["title", "category", "genre", "releaseDate", "releaseDatePrecision", "releaseTBA", "isReRelease", "reReleaseDate", "reReleaseDatePrecision", "director", "producer", "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status", "streamingOn", "streamingUrl", "ottReleaseDate"];
+    const allowed = ["title", "category", "genre", "releaseDate", "releaseDatePrecision", "releaseTBA", "isReRelease", "reReleaseDate", "reReleaseDatePrecision", "director", "producer", "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status", "streamingOn", "streamingUrl", "ottReleaseDate", "inTheatre"];
     const update = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
+    if (req.body.inTheatre !== undefined) {
+      update.inTheatre = String(req.body.inTheatre).toLowerCase() === "yes" || req.body.inTheatre === true ? "Yes" : "No";
+    }
     if (req.body.verdict) update.status = req.body.verdict === "Upcoming" ? "Upcoming" : "Released";
     const updated = await Movie.findByIdAndUpdate(req.params.id, update, { new: true })
       .populate("productionId", "name logo").populate("collaborators", "name logo").lean();
@@ -4158,7 +4200,7 @@ app.get("/api/admin/community/stats", adminAuth, async (req, res) => {
       CommunityActivity.find()
         .sort({ createdAt: -1 })
         .limit(12)
-        .populate("userId", "username displayName email avatar")
+        .populate("userId", "username displayName email avatar role status authProvider")
         .populate("movieId", "title slug posterUrl releaseDate")
         .lean()
     ]);
@@ -4348,7 +4390,7 @@ app.get("/api/admin/community/activities", adminAuth, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("userId", "username displayName email avatar role status")
+        .populate("userId", "username displayName email avatar role status authProvider")
         .populate("movieId", "title slug posterUrl releaseDate")
         .lean(),
       CommunityActivity.countDocuments(filter)
@@ -4710,6 +4752,7 @@ app.post("/api/admin/movies", adminAuth, async (req, res) => {
       runtime: String(b.runtime || ""),
       bannerUrl: String(b.bannerUrl || ""),
       boxOffice: b.boxOffice || { opening: "TBA", firstWeek: "TBA", total: "TBA" },
+      inTheatre: (b.inTheatre && String(b.inTheatre).toLowerCase() === "yes") ? "Yes" : "No",
       streamingOn: String(b.streamingOn || ""),
       streamingUrl: String(b.streamingUrl || ""),
       ottReleaseDate: String(b.ottReleaseDate || ""),
@@ -4776,8 +4819,11 @@ app.patch("/api/admin/movies/:id", adminAuth, async (req, res) => {
     const scalars = ["title", "category", "genre", "releaseDate", "releaseDatePrecision", "releaseTBA", "isReRelease", "reReleaseDate", "reReleaseDatePrecision", "director", "producer",
       "budget", "language", "synopsis", "posterUrl", "thumbnailUrl", "verdict", "status",
       "imdbId", "imdbRating", "imdbVotes", "contentRating", "runtime", "bannerUrl",
-      "streamingOn", "streamingUrl", "ottReleaseDate"];
+      "streamingOn", "streamingUrl", "ottReleaseDate", "inTheatre"];
     scalars.forEach(k => { if (b[k] !== undefined) update[k] = b[k]; });
+    if (b.inTheatre !== undefined) {
+      update.inTheatre = String(b.inTheatre).toLowerCase() === "yes" || b.inTheatre === true ? "Yes" : "No";
+    }
     if (b.verdict) update.status = b.verdict === "Upcoming" ? "Upcoming" : "Released";
     if (b.boxOffice) update.boxOffice = b.boxOffice;
     if (b.ott !== undefined) {
