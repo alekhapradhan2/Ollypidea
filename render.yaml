@@ -23,21 +23,23 @@ services:
         sync: false          # ← set to your frontend URL after first deploy
       - key: ADMIN_REGISTER_SECRET
         sync: false          # ← choose any secret word
-      # ── Email Marketing (Brevo SMTP) ──
+      # ── Email Marketing (Brevo REST API on HTTPS 443 + SMTP fallback) ──
+      - key: BREVO_API_KEY
+        sync: false          # ← Brevo API Key (xkeysib-...) REQUIRED for Render because Render blocks SMTP port 587
       - key: BREVO_SMTP_HOST
         value: smtp-relay.brevo.com
       - key: BREVO_SMTP_PORT
         value: "587"
       - key: BREVO_SMTP_USER
-        sync: false          # ← your Brevo SMTP login
+        sync: false          # ← Brevo SMTP login (optional if BREVO_API_KEY is set)
       - key: BREVO_SMTP_KEY
-        sync: false          # ← your Brevo SMTP key (xsmtpsib-...)
+        sync: false          # ← Brevo SMTP key (xsmtpsib-...)
       - key: BREVO_FROM_EMAIL
         value: noreply@ollypedia.in
       - key: BREVO_FROM_NAME
         value: Ollypedia
       - key: BACKEND_URL
-        sync: false          # ← set to your actual backend URL (e.g. https://ollipedia-backend.onrender.com)
+        sync: false          # ← set to https://ollipedia-backend.onrender.com (auto-detected if left empty)
       - key: EMAIL_UNSUBSCRIBE_SECRET
         sync: false          # ← random 32+ char secret string
       - key: EMAIL_TRACKING_SECRET

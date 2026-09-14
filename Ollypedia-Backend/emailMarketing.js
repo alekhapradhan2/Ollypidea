@@ -13,22 +13,45 @@
 
 const nodemailer = require('nodemailer');
 const crypto     = require('crypto');
+const axios      = require('axios');
 const { parse: csvParse } = require('csv-parse/sync');
 
+// ── Smart backend URL resolution for email click/open tracking links ───────────
+// Prioritizes:
+// 1. Explicit BACKEND_URL if not localhost
+// 2. Render-provided RENDER_EXTERNAL_URL (e.g. https://ollipedia-backend.onrender.com)
+// 3. Fallback to BACKEND_URL or local server
+function resolveBackendUrl() {
+  const envBackend = (process.env.BACKEND_URL || '').trim();
+  if (envBackend && !envBackend.includes('localhost') && !envBackend.includes('127.0.0.1')) {
+    return envBackend.replace(/\/+$/, '');
+  }
+  const renderUrl = (process.env.RENDER_EXTERNAL_URL || '').trim();
+  if (renderUrl) {
+    return renderUrl.replace(/\/+$/, '');
+  }
+  return (envBackend || ('http://localhost:' + (process.env.PORT || 4000))).replace(/\/+$/, '');
+}
+
 // ── Read config lazily so .env can be loaded after require() ────────────────
-const cfg = () => ({
-  host:        process.env.BREVO_SMTP_HOST     || 'smtp-relay.brevo.com',
-  port:        parseInt(process.env.BREVO_SMTP_PORT || '587', 10),
-  user:        process.env.BREVO_SMTP_USER     || '',   // your Brevo account email
-  pass:        process.env.BREVO_SMTP_KEY      || '',   // SMTP Key from Brevo dashboard
-  fromEmail:   process.env.BREVO_FROM_EMAIL    || 'noreply@ollypedia.in',
-  fromName:    process.env.BREVO_FROM_NAME     || 'Ollypedia',
-  unsubSecret: process.env.EMAIL_UNSUBSCRIBE_SECRET || 'change_me_unsub_32chars',
-  trackSecret: process.env.EMAIL_TRACKING_SECRET    || 'change_me_track_32chars',
-  backendUrl:  process.env.BACKEND_URL || ('http://localhost:' + (process.env.PORT || 4000)),
-  batchSize:   parseInt(process.env.EMAIL_BATCH_SIZE     || '30',  10),
-  batchDelay:  parseInt(process.env.EMAIL_BATCH_DELAY_MS || '500', 10),
-});
+const cfg = () => {
+  // Support BREVO_API_KEY directly, or if user put xkeysib-... inside BREVO_SMTP_KEY
+  const apiKey = (process.env.BREVO_API_KEY || (process.env.BREVO_SMTP_KEY && process.env.BREVO_SMTP_KEY.startsWith('xkeysib-') ? process.env.BREVO_SMTP_KEY : '')).trim();
+  return {
+    apiKey,
+    host:        process.env.BREVO_SMTP_HOST     || 'smtp-relay.brevo.com',
+    port:        parseInt(process.env.BREVO_SMTP_PORT || '587', 10),
+    user:        (process.env.BREVO_SMTP_USER     || '').trim(),   // your Brevo account email
+    pass:        (process.env.BREVO_SMTP_KEY      || '').trim(),   // SMTP Key from Brevo dashboard
+    fromEmail:   (process.env.BREVO_FROM_EMAIL    || 'noreply@ollypedia.in').trim(),
+    fromName:    (process.env.BREVO_FROM_NAME     || 'Ollypedia').trim(),
+    unsubSecret: process.env.EMAIL_UNSUBSCRIBE_SECRET || 'change_me_unsub_32chars',
+    trackSecret: process.env.EMAIL_TRACKING_SECRET    || 'change_me_track_32chars',
+    backendUrl:  resolveBackendUrl(),
+    batchSize:   parseInt(process.env.EMAIL_BATCH_SIZE     || '30',  10),
+    batchDelay:  parseInt(process.env.EMAIL_BATCH_DELAY_MS || '500', 10),
+  };
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth, SITE_URL) {
@@ -119,15 +142,15 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
     mongoose.model('EmailCampaignRecipient', EmailCampaignRecipientSchema, 'emailcampaignrecipients');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  EMAIL SERVICE — Brevo SMTP via nodemailer
+  //  EMAIL SERVICE — Brevo HTTPS REST API (Port 443) & Brevo SMTP (Port 587)
   // ═══════════════════════════════════════════════════════════════════════════
 
   function createTransporter() {
     const c = cfg();
     if (!c.user || !c.pass) {
       throw new Error(
-        'Brevo SMTP credentials are not configured. ' +
-        'Set BREVO_SMTP_USER and BREVO_SMTP_KEY in your .env file.'
+        'Brevo credentials are not configured. ' +
+        'Set BREVO_API_KEY (for Render / production over HTTPS) or BREVO_SMTP_USER & BREVO_SMTP_KEY (for local dev).'
       );
     }
     return nodemailer.createTransport({
@@ -136,16 +159,77 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
       secure: false,  // STARTTLS on 587
       auth:   { user: c.user, pass: c.pass },
       tls:    { rejectUnauthorized: false },
+      connectionTimeout: 15000,
     });
+  }
+
+  // Send via Brevo v3 HTTPS REST API (Port 443 — reliable in cloud environments like Render)
+  async function sendViaBrevoApi({ to, subject, html, fromName, fromEmail, replyTo, apiKey }) {
+    const payload = {
+      sender: {
+        name:  fromName,
+        email: fromEmail,
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      headers: { 'X-Mailer': 'Ollypedia Email Marketing v1.0' },
+    };
+    if (replyTo && replyTo.trim()) {
+      payload.replyTo = { email: replyTo.trim() };
+    }
+
+    try {
+      const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        timeout: 20000,
+      });
+      const data = response.data || {};
+      const msgId = data.messageId || (Array.isArray(data.messageIds) ? data.messageIds[0] : 'brevo-api-ok');
+      console.log(`[Email] Brevo REST API Dispatched -> ID: ${msgId}`);
+      return { messageId: msgId, response: 'OK' };
+    } catch (apiErr) {
+      const respData = apiErr.response ? apiErr.response.data : null;
+      let errMsg = apiErr.message;
+      if (respData) {
+        errMsg = typeof respData === 'object' ? (respData.message || JSON.stringify(respData)) : String(respData);
+      }
+      console.error(`[Email] Brevo REST API error (${apiErr.response ? apiErr.response.status : 'network'}):`, errMsg);
+      throw new Error(`Brevo API error: ${errMsg}`);
+    }
   }
 
   async function sendEmail({ to, subject, html, fromName, fromEmail, replyTo }) {
     const c = cfg();
-    const transport = createTransporter();
     const fromAddr = fromEmail || c.fromEmail;
-    console.log(`[Email] Sending via Brevo SMTP -> To: ${to} | From: ${fromAddr} | Subject: "${subject}"`);
+    const resolvedFromName = fromName || c.fromName;
+
+    // ── Primary: Brevo HTTPS REST API (Port 443 — never blocked by Render / cloud firewalls) ──
+    if (c.apiKey) {
+      console.log(`[Email] Sending via Brevo REST API (HTTPS 443) -> To: ${to} | From: ${fromAddr} | Subject: "${subject}"`);
+      return sendViaBrevoApi({
+        to,
+        subject,
+        html,
+        fromName:  resolvedFromName,
+        fromEmail: fromAddr,
+        replyTo,
+        apiKey:    c.apiKey,
+      });
+    }
+
+    // ── Secondary: Brevo SMTP (Port 587) ──
+    if (process.env.RENDER_EXTERNAL_URL || process.env.RENDER) {
+      console.warn('[Email] Warning: Render free tier blocks outbound SMTP ports (587, 465, 25). Set BREVO_API_KEY (xkeysib-...) in Render environment variables to send over HTTPS port 443.');
+    }
+    const transport = createTransporter();
+    console.log(`[Email] Sending via Brevo SMTP (Port ${c.port}) -> To: ${to} | From: ${fromAddr} | Subject: "${subject}"`);
     const info = await transport.sendMail({
-      from:    '"' + (fromName || c.fromName) + '" <' + fromAddr + '>',
+      from:    '"' + resolvedFromName + '" <' + fromAddr + '>',
       to, subject, html,
       ...(replyTo ? { replyTo } : {}),
       headers: { 'X-Mailer': 'Ollypedia Email Marketing v1.0' },
@@ -894,7 +978,10 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
       res.json({
         host: c.host,
         port: c.port,
-        configured: Boolean(c.user && c.pass),
+        configured: Boolean(c.apiKey || (c.user && c.pass)),
+        mode: c.apiKey ? 'REST API (HTTPS Port 443)' : 'SMTP (Port ' + c.port + ')',
+        hasApiKey: Boolean(c.apiKey),
+        hasSmtp: Boolean(c.user && c.pass),
         smtpUser: c.user ? c.user.replace(/(?<=^..).+(?=@)/, '***') : '',
         fromEmail: c.fromEmail,
         fromName: c.fromName,
