@@ -264,7 +264,42 @@ const API = {
   adminSyncCloudinary: () => post("/admin/media/sync-cloudinary", void 0, _adminToken),
   adminDeleteMedia: (id) => del(`/admin/media/${id}`, _adminToken),
   adminBulkDeleteMedia: (ids) => post("/admin/media/bulk-delete", { ids }, _adminToken),
-  adminUpdateMedia: (id, body) => patch(`/admin/media/${id}`, body, _adminToken)
+  adminUpdateMedia: (id, body) => patch(`/admin/media/${id}`, body, _adminToken),
+  // ── Admin — Email Marketing (Brevo) ──
+  adminGetEmailDashboard: () => get("/admin/email/dashboard", _adminToken),
+  adminGetEmailSubscribers: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/email/subscribers${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminAddEmailSubscriber: (body) => post("/admin/email/subscribers", body, _adminToken),
+  adminUpdateEmailSubscriber: (id, body) => patch(`/admin/email/subscribers/${id}`, body, _adminToken),
+  adminDeleteEmailSubscriber: (id) => del(`/admin/email/subscribers/${id}`, _adminToken),
+  adminImportEmailSubscribers: (body) => post("/admin/email/subscribers/import", body, _adminToken),
+  adminSyncCommunitySubscribers: () => post("/admin/email/subscribers/sync-community", {}, _adminToken),
+  adminExportEmailSubscribersUrl: () => `${BASE}/admin/email/subscribers/export`,
+  adminGetEmailTemplates: () => get("/admin/email/templates", _adminToken),
+  adminGetEmailTemplate: (id) => get(`/admin/email/templates/${id}`, _adminToken),
+  adminCreateEmailTemplate: (body) => post("/admin/email/templates", body, _adminToken),
+  adminUpdateEmailTemplate: (id, body) => req("PUT", `/admin/email/templates/${id}`, body, _adminToken),
+  adminDeleteEmailTemplate: (id) => del(`/admin/email/templates/${id}`, _adminToken),
+  adminDuplicateEmailTemplate: (id) => post(`/admin/email/templates/${id}/duplicate`, {}, _adminToken),
+  adminGetEmailCampaigns: () => get("/admin/email/campaigns", _adminToken),
+  adminGetEmailCampaign: (id) => get(`/admin/email/campaigns/${id}`, _adminToken),
+  adminCreateEmailCampaign: (body) => post("/admin/email/campaigns", body, _adminToken),
+  adminUpdateEmailCampaign: (id, body) => req("PUT", `/admin/email/campaigns/${id}`, body, _adminToken),
+  adminDeleteEmailCampaign: (id) => del(`/admin/email/campaigns/${id}`, _adminToken),
+  adminGetCampaignRecipientCount: (body) => post("/admin/email/campaigns/recipient-count", body, _adminToken),
+  adminSendEmailCampaign: (id) => post(`/admin/email/campaigns/${id}/send`, { confirmed: true }, _adminToken),
+  adminCancelEmailCampaign: (id) => post(`/admin/email/campaigns/${id}/cancel`, {}, _adminToken),
+  adminGetCampaignRecipients: (id, params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/email/campaigns/${id}/recipients${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminReseedBrandEmailTemplates: () => post("/admin/email/templates/reseed-brand", {}, _adminToken),
+  adminGetEmailSettings: () => get("/admin/email/settings", _adminToken),
+  adminSendTestEmail: (body) => post("/admin/email/test", body, _adminToken),
+  adminSimulateCampaignOpen: (campaignId, rid) => post(`/admin/email/campaigns/${campaignId}/recipients/${rid}/simulate-open`, {}, _adminToken),
+  adminSimulateCampaignClick: (campaignId, rid) => post(`/admin/email/campaigns/${campaignId}/recipients/${rid}/simulate-click`, {}, _adminToken)
 };
 const api = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -12648,13 +12683,14 @@ function PortalCastProfile({ production }) {
     /* @__PURE__ */ jsx(CastProfile, { portalMode: true })
   ] });
 }
-const BlogGenerator = lazy(() => import("./assets/BlogGenerator-CBDa7u9e.js"));
+const BlogGenerator = lazy(() => import("./assets/BlogGenerator-uqbQBO-w.js"));
 const BoxOfficePanel = lazy(() => import("./assets/BoxOfficePanel-DWba9T8B.js"));
 const MergePanel = lazy(() => import("./assets/MergePanel-DU6eslPq.js"));
 const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBhCj4H.js"));
 const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-Bu3AylyH.js"));
 const CommunityPanel = lazy(() => import("./assets/CommunityPanel-CoCEIZbc.js"));
 const MediaPanel = lazy(() => import("./assets/MediaPanel-DOrQCeDC.js"));
+const EmailMarketingPanel = lazy(() => import("./assets/EmailMarketingPanel-URVmv492.js"));
 const GENRES = [
   "Action",
   "Drama",
@@ -15504,6 +15540,7 @@ const MODULE_GROUPS = [
   {
     title: "Audience & Ops",
     items: [
+      { key: "email-marketing", icon: "📧", label: "Email Marketing" },
       { key: "enquiries", icon: "✉️", label: "Enquiries" },
       { key: "users", icon: "👥", label: "Users & Reviewers" },
       { key: "reviews", icon: "⭐", label: "Reviews" },
@@ -15527,6 +15564,7 @@ const ALL_MODULES = [
   { key: "blog", icon: "✍️", label: "Blog" },
   { key: "boxoffice", icon: "📊", label: "Box Office" },
   { key: "sacnilk", icon: "🕷️", label: "Sacnilk" },
+  { key: "email-marketing", icon: "📧", label: "Email Marketing" },
   { key: "enquiries", icon: "✉️", label: "Enquiries" },
   { key: "merge", icon: "🔀", label: "Merge Duplicates" },
   { key: "staff", icon: "👥", label: "Staff Management" },
@@ -17741,6 +17779,7 @@ function AdminPortal({ admin, onLogout, onToast }) {
         tab === "community" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(CommunityPanel, { onToast }) }),
         tab === "users" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(UserReviewsPanel, { defaultMode: "users", movies, onToast }) }),
         tab === "reviews" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(UserReviewsPanel, { defaultMode: "reviews", movies, onToast }) }),
+        tab === "email-marketing" && /* @__PURE__ */ jsx(Suspense, { fallback: /* @__PURE__ */ jsx(Spinner, {}), children: /* @__PURE__ */ jsx(EmailMarketingPanel, { onToast }) }),
         tab === "staff" && /* @__PURE__ */ jsx(StaffPanel, { onToast }),
         tab === "settings" && /* @__PURE__ */ jsx("div", { style: { padding: 28 }, children: /* @__PURE__ */ jsx(AdminSettings, { admin, onToast }) })
       ] }) })

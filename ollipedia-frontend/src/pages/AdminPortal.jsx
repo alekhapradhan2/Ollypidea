@@ -11,6 +11,7 @@ const SacnilkScraperPanel = lazy(() => import("./SacnilkScraperPanel"));
 const UserReviewsPanel = lazy(() => import("./UserReviewsPanel"));
 const CommunityPanel = lazy(() => import("./CommunityPanel"));
 const MediaPanel = lazy(() => import("./MediaPanel"));
+const EmailMarketingPanel = lazy(() => import("./EmailMarketingPanel"));
 
 
 
@@ -2850,6 +2851,7 @@ const MODULE_GROUPS = [
   {
     title: "Audience & Ops",
     items: [
+      { key: "email-marketing", icon: "📧", label: "Email Marketing" },
       { key: "enquiries", icon: "✉️", label: "Enquiries" },
       { key: "users", icon: "👥", label: "Users & Reviewers" },
       { key: "reviews", icon: "⭐", label: "Reviews" },
@@ -2874,6 +2876,7 @@ const ALL_MODULES = [
   { key: "blog", icon: "✍️", label: "Blog" },
   { key: "boxoffice", icon: "📊", label: "Box Office" },
   { key: "sacnilk", icon: "🕷️", label: "Sacnilk" },
+  { key: "email-marketing", icon: "📧", label: "Email Marketing" },
   { key: "enquiries", icon: "✉️", label: "Enquiries" },
   { key: "merge", icon: "🔀", label: "Merge Duplicates" },
   { key: "staff", icon: "👥", label: "Staff Management" },
@@ -5326,6 +5329,13 @@ export default function AdminPortal({ admin, onLogout, onToast }) {
               {tab === "reviews" && (
                 <Suspense fallback={<Spinner />}>
                   <UserReviewsPanel defaultMode="reviews" movies={movies} onToast={onToast} />
+                </Suspense>
+              )}
+
+              {/* ── EMAIL MARKETING ── */}
+              {tab === "email-marketing" && (
+                <Suspense fallback={<Spinner />}>
+                  <EmailMarketingPanel onToast={onToast} />
                 </Suspense>
               )}
 

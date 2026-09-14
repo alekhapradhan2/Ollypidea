@@ -294,4 +294,42 @@ export const API = {
   adminDeleteMedia: (id) => del(`/admin/media/${id}`, _adminToken),
   adminBulkDeleteMedia: (ids) => post("/admin/media/bulk-delete", { ids }, _adminToken),
   adminUpdateMedia: (id, body) => patch(`/admin/media/${id}`, body, _adminToken),
+
+  // ── Admin — Email Marketing (Brevo) ──
+  adminGetEmailDashboard: () => get("/admin/email/dashboard", _adminToken),
+  adminGetEmailSubscribers: (params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/email/subscribers${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminAddEmailSubscriber: (body) => post("/admin/email/subscribers", body, _adminToken),
+  adminUpdateEmailSubscriber: (id, body) => patch(`/admin/email/subscribers/${id}`, body, _adminToken),
+  adminDeleteEmailSubscriber: (id) => del(`/admin/email/subscribers/${id}`, _adminToken),
+  adminImportEmailSubscribers: (body) => post("/admin/email/subscribers/import", body, _adminToken),
+  adminSyncCommunitySubscribers: () => post("/admin/email/subscribers/sync-community", {}, _adminToken),
+  adminExportEmailSubscribersUrl: () => `${BASE}/admin/email/subscribers/export`,
+
+  adminGetEmailTemplates: () => get("/admin/email/templates", _adminToken),
+  adminGetEmailTemplate: (id) => get(`/admin/email/templates/${id}`, _adminToken),
+  adminCreateEmailTemplate: (body) => post("/admin/email/templates", body, _adminToken),
+  adminUpdateEmailTemplate: (id, body) => req("PUT", `/admin/email/templates/${id}`, body, _adminToken),
+  adminDeleteEmailTemplate: (id) => del(`/admin/email/templates/${id}`, _adminToken),
+  adminDuplicateEmailTemplate: (id) => post(`/admin/email/templates/${id}/duplicate`, {}, _adminToken),
+
+  adminGetEmailCampaigns: () => get("/admin/email/campaigns", _adminToken),
+  adminGetEmailCampaign: (id) => get(`/admin/email/campaigns/${id}`, _adminToken),
+  adminCreateEmailCampaign: (body) => post("/admin/email/campaigns", body, _adminToken),
+  adminUpdateEmailCampaign: (id, body) => req("PUT", `/admin/email/campaigns/${id}`, body, _adminToken),
+  adminDeleteEmailCampaign: (id) => del(`/admin/email/campaigns/${id}`, _adminToken),
+  adminGetCampaignRecipientCount: (body) => post("/admin/email/campaigns/recipient-count", body, _adminToken),
+  adminSendEmailCampaign: (id) => post(`/admin/email/campaigns/${id}/send`, { confirmed: true }, _adminToken),
+  adminCancelEmailCampaign: (id) => post(`/admin/email/campaigns/${id}/cancel`, {}, _adminToken),
+  adminGetCampaignRecipients: (id, params = {}) => {
+    const qp = new URLSearchParams(params).toString();
+    return get(`/admin/email/campaigns/${id}/recipients${qp ? `?${qp}` : ""}`, _adminToken);
+  },
+  adminReseedBrandEmailTemplates: () => post("/admin/email/templates/reseed-brand", {}, _adminToken),
+  adminGetEmailSettings: () => get("/admin/email/settings", _adminToken),
+  adminSendTestEmail: (body) => post("/admin/email/test", body, _adminToken),
+  adminSimulateCampaignOpen: (campaignId, rid) => post(`/admin/email/campaigns/${campaignId}/recipients/${rid}/simulate-open`, {}, _adminToken),
+  adminSimulateCampaignClick: (campaignId, rid) => post(`/admin/email/campaigns/${campaignId}/recipients/${rid}/simulate-click`, {}, _adminToken),
 };

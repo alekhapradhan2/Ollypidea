@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const compression = require("compression"); // gzip all responses
@@ -1125,9 +1125,9 @@ function buildOttTitle(movie, cc) {
  * rewriting the snippet itself.
  */
 async function callGroqStructured(systemPrompt, userPrompt, keys, fallbacks, maxTokens = 2200) {
-  const groqKey = process.env.GROQ_API_KEY || "";
+  const groqKey = (process.env.GROQ_API_KEY || "").trim();
   if (!groqKey) { console.warn("⚠️ GROQ_API_KEY not set — auto-blog using template fallback content."); return fallbacks; }
-  const model = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+  const model = (process.env.GROQ_MODEL || "qwen/qwen3.8-27b").trim();
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -5899,6 +5899,23 @@ app.patch("/api/admin/media/:id", adminAuth, async (req, res) => {
     const update = {};
     if (title !== undefined) update.title = title;
     if (tags !== undefined) update.tags = Array.isArray(tags) ? tags : tags.split(",").map(t => t.trim()).filter(Boolean);
+    
+    const groqKey = (process.env.GROQ_API_KEY || "").trim();
+    if (!groqKey) {
+      return res.status(500).json({
+        error: "GROQ_API_KEY not set in .env. Get a free key at https://console.groq.com",
+      });
+    }
+
+    const candidateModels = [
+      process.env.GROQ_MODEL?.trim(),
+      "qwen/qwen3.8-27b",
+      "openai/gpt-oss-120b",
+      "groq/compound-mini",
+    ].filter(Boolean);
+
+    let lastErrorMsg = "Generation failed";
+
     if (source !== undefined) update.source = source;
 
     const updated = await MediaAsset.findByIdAndUpdate(req.params.id, update, { new: true });
@@ -10914,6 +10931,20 @@ async function maybeGenerateWeekSummaryBlog(movie, sortedDays, totalNet, movieId
 
     const totalNetStr = formatINR(totalNet);
     const week2Total = weekNum === 2 ? formatINR(sortedDays.filter(d => d.day >= 8 && d.day <= 14).reduce((s, d) => s + parseToRupeesGlobal(d.net || "0"), 0)) : "";
+    console.log("✅ Sacnilk cron scheduled: daily at 8:00 AM IST");
+
+// ════════════════════════════════════════════════════════════════════════════
+// EMAIL MARKETING MODULE  (Brevo SMTP — 300 emails/day free)
+// Must be mounted BEFORE the SPA catch-all route (*) below.
+// ════════════════════════════════════════════════════════════════════════════
+require('./emailMarketing')(
+  app,
+  mongoose,
+  cron,
+  adminAuth,
+  process.env.SITE_URL || 'https://www.ollypedia.in'
+);
+// ════════════════════════════════════════════════════════════════════════════
     const seed = (String(movieId) + eventType).split("").reduce((s, c) => s + c.charCodeAt(0), 0);
 
     let title;
@@ -11614,6 +11645,19 @@ cron.schedule("30 6 * * *", async () => {
 console.log("✅ Sacnilk cron scheduled: daily at 8:00 AM IST");
 
 // ════════════════════════════════════════════════════════════════════════════
+
+// =====================================================================
+// EMAIL MARKETING MODULE  (Brevo SMTP via nodemailer)
+// Mounted BEFORE the SPA wildcard so email routes take priority.
+// =====================================================================
+require('./emailMarketing')(
+  app,
+  mongoose,
+  cron,
+  adminAuth,
+  process.env.SITE_URL || 'https://www.ollypedia.in'
+);
+// =====================================================================
 // ── Serve Vite frontend build (Render.com deployment) ──────────────
 // "dist" is Vite's default output folder — make sure your build
 // command is: cd frontend && npm run build  (or wherever your React app lives)
