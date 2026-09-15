@@ -64,7 +64,7 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
     firstName:       { type: String, default: '' },
     lastName:        { type: String, default: '' },
     status:          { type: String, enum: ['subscribed', 'unsubscribed', 'bounced'], default: 'subscribed' },
-    source:          { type: String, enum: ['import', 'manual', 'community', 'registered'], default: 'manual' },
+    source:          { type: String, enum: ['import', 'manual', 'community', 'registered', 'review'], default: 'manual' },
     subscribedAt:    { type: Date, default: Date.now },
     unsubscribedAt:  { type: Date, default: null },
     communityUserId: { type: Schema.Types.ObjectId, ref: 'CommunityUser', default: null },
@@ -96,7 +96,7 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
     replyTo:           { type: String, default: '' },
     templateId:        { type: Schema.Types.ObjectId, ref: 'EmailTemplate', default: null },
     status:            { type: String, enum: ['draft','scheduled','sending','sent','failed','cancelled'], default: 'draft' },
-    recipientFilter:   { type: String, enum: ['all','community','imported','manual'], default: 'all' },
+    recipientFilter:   { type: String, enum: ['all','community','imported','manual','review'], default: 'all' },
     manualRecipients:  [{ type: String }],
     recipientCount:    { type: Number, default: 0 },
     sentCount:         { type: Number, default: 0 },
@@ -421,6 +421,7 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
     const q = { status: 'subscribed' };
     if (f === 'community') q.source = 'community';
     if (f === 'imported')  q.source = 'import';
+    if (f === 'review')    q.source = 'review';
     return EmailSubscriber.find(q).lean();
   }
 
@@ -652,6 +653,62 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
     }
   });
 
+  // ── Subscribers: Sync from Movie User Reviews ──────────────────────────────
+  app.post('/api/admin/email/subscribers/sync-reviews', adminAuth, async (req, res) => {
+    try {
+      const Movie = mongoose.models.Movie;
+      if (!Movie) return res.json({ ok: true, synced: 0, existing: 0, total: 0 });
+
+      // Scan all movies with review emails
+      const movies = await Movie.find({ 'reviews.email': { $exists: true, $ne: '' } }, 'title reviews').lean();
+      let added = 0;
+      let existing = 0;
+      const seenEmails = new Set();
+
+      for (const movie of movies) {
+        if (!Array.isArray(movie.reviews)) continue;
+        for (const rev of movie.reviews) {
+          const rawEmail = (rev.email || '').trim().toLowerCase();
+          if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) continue;
+
+          if (seenEmails.has(rawEmail)) continue;
+          seenEmails.add(rawEmail);
+
+          const found = await EmailSubscriber.findOne({ email: rawEmail });
+          if (found) {
+            existing++;
+          } else {
+            const rawName = (rev.user || '').trim();
+            const nameParts = rawName.split(' ').filter(Boolean);
+            const firstName = nameParts[0] || rawEmail.split('@')[0] || 'Reviewer';
+            const lastName  = nameParts.slice(1).join(' ') || '';
+            const fullName  = rawName || firstName;
+
+            await EmailSubscriber.create({
+              email: rawEmail,
+              name: fullName,
+              firstName: firstName,
+              lastName: lastName,
+              source: 'review',
+              status: 'subscribed',
+              metadata: {
+                movieTitle: movie.title,
+                rating: rev.rating || 5,
+                reviewedAt: rev.date || new Date().toISOString().split('T')[0],
+              }
+            });
+            added++;
+          }
+        }
+      }
+
+      res.json({ ok: true, synced: added, existing, total: seenEmails.size });
+    } catch (err) {
+      console.error('[Email] Sync Reviews:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Templates: CRUD ────────────────────────────────────────────────────────
   app.get('/api/admin/email/templates', adminAuth, async (req, res) => {
     try { res.json({ templates: await EmailTemplate.find().sort({ createdAt: -1 }).lean() }); }
@@ -817,6 +874,7 @@ module.exports = function registerEmailMarketing(app, mongoose, cron, adminAuth,
         const q = { status: 'subscribed' };
         if (recipientFilter === 'community') q.source = 'community';
         if (recipientFilter === 'imported')  q.source = 'import';
+        if (recipientFilter === 'review')    q.source = 'review';
         count = await EmailSubscriber.countDocuments(q);
       }
       res.json({ count });

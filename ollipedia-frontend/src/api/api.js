@@ -306,6 +306,7 @@ export const API = {
   adminDeleteEmailSubscriber: (id) => del(`/admin/email/subscribers/${id}`, _adminToken),
   adminImportEmailSubscribers: (body) => post("/admin/email/subscribers/import", body, _adminToken),
   adminSyncCommunitySubscribers: () => post("/admin/email/subscribers/sync-community", {}, _adminToken),
+  adminSyncReviewsSubscribers: () => post("/admin/email/subscribers/sync-reviews", {}, _adminToken),
   adminExportEmailSubscribersUrl: () => `${BASE}/admin/email/subscribers/export`,
 
   adminGetEmailTemplates: () => get("/admin/email/templates", _adminToken),

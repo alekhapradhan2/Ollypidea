@@ -238,6 +238,20 @@ function EmailMarketingPanel({ onToast }) {
       setLoading(false);
     }
   };
+  const handleSyncReviews = async () => {
+    if (!window.confirm("Sync all user review emails from movies into Email Marketing subscribers?")) return;
+    try {
+      setLoading(true);
+      const res = await API.adminSyncReviewsSubscribers();
+      toast(`✅ Synced successfully! Added ${res.synced} new subscribers from user reviews (${res.existing} already existed).`, "success");
+      if (activeTab === "subscribers") loadSubscribers(1);
+      if (activeTab === "dashboard") loadDashboard();
+    } catch (err) {
+      toast(err.message || "Review sync failed", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
   function renderDashboard() {
     const subs = (dashboard == null ? void 0 : dashboard.subscribers) || { total: 0, active: 0 };
     const camps = (dashboard == null ? void 0 : dashboard.campaigns) || { sent: 0, emailsSent: 0, emailsOpened: 0, emailsClicked: 0 };
@@ -316,6 +330,7 @@ function EmailMarketingPanel({ onToast }) {
                 children: "⚡ Send SMTP Test Email"
               }
             ),
+            /* @__PURE__ */ jsx("button", { onClick: handleSyncReviews, className: "btn btn-sm btn-outline", style: { borderRadius: 8, fontSize: "0.78rem" }, children: "⭐ Sync User Reviews" }),
             /* @__PURE__ */ jsxs("button", { onClick: handleSyncCommunity, className: "btn btn-sm btn-outline", style: { borderRadius: 8, fontSize: "0.78rem" }, children: [
               "🌐 Sync Community Users (",
               subs.total,
@@ -871,6 +886,7 @@ function EmailMarketingPanel({ onToast }) {
               children: [
                 /* @__PURE__ */ jsx("option", { value: "", children: "All Sources" }),
                 /* @__PURE__ */ jsx("option", { value: "community", children: "Community (Live)" }),
+                /* @__PURE__ */ jsx("option", { value: "review", children: "User Reviews" }),
                 /* @__PURE__ */ jsx("option", { value: "import", children: "CSV Import" }),
                 /* @__PURE__ */ jsx("option", { value: "manual", children: "Manual" })
               ]
@@ -878,7 +894,8 @@ function EmailMarketingPanel({ onToast }) {
           ),
           /* @__PURE__ */ jsx("button", { onClick: () => loadSubscribers(1), className: "btn btn-sm btn-outline", style: { borderRadius: 8, height: 36 }, children: "Filter" })
         ] }),
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+        /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" }, children: [
+          /* @__PURE__ */ jsx("button", { onClick: handleSyncReviews, className: "btn btn-sm btn-outline", style: { borderRadius: 8 }, children: "⭐ Sync User Reviews" }),
           /* @__PURE__ */ jsx("button", { onClick: handleSyncCommunity, className: "btn btn-sm btn-outline", style: { borderRadius: 8 }, children: "🌐 Sync Community Users" }),
           /* @__PURE__ */ jsx(
             "a",
@@ -910,7 +927,23 @@ function EmailMarketingPanel({ onToast }) {
               s.name && /* @__PURE__ */ jsx("div", { style: { fontSize: "0.75rem", color: THEME.muted }, children: s.name })
             ] }),
             /* @__PURE__ */ jsx("td", { style: { padding: "14px 18px" }, children: /* @__PURE__ */ jsx(StatusBadge, { status: s.status }) }),
-            /* @__PURE__ */ jsx("td", { style: { padding: "14px 18px" }, children: /* @__PURE__ */ jsx("span", { style: { fontSize: "0.72rem", background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 6, textTransform: "uppercase", letterSpacing: "0.05em", color: THEME.muted }, children: s.source }) }),
+            /* @__PURE__ */ jsx("td", { style: { padding: "14px 18px" }, children: /* @__PURE__ */ jsx(
+              "span",
+              {
+                style: {
+                  fontSize: "0.72rem",
+                  background: s.source === "review" ? "rgba(255,180,0,0.15)" : s.source === "community" ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.06)",
+                  color: s.source === "review" ? "#ffb400" : s.source === "community" ? "#60a5fa" : THEME.muted,
+                  border: s.source === "review" ? "1px solid rgba(255,180,0,0.3)" : s.source === "community" ? "1px solid rgba(59,130,246,0.3)" : "1px solid transparent",
+                  padding: "2px 8px",
+                  borderRadius: 6,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  fontWeight: 700
+                },
+                children: s.source === "review" ? "⭐ Review" : s.source === "community" ? "🌐 Community" : s.source
+              }
+            ) }),
             /* @__PURE__ */ jsx("td", { style: { padding: "14px 18px", color: THEME.subtle, fontSize: "0.75rem" }, children: fmtDate(s.subscribedAt) }),
             /* @__PURE__ */ jsxs("td", { style: { padding: "14px 18px", textAlign: "right" }, children: [
               /* @__PURE__ */ jsx(
@@ -1452,9 +1485,10 @@ function CampaignWizardModal({ onClose, templates, onCreated, toast }) {
           ] }),
           step === 2 && /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 16 }, children: [
             /* @__PURE__ */ jsx("div", { style: { fontSize: "0.85rem", color: THEME.muted }, children: "Choose which subscribers will receive this campaign:" }),
-            /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }, children: [
+            /* @__PURE__ */ jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }, children: [
               { id: "all", title: "All Active Subscribers", desc: "Sends to all confirmed subscribed users" },
-              { id: "community", title: "Community Users", desc: "Only users imported from the Ollypedia Community Hub" },
+              { id: "community", title: "Community Users", desc: "Users imported from the Ollypedia Community Hub" },
+              { id: "review", title: "Movie Reviewers", desc: "Users who submitted reviews & ratings on movie pages" },
               { id: "imported", title: "CSV Imported Lists", desc: "Subscribers added via bulk CSV file import" },
               { id: "manual", title: "Specific Email List", desc: "Type or paste specific email addresses manually" }
             ].map((aud) => /* @__PURE__ */ jsxs(

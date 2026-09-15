@@ -276,6 +276,7 @@ const API = {
   adminDeleteEmailSubscriber: (id) => del(`/admin/email/subscribers/${id}`, _adminToken),
   adminImportEmailSubscribers: (body) => post("/admin/email/subscribers/import", body, _adminToken),
   adminSyncCommunitySubscribers: () => post("/admin/email/subscribers/sync-community", {}, _adminToken),
+  adminSyncReviewsSubscribers: () => post("/admin/email/subscribers/sync-reviews", {}, _adminToken),
   adminExportEmailSubscribersUrl: () => `${BASE}/admin/email/subscribers/export`,
   adminGetEmailTemplates: () => get("/admin/email/templates", _adminToken),
   adminGetEmailTemplate: (id) => get(`/admin/email/templates/${id}`, _adminToken),
@@ -12690,7 +12691,7 @@ const SacnilkScraperPanel = lazy(() => import("./assets/SacnilkScraperPanel-CfBh
 const UserReviewsPanel = lazy(() => import("./assets/UserReviewsPanel-Bu3AylyH.js"));
 const CommunityPanel = lazy(() => import("./assets/CommunityPanel-CoCEIZbc.js"));
 const MediaPanel = lazy(() => import("./assets/MediaPanel-DOrQCeDC.js"));
-const EmailMarketingPanel = lazy(() => import("./assets/EmailMarketingPanel-URVmv492.js"));
+const EmailMarketingPanel = lazy(() => import("./assets/EmailMarketingPanel-9snu86tC.js"));
 const GENRES = [
   "Action",
   "Drama",

@@ -291,6 +291,21 @@ export default function EmailMarketingPanel({ onToast }) {
     }
   };
 
+  const handleSyncReviews = async () => {
+    if (!window.confirm('Sync all user review emails from movies into Email Marketing subscribers?')) return;
+    try {
+      setLoading(true);
+      const res = await API.adminSyncReviewsSubscribers();
+      toast(`✅ Synced successfully! Added ${res.synced} new subscribers from user reviews (${res.existing} already existed).`, 'success');
+      if (activeTab === 'subscribers') loadSubscribers(1);
+      if (activeTab === 'dashboard') loadDashboard();
+    } catch (err) {
+      toast(err.message || 'Review sync failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  TAB 1: DASHBOARD
   // ═══════════════════════════════════════════════════════════════════════════
@@ -371,6 +386,9 @@ export default function EmailMarketingPanel({ onToast }) {
                 style={{ borderRadius: 8, fontSize: '0.78rem' }}
               >
                 ⚡ Send SMTP Test Email
+              </button>
+              <button onClick={handleSyncReviews} className="btn btn-sm btn-outline" style={{ borderRadius: 8, fontSize: '0.78rem' }}>
+                ⭐ Sync User Reviews
               </button>
               <button onClick={handleSyncCommunity} className="btn btn-sm btn-outline" style={{ borderRadius: 8, fontSize: '0.78rem' }}>
                 🌐 Sync Community Users ({subs.total})
@@ -986,6 +1004,7 @@ export default function EmailMarketingPanel({ onToast }) {
             >
               <option value="">All Sources</option>
               <option value="community">Community (Live)</option>
+              <option value="review">User Reviews</option>
               <option value="import">CSV Import</option>
               <option value="manual">Manual</option>
             </select>
@@ -995,7 +1014,10 @@ export default function EmailMarketingPanel({ onToast }) {
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={handleSyncReviews} className="btn btn-sm btn-outline" style={{ borderRadius: 8 }}>
+              ⭐ Sync User Reviews
+            </button>
             <button onClick={handleSyncCommunity} className="btn btn-sm btn-outline" style={{ borderRadius: 8 }}>
               🌐 Sync Community Users
             </button>
@@ -1047,8 +1069,20 @@ export default function EmailMarketingPanel({ onToast }) {
                       <StatusBadge status={s.status} />
                     </td>
                     <td style={{ padding: '14px 18px' }}>
-                      <span style={{ fontSize: '0.72rem', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.05em', color: THEME.muted }}>
-                        {s.source}
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          background: s.source === 'review' ? 'rgba(255,180,0,0.15)' : s.source === 'community' ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.06)',
+                          color: s.source === 'review' ? '#ffb400' : s.source === 'community' ? '#60a5fa' : THEME.muted,
+                          border: s.source === 'review' ? '1px solid rgba(255,180,0,0.3)' : s.source === 'community' ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {s.source === 'review' ? '⭐ Review' : s.source === 'community' ? '🌐 Community' : s.source}
                       </span>
                     </td>
                     <td style={{ padding: '14px 18px', color: THEME.subtle, fontSize: '0.75rem' }}>
@@ -1664,10 +1698,11 @@ function CampaignWizardModal({ onClose, templates, onCreated, toast }) {
                 Choose which subscribers will receive this campaign:
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 {[
                   { id: 'all', title: 'All Active Subscribers', desc: 'Sends to all confirmed subscribed users' },
-                  { id: 'community', title: 'Community Users', desc: 'Only users imported from the Ollypedia Community Hub' },
+                  { id: 'community', title: 'Community Users', desc: 'Users imported from the Ollypedia Community Hub' },
+                  { id: 'review', title: 'Movie Reviewers', desc: 'Users who submitted reviews & ratings on movie pages' },
                   { id: 'imported', title: 'CSV Imported Lists', desc: 'Subscribers added via bulk CSV file import' },
                   { id: 'manual', title: 'Specific Email List', desc: 'Type or paste specific email addresses manually' },
                 ].map((aud) => (

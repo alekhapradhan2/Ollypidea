@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const compression = require("compression"); // gzip all responses
@@ -268,6 +268,7 @@ const VideoSchema = new mongoose.Schema({
 
 const ReviewSchema = new mongoose.Schema({
   user: { type: String, default: "Anonymous" },
+  email: { type: String, default: "" },
   rating: Number,
   text: String,
   date: String,
@@ -3174,13 +3175,41 @@ app.post("/api/movies/:id/reviews", async (req, res) => {
   try {
     const { user, email, rating, text } = req.body;
     if (!user?.trim() || !text?.trim()) return res.status(400).json({ error: "Name and review required." });
+    const cleanEmail = (email || "").trim().toLowerCase();
     const query = isOid(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
     const movie = await Movie.findOneAndUpdate(
       query,
-      { $push: { reviews: { user: user.trim(), email: (email || "").trim().toLowerCase(), rating: Number(rating) || 5, text: text.trim(), date: new Date().toISOString().split("T")[0] } } },
+      { $push: { reviews: { user: user.trim(), email: cleanEmail, rating: Number(rating) || 5, text: text.trim(), date: new Date().toISOString().split("T")[0] } } },
       { new: true }
     );
     if (!movie) return res.status(404).json({ error: "Movie not found" });
+
+    // Auto-sync reviewer to Email Marketing subscribers if email provided
+    if (cleanEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setImmediate(async () => {
+        try {
+          const EmailSubscriber = mongoose.models.EmailSubscriber;
+          if (EmailSubscriber) {
+            const existing = await EmailSubscriber.findOne({ email: cleanEmail });
+            if (!existing) {
+              const nameParts = (user || "").trim().split(" ").filter(Boolean);
+              await EmailSubscriber.create({
+                email: cleanEmail,
+                name: (user || "").trim() || nameParts[0] || "Reviewer",
+                firstName: nameParts[0] || cleanEmail.split("@")[0],
+                lastName: nameParts.slice(1).join(" ") || "",
+                source: "review",
+                status: "subscribed",
+                metadata: { movieTitle: movie.title, rating: Number(rating) || 5 }
+              });
+            }
+          }
+        } catch (subErr) {
+          console.warn("[EmailSubscriber] Auto-sync review subscriber:", subErr.message);
+        }
+      });
+    }
+
     res.json(movie.reviews);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
