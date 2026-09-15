@@ -44,6 +44,17 @@ services:
         sync: false          # ← random 32+ char secret string
       - key: EMAIL_TRACKING_SECRET
         sync: false          # ← random 32+ char secret string
+      # ── Cloudflare R2 Media Storage (Permanent Zero-Egress Storage) ──
+      - key: R2_ACCOUNT_ID
+        value: ecd0971066d465463b6c98f49df590e0
+      - key: R2_ACCESS_KEY_ID
+        value: 9046b3a80c14b92ef1c6380bae89b0d5
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false          # ← Cloudflare R2 secret access key
+      - key: R2_BUCKET_NAME
+        value: ollypedia-media
+      - key: R2_PUBLIC_URL
+        value: https://pub-3460231f610c4020ae1a4d57ef20552a.r2.dev
 
   # ── Frontend Static Site ─────────────────────────────────────────
   - type: web

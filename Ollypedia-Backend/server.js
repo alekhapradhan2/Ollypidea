@@ -24,6 +24,28 @@ if (process.env.CLOUDINARY_URL) {
     console.error("Failed to parse CLOUDINARY_URL:", err.message);
   }
 }
+
+// ── Cloudflare R2 Client (Zero-Egress Permanent Media Storage) ────────────────
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+let r2Client = null;
+if (process.env.R2_SECRET_ACCESS_KEY && process.env.R2_ACCESS_KEY_ID) {
+  try {
+    const endpoint = process.env.R2_ENDPOINT ||
+      (process.env.R2_ACCOUNT_ID ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com` : "https://ecd0971066d465463b6c98f49df590e0.r2.cloudflarestorage.com");
+    r2Client = new S3Client({
+      region: "auto",
+      endpoint,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      },
+    });
+    console.log("[Storage] Cloudflare R2 client initialized successfully.");
+  } catch (err) {
+    console.error("[Storage] Failed to initialize Cloudflare R2 client:", err.message);
+  }
+}
+
 const streamifier = require("streamifier");
 
 const blogImageStorage = multer.memoryStorage();
@@ -5628,15 +5650,54 @@ const uploadBufferToCloudinary = (buffer, folder = "ollypedia_media", options = 
   });
 };
 
-// 1. Single / Blog Image Upload (saves to Cloudinary with SEO name and indexes in MediaAsset)
+const uploadBufferToR2 = async (buffer, folder = "ollypedia_media", options = {}) => {
+  const parsedOpts = typeof options === "string" ? { filename: options } : (options || {});
+  const public_id = generateCloudinaryPublicId(parsedOpts);
+  const ext = (parsedOpts.filename ? path.extname(parsedOpts.filename) : ".jpg") || ".jpg";
+  const r2Key = `${folder}/${public_id}${ext}`.replace(/\/+/g, "/");
+  const bucket = process.env.R2_BUCKET_NAME || "ollypedia-media";
+  const publicBase = (process.env.R2_PUBLIC_URL || "https://pub-3460231f610c4020ae1a4d57ef20552a.r2.dev").replace(/\/+$/, "");
+
+  let contentType = "image/jpeg";
+  const e = ext.toLowerCase();
+  if (e === ".png") contentType = "image/png";
+  else if (e === ".webp") contentType = "image/webp";
+  else if (e === ".gif") contentType = "image/gif";
+  else if (e === ".svg") contentType = "image/svg+xml";
+
+  await r2Client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: r2Key,
+    Body: buffer,
+    ContentType: contentType,
+  }));
+
+  const secure_url = `${publicBase}/${r2Key}`;
+  return {
+    secure_url,
+    url: secure_url,
+    public_id: r2Key,
+    bytes: buffer.length,
+    format: ext.replace(".", ""),
+  };
+};
+
+const uploadBufferToMediaStorage = async (buffer, folder = "ollypedia_media", options = {}) => {
+  if (r2Client) {
+    return uploadBufferToR2(buffer, folder, options);
+  }
+  return uploadBufferToCloudinary(buffer, folder, options);
+};
+
+// 1. Single / Blog Image Upload (saves to Cloudflare R2 / Cloudinary with SEO name and indexes in MediaAsset)
 app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No image file received" });
   try {
-    const source = req.body.source || "Cloudinary Upload";
+    const source = req.body.source || "Media Upload";
     const entityName = req.body.name || req.body.title || req.body.movieTitle || req.body.castName || "";
     const type = req.body.type || "";
 
-    const result = await uploadBufferToCloudinary(req.file.buffer, "ollypedia_media", {
+    const result = await uploadBufferToMediaStorage(req.file.buffer, "ollypedia_media", {
       filename: req.file.originalname,
       name: entityName,
       type,
@@ -5657,7 +5718,7 @@ app.post("/api/admin/upload-blog-image", adminAuth, blogImageUpload.single("imag
     });
     res.json({ url: result.secure_url, filename: result.public_id, media });
   } catch (error) {
-    console.error("Cloudinary / Media Upload Error:", error);
+    console.error("Media Upload Error:", error);
     res.status(500).json({ error: "Image upload failed: " + (error.message || "Unknown error") });
   }
 });
@@ -5672,7 +5733,7 @@ app.post("/api/admin/media/upload", adminAuth, blogImageUpload.array("files", 20
     const uploadedMedia = [];
 
     for (const file of files) {
-      const result = await uploadBufferToCloudinary(file.buffer, "ollypedia_media", file.originalname);
+      const result = await uploadBufferToMediaStorage(file.buffer, "ollypedia_media", file.originalname);
       const asset = await MediaAsset.create({
         url: result.secure_url,
         publicId: result.public_id,
@@ -5885,10 +5946,21 @@ app.delete("/api/admin/media/:id", adminAuth, async (req, res) => {
     if (!asset) return res.status(404).json({ error: "Media item not found" });
 
     if (asset.publicId) {
-      try {
-        await cloudinary.uploader.destroy(asset.publicId);
-      } catch (err) {
-        console.warn("Cloudinary delete warning:", err.message);
+      if (r2Client && (asset.publicId.startsWith("ollypedia_") || asset.publicId.startsWith("media/"))) {
+        try {
+          await r2Client.send(new DeleteObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME || "ollypedia-media",
+            Key: asset.publicId,
+          }));
+        } catch (err) {
+          console.warn("R2 delete warning:", err.message);
+        }
+      } else if (cloudinary) {
+        try {
+          await cloudinary.uploader.destroy(asset.publicId);
+        } catch (err) {
+          console.warn("Cloudinary delete warning:", err.message);
+        }
       }
     }
 
@@ -5908,9 +5980,18 @@ app.post("/api/admin/media/bulk-delete", adminAuth, async (req, res) => {
     const assets = await MediaAsset.find({ _id: { $in: ids } });
     for (const a of assets) {
       if (a.publicId) {
-        try {
-          await cloudinary.uploader.destroy(a.publicId);
-        } catch {}
+        if (r2Client && (a.publicId.startsWith("ollypedia_") || a.publicId.startsWith("media/"))) {
+          try {
+            await r2Client.send(new DeleteObjectCommand({
+              Bucket: process.env.R2_BUCKET_NAME || "ollypedia-media",
+              Key: a.publicId,
+            }));
+          } catch {}
+        } else if (cloudinary) {
+          try {
+            await cloudinary.uploader.destroy(a.publicId);
+          } catch {}
+        }
       }
     }
 
